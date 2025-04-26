@@ -65,21 +65,35 @@ An ideal high-level language would abstract the need for this in depth understan
 \textbf{Quff} like the other examples provided still relies on dynamically generated circuits, requiring a classical machine to be involved in its compilation.
 Our current high-level quantum languages are not yet ready to support a general purpose QPU with static circuit structures.
 
-We aim with this research to address the remaining gaps in existing high-level quantum languages by:
-\begin{itemize}
-    \item Defining quantum operation (not bit-wise) primitives and their associated circuit structures.
-    \item Defining a new quantum programming language and syntax built with these operations.
-    \item Building an OpenQASM compiler for our language for dynamic circuit generation.
-    \item Defining a novel general purpose circuit structure and microcode architecture for static compilation
-\end{itemize}
+We aim with this research to address the remaining gaps in existing high-level quantum languages by defining new high-level software operations for quantum programs, paradigms for compiling them into low-level assembly and circuits and a programming language that describes the new operations.
 
 Our research will focus on a language capable of running to completion on a standalone QPU. 
 It is not a focus or within our initial scope to explore or develop implementations of quantum random access memory or storage.
 
 % Research Design
 \section{Research Design}
-\subsection{Research Questions}
-The study aims to address the following research questions...
+\subsection{Research Aims}
+The study aims to achieve the following outcomes which will form the basis for a high-level quantum software paradigm and programming language.
+\begin{itemize}
+    \item Defining quantum operation (not bit-wise) primitives and their associated circuit structures.
+    \item Defining a new quantum programming language and syntax built with these operations.
+    \item Building an OpenQASM compiler for our language for dynamic circuit generation.
+    \item Defining a novel general purpose circuit structure and microcode architecture for static compilation.
+\end{itemize}
+
+The language will be unique in that it will not require an understanding of circuit registers or quantum mechanics to be used.
+Instead, we will develop a quantum programming language in which data can be defined intuitively as in classical languages such as C.
+Quantum gates such as the Hadamard, CNOT and rotations will not be considered primary operations in this language, which will instead abstract the effects of these operators into well-defined software operations and functions.
+The language will define new, quantum specific operations that may not have analgoues in classical languages but can described and taught based on their software outcomes rather than physical or quantum mechnical outcomes.
+
+We will answer the following questions with our research:
+\begin{itemize}
+    \item Can quantum operations be abstracted away from bit-wise actions?
+    \item Can a high-level programming language provide sufficient flexbility with more abstraction for non-expert quantum programmers?
+    \item Can generic quantum programs be run on a static and shared circuit structure?
+\end{itemize}
+
+By building a new quantum programming language with novel compilation techniques we can answer these questions.
 
 \subsection{Methodology}
 We will use the Constructive Research Method, which is well-suited for the development of innovative artifacts in computing \cite{lukka2003constructive}. 
@@ -172,18 +186,61 @@ Year 3
 
 % Thesis Structure
 \section{Thesis Structure}
+Section~\ref{sec:timeline-plan} provides an in depth overview of the milestones and tasks associated with the research.
+
+There are 3 proposed publications that will be the outcomes of these milestones.
 \begin{enumerate}
-    \item Introduction
-    \item Literature Review
-    \item Methodology
-    \item Analysis
-    \item Discussion
-    \item Conclusion
+    \item Defining High-Level Quantum Software operations
+    \item Specification and Proof for High-Level Quantum Programming Language
+    \item Static and Dynamic Compilation of High-Level Quantum Programming Languages
 \end{enumerate}
+
+These 3 publications will also form the basis of the final thesis and its chapters.
+
+The thesis will include Chapters as outlined below:
+
+\begin{table}[H]
+\centering
+\caption{Structure of the PhD Thesis}
+\begin{tabular}{@{}p{4cm} p{10cm}@{}}
+\toprule
+\textbf{Chapter} & \textbf{Content Description} \\
+\midrule
+
+Introduction & Outlines the motivation for accessible quantum programming, the challenges in abstraction and portability, and the objectives of the study. Provides background on quantum computing fundamentals and current limitations in quantum programming languages. \\
+\midrule
+
+Methodology & Describes the use of the Constructive Research Method for artifact development. Justifies the iterative design, implementation, and evaluation process chosen for language and compiler development. \\
+\midrule
+
+Software Operations (\textbf{Included Publication}) & Presents the analysis and definition of essential high-level quantum operations. Includes a literature review of existing circuit primitives and a publication detailing the defined operational abstractions. \\
+\midrule
+
+Programming Language Development (\textbf{Included Publication}) & Details the design and specification of the new high-level quantum programming language. Describes language syntax, semantics, and proof-of-concept implementations. Contains a literature review of quantum programming languages where relevant. \\
+\midrule
+
+Language Compilation (\textbf{Included Publication}) & Discusses compilation approaches developed for the language, including dynamic and static compilation into general circuit structures. A publication comparing compilation techniques is included, supported by a review of related work in quantum compilation. \\
+\midrule
+
+Results & Summarizes the evaluation of the developed language and compilers. Presents results from simulation and hardware execution, where available provides qualitative results about the use of the language by non-experts. \\
+\midrule
+
+Future Directions & Explores opportunities for extending the language, optimizing static circuit compilation, and integrating the framework into larger quantum-classical hybrid systems. Identifies potential research directions for broadening accessibility in quantum software engineering. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+
+
 
 % Study Implications
 \section{Study Implications}
-This research will contribute both to academic theory and professional practice in the domain.
+This study will significantly enhance accessibility in quantum computing by introducing a high-level programming language with C-like abstraction. 
+By decoupling low-level quantum mechanics from software design, the language enables software engineers to write quantum programs without expertise in quantum mechanics. 
+The ability to compile into a general, static circuit structure promotes cross-platform compatibility, reducing hardware dependency and fostering broader adoption. 
+The static circuit will provide a starting point for the development of steady state QPUs that do not require complex classical controllers to load and run circuit configurations.
+We will las the groundwork for scalable quantum software development, supporting clearer reasoning, improved tooling, and future integration with classical systems. 
 
 % References
 \bibliographystyle{IEEEtran}
