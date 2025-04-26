@@ -10,6 +10,9 @@
 \usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{cite}  % For IEEE-style citations
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage{float}
 
 % Spacing
 \doublespacing
@@ -40,11 +43,38 @@ This proposal outlines the scope, context, and structure of the proposed PhD res
 
 % Introduction
 \section{Introduction}
-The research aims to explore key challenges in the field of computational design \cite{sample2023}.
+This research aims to explore and resolve the missing link between high-level programming languages and quantum programming.
 
-% Literature Review
-\section{Literature Review}
-Research in this domain has evolved over the last decade \cite{doe2020example}, with recent innovations suggesting new frameworks \cite{smith2019conference}.
+In the last 10 years profound progress has been made towards unlocking higher level and interoperable quantum programming languages.
+
+OpenQASM (Open Quantum Assembly Language) is a low-level quantum programming language introduced in 2017. OpenQASM provides a hardware-agnostic interface for specifying quantum operations and control sequences. It abstracts the quantum circuit, with a focus on gate-level instructions, expressing quantum algorithms directly in terms of qubits, gates, and measurements \cite{cross2017open}.
+
+While powerful for precise quantum hardware control, OpenQASM lacks high-level abstractions, such as quantum-native control flows or modular algorithm design, often present in classical high-level languages.
+
+Built on top of QASM we see progress towards high-level, C or Java-like languages. For instance, \textbf{Qiskit}~\cite{qiskit} and \textbf{PennyLane QML}~\cite{pennylane} provide Python-based interfaces that facilitate quantum programming, yet they rely heavily on low-level constructs and manual control flows.
+Despite recent progress, most quantum programming languages remain close to circuit-level abstractions, requiring users to manipulate gates and qubits explicitly.
+
+Efforts toward higher-level abstractions include \textbf{Silq}~\cite{silq2024}, \textbf{Qmod}~\cite{qmod2025}, \textbf{Qrisp}~\cite{qrisp2024}, \textbf{Qutes}~\cite{qutes2025}, and \textbf{ONDA}~\cite{onda2024}. \textbf{Silq} introduces automatic uncomputation, reducing programmer overhead, and improving type safety. \textbf{Qmod} emphasizes quantum-native numeric types and high-level expressiveness. \textbf{Qrisp} brings software engineering paradigms into quantum development, with the aim of maintainability and abstraction. \textbf{Qutes} simplifies quantum development by abstracting hardware details while remaining interoperable with Qiskit. \textbf{ONDA} incorporates conditional branching and sequential logic, approaching the structure of classical control flows within a quantum context.
+
+These languages represent significant advances, but are still emerging, with limited adoption and tooling. None fully match the abstraction levels found in mature classical languages like C or Python.
+
+At their core, these languages still rely on circuit primitives or bit-wise operations and a fundamental understanding of how these operate in a quantum mechanical context.
+An ideal high-level language would abstract the need for this in depth understanding and provide new, operational abstractions instead.
+\textbf{Quff}~\cite{quff2024}, a high-level C-like quantum language, provides a push in the right direction to achieve this result. 
+
+\textbf{Quff} like the other examples provided still relies on dynamically generated circuits, requiring a classical machine to be involved in its compilation.
+Our current high-level quantum languages are not yet ready to support a general purpose QPU with static circuit structures.
+
+We aim with this research to address the remaining gaps in existing high-level quantum languages by:
+\begin{itemize}
+    \item Defining quantum operation (not bit-wise) primitives and their associated circuit structures.
+    \item Defining a new quantum programming language and syntax built with these operations.
+    \item Building an OpenQASM compiler for our language for dynamic circuit generation.
+    \item Defining a novel general purpose circuit structure and microcode architecture for static compilation
+\end{itemize}
+
+Our research will focus on a language capable of running to completion on a standalone QPU. 
+It is not a focus or within our initial scope to explore or develop implementations of quantum random access memory or storage.
 
 % Research Design
 \section{Research Design}
@@ -52,19 +82,93 @@ Research in this domain has evolved over the last decade \cite{doe2020example}, 
 The study aims to address the following research questions...
 
 \subsection{Methodology}
-A mixed-methods approach will be used...
+We will use the Constructive Research Method, which is well-suited for the development of innovative artifacts in computing \cite{lukka2003constructive}. 
 
-\subsection{Data Collection and Analysis}
-Qualitative interviews and quantitative analysis will support the findings...
+The methodology focuses on constructing a novel programming language grounded in theoretical analysis of quantum programming limitations. 
+The process includes the systematic design, development, and demonstration of the language, followed by evaluation through case studies and comparisons with existing approaches. 
+Emphasis is placed on the practical relevance of the artifact as a solution to real-world problems in quantum software engineering.
+
+The \textit{Constructive Research Method} is applied in computer science for developing practical artifacts. Examples include work on trans-disciplinary innovation~\cite{mcgregor2018}, studies on computational models~\cite{dodig2010}, and guidelines for industry-related software tools~\cite{lassenius2001}.
+
+\subsection{Success Criteria}
+Our research will focus on physical outcomes and the development of a project.
+Success will be measured based on the completion of each milestone and its ability to meet its objectives as outlined in Section~\ref{sec:timeline-plan}.
+
+The research must meet the following general outcomes to be considered successful:
+\begin{itemize}
+    \item Creation of a high-level and compilable quantum programming language.
+    \item Successful writing and running of a program in that language on quantum hardware.
+    \item Presented evidence of the ability for non-experts in quantum computation to use the language.
+\end{itemize}
 
 % Timeline and Plan
-\section{Timeline and Plan}
-\begin{itemize}
-    \item Year 1: Literature review and proposal finalization
-    \item Year 2: Data collection
-    \item Year 3: Analysis and writing
-    \item Year 4: Final thesis and defense
-\end{itemize}
+\section{Timeline and Plan}\label{sec:timeline-plan}
+
+\begin{table}[H]
+\centering
+\caption{PhD Timeline and Milestones}
+\begin{tabular}{@{}c|c|p{6cm}|p{5cm}@{}}
+\toprule
+\textbf{Year} & \textbf{Milestone} & \textbf{Tasks} & \textbf{Expected Outcomes} \\
+\midrule
+
+Year 1 
+& Define Quantum Operations 
+& - Literature review of existing quantum circuit primitives \newline
+  - Compile common quantum operations and related circuits \newline
+  - Select control flow circuits for quantum programs 
+& - Defined high-level operations \newline
+  - Paper on review and defined operations \\
+\midrule
+
+\multirow{2}{*}{Year 2} 
+& Programming Languages Refresher 
+& - Take refresher classes on language design \newline
+  - Study context-free grammars and parsing 
+& - Strong foundation in language design for quantum context \\
+\cmidrule{2-4}
+
+& \multirow{2}{*}{Define High-Level Language} 
+& - Define syntax and keywords \newline
+  - Map quantum operations to language structures \newline
+  - Write proof-of-concept programs (e.g., Grover's algorithm) 
+& - Language specification \newline
+  - Paper on high-level quantum language design \\
+\cline{1-1} % Draws horizontal line only under "Year 3" in the first column
+
+Year 3 
+&  
+& - Finalize language features \newline
+  - Refine proof-of-concept implementations 
+& - Completed high-level language prototype \\
+\cmidrule{2-4}
+
+\multirow{1}{*}{} 
+& Develop Dynamic Compiler 
+& - Build QASM compiler for defined language \newline
+  - Test output on simulators and hardware 
+& - Dynamic compiler prototype \newline
+  - Demonstrated execution results \\
+\midrule
+
+\multirow{2}{*}{Year 4} 
+& Build Static Circuit Compiler 
+& - Define static circuit model and quantum latches \newline
+  - Define microcode instructions and QASM output \newline
+  - Develop static compilation pipeline 
+& - Static compiler implementation \newline
+  - Paper comparing static vs. dynamic compilation \\
+\cmidrule{2-4}
+
+& Compile Thesis 
+& - Write and edit final dissertation 
+& - Submitted PhD thesis \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+
 
 % Thesis Structure
 \section{Thesis Structure}
