@@ -1,0 +1,40 @@
+\documentclass[12pt,a4paper,oneside]{book}
+
+% Preamble
+\input{../preamble/packages}
+\input{../preamble/macros}
+\input{../preamble/bibliography}
+
+\begin{document}
+
+\frontmatter
+\input{frontmatter/titlepage}
+\input{frontmatter/abstract}
+\input{frontmatter/declaration}
+\input{frontmatter/acknowledgements}
+\input{frontmatter/preface_publications}
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+\mainmatter
+
+% Chapters
+\input{chapters/chapt_introduction/chapter}
+\input{chapters/chapt_literature_review/chapter}
+\input{chapters/chapt_methodology/chapter}
+
+% Publication chapters
+\input{chapters/chapt_pub_operations_model/chapter}
+\input{chapters/chapt_pub_language_design/chapter}
+\input{chapters/chapt_pub_compilation_dynamic_static/chapter}
+
+\input{chapters/chapt_results_evaluation/chapter}
+\input{chapters/chapt_study_implications/chapter}
+\input{chapters/chapt_future_directions_conclusion/chapter}
+
+\backmatter
+\printbibliography
+
+\end{document}
