@@ -18,7 +18,7 @@ The aim is to present the ways in which abstraction is defined and discussed in 
 These definitions ground the discussion throughout the remainder of this section.
 The focus is predominantly on literature published since 2020, though older works establishing standard interpretations of foundational concepts are drawn upon where appropriate.
 
-Abstraction as used in this subsection may refer to either a layered system with reduced or increased complexity between layers, or to a specific layer within such a system.
+Abstraction as used in this subsection may refer to either a layered system with reduced or increased complexity between layers or to a specific layer within such a system.
 This discussion distinguishes the two using the terms \textit{System (of abstraction)} and \textit{Abstraction (layer)} respectively.
 Regardless of which form is under discussion, any system of abstraction and the layers within it share a common set of defining elements:
 \begin{itemize}
@@ -38,22 +38,33 @@ Each layer makes assumptions about the availability of operations in the layer b
 Additional specificity or generality can be introduced on either side of this layered structure: at the more general end, all layers may collapse into a single bridging model~\cite{Valiant1990BSP} used as its own layer in higher-level systems.
 At the more specific end, the programming layer may be expanded to include high-level languages such as Python or domain specifications for machine learning.
 
-%TODO: A figure might be nice here to illustrate different known abstraction systems and how they progress into each other.
-\begin{figure}
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.75\linewidth]{../figures/fig:lit_rev:abstraction:abstraction_relationships}
+    \caption{A representation of the common programming, execution, hardware abstraction system with concrete examples for a C program.}
     \label{fig:lit_rev:abstraction:abstraction_relationships}
 \end{figure}
 
 The scope of any system of abstraction is therefore contingent on the discussion it is designed to support; the definitions established here are applied with that flexibility in mind.
 
-It is necessary to be able to compare both systems of abstraction and abtractions to determine their applicability to a given domain and value in a situation.
+It is necessary to be able to compare both systems of abstraction and abstractions to determine their applicability to a given domain and value in a situation.
 Comparative relationships between abstractions are well documented; however, formalisms for discussing such relationships between systems of abstraction are absent from the literature.
 The taxonomy of abstractions~\cite{aho2022abstractions} provides a spectrum from Fundamental → Abstract → Declarative → Computational, offering a framework for describing relationships between abstractions in computational processes.
 Through this taxonomy it is possible to relate abstractions at higher or lower levels to each other, forming systems of abstractions.
-As an example, Table~\ref{tab:lit_rev:abstraction:abstraction_taxonomy} illustrates the taxonomic relationships of dictionaries and hash maps~\cite{aho2022abstractions}.
+As an example, Table~\ref{tab:lit_rev:abstraction:abstraction_taxonomy} illustrates the taxonomic relationships of dictionaries and maps~\cite{aho2022abstractions}.
 
-%TODO: A table illustrating the taxonomy of abstractions from aho2022, include a classical and quantum progression
-\begin{table}
+\begin{table}[htbp]
+    \centering
+    \caption{Taxonomy of abstractions illustrating the progression from fundamental concepts to computational implementations for both classical and quantum domains, adapted from Aho and Ullman~\cite{aho2022abstractions}.}
     \label{tab:lit_rev:abstraction:abstraction_taxonomy}
+    \begin{tabular}{@{}lll@{}}
+        \toprule
+        \textbf{Taxonomy Level} & \textbf{Classical Example}          \midrule
+        Fundamental & Dictionary (insert, delete, lookup) \\
+        Abstract & LinkedList, Map \\
+        Declarative & SQL Table/Query \\
+        Computational & Java/C implementation & QASM \\ \bottomrule
+    \end{tabular}
 \end{table}
 
 Comparative frameworks such as the taxonomy are useful for comparing abstractions but provide no real measure of comparison between systems.
@@ -67,7 +78,7 @@ A system could simultaneously belong to both definitions based on its position w
 These definitions provide conceptual tools for comparing abstractions, but do not suffice for critically examining the state of abstraction in quantum computing addressed in Subsection~\ref{subsec:lit_rev:abstraction:in_quantum_computing}.
 The taxonomy describes abstraction across computation broadly and within systems; it does not provide the vocabulary to locate languages within a compilation stack specifically.
 The system comparison framework likewise allows us to reason about the applicability of different systems within a domain but does not define which system configurations serve compilation or computation.
-A more precise vocabulary is therefore required that can:
+More precise vocabulary is therefore required that can:
 \begin{itemize}
     \item Define systems of abstraction for programming language compilation.
     \item Categorise and place languages within systems of abstraction.
@@ -76,35 +87,33 @@ A more precise vocabulary is therefore required that can:
 These tools will allow us to understand the roles of different quantum programming languages discussed in Section~\ref{sec:lit_rev:quantum_programming_languages} and develop the assessment frameworks in Chapter~\ref{chapt:pub_language_review}.
 To arrive at our required definitions, we first need to explore the ways in which abstraction is used in programming.
 
-% TODO [2.1 → bridge to 2.2]:
-% Write a short paragraph (~100–150 words) here that does the following:
-%
-% 1. PARNAS — Name the programming-specific meaning of abstraction.
-%    State that in programming, abstraction specifically means hiding
-%    implementation details behind a stable interface (cite parnas1972criteria).
-%    One sentence is enough — do NOT discuss what makes an abstraction
-%    good or bad in detail; that argument belongs in 2.2.
-%
-% 2. DIMATTEO — Gesture at the spectrum without walking through it.
-%    Note that abstraction applies at multiple granularities (language
-%    constructs, whole languages, compilation pipelines) and that the
-%    level of abstraction is a property of how much is hidden from the user.
-%    Evidence that even within a single domain abstraction admits multiple
-%    distinct levels. Do NOT enumerate the hierarchy again — you have already
-%    used it structurally above.
-%
-% 3. YUAN — Introduce the cost/correctness tension as a single conceptual hook.
-%    State that raising the level of abstraction carries a cost: it constrains
-%    what a programmer can express or control (cite yuan2025foundationalabstractions).
-%    Resolve this briefly with the takeaway definitions below (language abstractions
-%    and compiler chains). The full Yuan argument belongs in 2.2.
-%
-% THINGS TO AVOID HERE (leave for 2.2):
-%   - Classical examples (assembly → C → Python etc.)
-%   - Detailed discussion of what makes an abstraction good or bad
-%   - Re-explaining the DiMatteo three-layer hierarchy
-%   - Full argument from Yuan on abstraction costs
+The journey to define abstraction within programming and computer science has been ongoing since the 20th century.
+The development of higher level programming languages and increasingly complex systems required definitions to delineate how and when abstraction should and could be used.
 
+Abstraction in programming defines more than just how languages within a compilation stack relate to each other, it also defines how systems are designed and modularised.
+The language used to describe both is rooted in the same general principles:
+\begin{itemize}
+    \item Abstraction hides information and defines boundaries of responsibilities~\cite{parnas1972criteria}
+    \item Abstraction preserves semantic intention between layers~\cite{yuan2025foundationalabstractions}
+    \item Abstraction improves a user's ability to reason with the layer of a system~\cite{DiMatteo2024AbstractionHierarchy}
+\end{itemize}
+
+In programming languages abstraction defines the responsibility of a language to both the user and the machine.
+The system of abstraction selected for a given domain must responsibly hide information at each layer without inhibiting the user's ability to express their intent.
+Simultaneously it must ensure that intention is preserved so that the machine can execute it faithfully.
+
+But abstraction also defines the limitations of control a user of a language has on the system they are manipulating~\cite{yuan2025foundationalabstractions}.
+Abstraction in programming removes responsibility over details or actions that can be assumed or hidden, which also removes the ability to control them.
+A canonical example in classical programming is the presence or absence of garbage collection in a given language.
+
+Now can it be said that Java is a higher abstraction of C given one implements garbage collection and the other doesn't?
+Most definitions of abstraction in programming would acknowledge Java is higher-level but wouldn't necessarily place it at a higher \textit{abstraction layer} within a programming system.
+Why is that?
+
+Abstraction in programming is defined by more than just information hiding or reduction in control.
+In programming intention influences abstraction, the intention of a language in concert with the actions or control it permits is what places it at a certain layer in a system.
+Languages like C or Java sit at the same layer in parallel systems of abstraction because they inhabit the same intention, for example, application development.
+It's for this reason we don't look at C as being an assembly language despite its ability to have low-level control over memory; that's not its intended purpose.
 
 The preceding discussion motivates the following definitions, which are used throughout this review.
 
@@ -117,23 +126,97 @@ For example, a user need not specify the underlying character array representati
 \textit{Compiler chains} define computational systems of abstraction.
 Compiler chains link high-level to low-level language abstractions by translating from more to less general representations.
 A well-formed compiler chain guarantees no loss of intention across layers; higher layers are expected to reduce the cognitive burden on the programmer.
+Compiler chains can be compared faithfully by expressing the same system intention in their layers.
 
 The following section examines how these chains have been realised in classical computing systems, establishing a comparative baseline for evaluating quantum programming abstractions later in this review.
 
 \subsection{Levels and elements of abstraction}\label{subsec:lit_rev:abstraction:levels_elements}
-– Look at the compilation stack and concrete differentiating factors
-- Also discuss general rules for levels and elements of abstraction, we want to provide generic concepts we can build on that show the relevance of a higher abstraction level in quantum computing
-- Would be useful here to look at what makes an abstraction good, how do we know an abstraction proposal is relevant or useful
-- DiMatteo describes requirements for good abstractions as well the turing papers
+Abstraction is defined in multiple ways as shown in Section~\ref{subsec:lit_rev:abstraction:defining_abstraction}.
+Abstraction can be defined relatively between layers in a system using the taxonomy of abstraction~\cite{aho2022abstractions} or relatively between systems.
+In computation abstraction is defined both as languages that inhabit layers and compiler chains that describe systems of layers.
+This subsection focuses specifically on those systems.
 
-We've established already that abstractions exist in both conceptual and functional forms and that its possible to define hierarchies with fixed taxonomies in those forms\cite{parnas1972criteria, aho2022abstractions}.
-Building on those definitions, we have been able to formalise for computational systems the presence of language abstractions which improve tractability within a system for a user and compiler chains which describe the system with respect to its levels of abstraction.
-These definitions help us provide functional context to concepts like the abstraction taxonomy by showing how it is used in practice.
+Examples will be presented of different ways of organising abstraction within classical computing domains and a framework for assessing the effectiveness of those abstractions provided.
+Figure~\ref{fig:lit_rev:abstraction:classical_compiler_chains} provides a graphical representation illustrating three chains of compilation within classical systems.
+The first is one most software engineers and programmers would be familiar with; C may be replaced with many high-level languages and the structure would still hold.
+The C chain describes a common separation of layers in programming abstraction with programming, execution and hardware layers.
+The other two examples build on this with the SQL-led chain showing an extended compiler chain with a domain specification language (DSL) included.
+The Python chain provides a discussion point.
 
-Due to the hierarchical nature of compiler chains and the core definition of abstractions we can explore what the different levels of computational abstraction look like by building a baseline within classical computing.
-As part of this baseline we will establish what levels there are, what differentiates members of those abstraction levels and how we can assess if that differentiation is beneficial or ``good''.
-We will also explore why abstraction is used but not why it matters, that is left to Subsection~\ref{subsec:lit_rev:abstraction:why_matters}.
+Based on Figure~\ref{fig:lit_rev:abstraction:classical_compiler_chains} Python is serving as a machine learning (ML) DSL as it has come to be used in recent years~\cite{agrawal2019tensorflow}.
+However, Python can also be a scripting or programming layer; this is an example of how the compilation chains are flexible based on the intention of a layer.
+What matters here is the audience of the abstraction and how the choice of abstraction benefits or hinders their ability to interact with it~\cite{DiMatteo2024AbstractionHierarchy}.
 
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.75\linewidth]{../figures/fig:lit_rev:abstraction:classical_compiler_chains}
+    \caption{An example of three different ways to interpret compiler chains showing a traditional application development chain, SQL database domain chain and Python's use in machine learning.}
+    \label{fig:lit_rev:abstraction:classical_compiler_chains}
+\end{figure}
+
+When Python acts as an ML DSL it provides the purpose of hiding common programming paradigms and simplifying the way ML engineers and data scientists interact with machines.
+SQL serves a similar purpose allowing non-programmers to interact with computational systems in a way that benefits their domain and level of understanding.
+What counts as the highest abstraction level is relative to the domain and intended audience; in both cases presented the audience loses control over memory management or algorithmic decisions.
+Despite these losses, the information they hide allows the user to experience a more tractable version of computation in line with their understanding.
+
+The layers of a compiler chain can be described as in Table~\ref{tab:lit_rev:abstraction:compiler_layers}.
+
+\begin{table}[htbp]
+    \centering
+    \caption{General layers of a compilation chain including domain-specific simplification for high-level user interaction, demonstrates the cognitive simplification and distance from machine representations influence layering.}
+    \label{tab:lit_rev:abstraction:compiler_layers}
+    \begin{tabular}{@{}llp{8cm}@{}}
+        \toprule
+        \textbf{Layer} & \textbf{Level} & \textbf{Primary Purpose}                                                             \\ \midrule
+        Domain         & Highest        & Hiding programming paradigms; providing domain-specific syntax (e.g., SQL, ML DSLs). \\
+        Source         & High           & Human-readable logic; memory and resource management abstractions.                   \\
+        Intermediate   & Middle         & Machine-independent optimization and canonical representation (IR).                  \\
+        Assembly       & Low            & Mapping logic to specific hardware instructions and registers.                       \\
+        Binary         & Lowest         & Execution on physical hardware.                                                      \\ \bottomrule
+    \end{tabular}
+\end{table}
+
+While these layers appear well-structured, whether these compilation chains are effective needs to be qualified.
+Good abstraction must match the intention of the definition outlined in Subsection~\ref{subsec:lit_rev:abstraction:defining_abstraction}.
+To recap, that means:
+\begin{itemize}
+    \item Abstraction hides information and defines boundaries of responsibilities~\cite{parnas1972criteria}
+    \item Abstraction preserves semantic intention between layers~\cite{yuan2025foundationalabstractions}
+    \item Abstraction improves a user's ability to reason with the layer of a system~\cite{DiMatteo2024AbstractionHierarchy}
+\end{itemize}
+
+Effective abstractions guarantee that definition and can be assessed by the following criteria:
+\begin{itemize}
+    \item Correctness of execution can be verified through conditions and invariants~\cite{yuan2025foundationalabstractions, LiskovGuttag1986}
+    \item Data types define what they do, not how they do it~\cite{LiskovGuttag1986}
+    \item Procedures have formal, guaranteed definitions~\cite{LiskovGuttag1986}
+    \item Produced solutions reduce in complexity in higher layers~\cite{aho2022abstractions,DiMatteo2024AbstractionHierarchy}
+    \item Layers can be internally changed without \textit{requiring} changes in other layers~\cite{parnas1972criteria}
+\end{itemize}
+
+Table~\ref{tab:lit_rev:abstraction:assessing_sql_compiler_chain} applies these criteria to the SQL compiler chain in Figure~\ref{fig:lit_rev:abstraction:classical_compiler_chains}.
+\begin{table}[htbp]
+    \centering
+    \caption{Assessment of the SQL compiler chain based on effective abstraction criteria.}
+    \label{tab:lit_rev:abstraction:assessing_sql_compiler_chain}
+    \begin{tabular}{@{}lp{10cm}@{}}
+        \toprule
+        \textbf{Criterion}    & \textbf{SQL Implementation Evidence}                                                      \\ \midrule
+        Information Hiding    & Users interact with relations/tables; physical storage and indexing are hidden.           \\
+        Semantic Preservation & Declarative intent (WHAT) is preserved through optimization to relational algebra (HOW).  \\
+        Reasoning Improvement & Non-programmers can query complex datasets without understanding B-trees or buffer pools. \\
+        Formal Definition     & Relational algebra provides a formal, guaranteed basis for procedures.                    \\
+        Reduced Complexity    & High-level syntax reduces the cognitive load compared to manual data retrieval loops.     \\ \bottomrule
+    \end{tabular}
+\end{table}
+
+Understanding what an abstraction is and how to assess it provides an insight into why abstraction exists and its role in simplifying complex systems.
+What these concepts do not provide is commentary on why it is important for the users of those systems or why it matters to the design of quantum computing languages.
+
+The criteria established here, information hiding, semantic preservation, formal definition, and complexity reduction will serve as the evaluative baseline when comparing quantum programming systems in the sections that follow.
+
+In Subsection~\ref{subsec:lit_rev:abstraction:why_matters} a review concerning the importance of traditional and non-traditional abstraction systems is presented.
+The review provides qualitative results on why it is important to continue to examine abstraction in emerging systems and the benefits it provides their users.
 
 %% ------------------------ To be written --------------------------------------------------------------------------- %%
 
@@ -145,7 +228,7 @@ We will also explore why abstraction is used but not why it matters, that is lef
 - Accessibility of systems with higher levels of abstraction
 - aho2022 will be important her as well for historical relevance and importance of abstraction
 - What makes an abstraction worthwhile may be worth a cursory mention here to justify why it matters e.g abstraction when done well looks like A, this is useful because of B
-- Discuss tractability from Wing 2006 and link it back to findings from the wuantum survey
+- Discuss tractability from Wing 2006 and link it back to findings from the quantum survey
 
 \subsection{Abstraction in quantum computing}\label{subsec:lit_rev:abstraction:in_quantum_computing}
 - Discuss DiMatteo here and begin to disect why that abstraction framework isn't enough
