@@ -1,0 +1,17 @@
+\makeatletter
+\@ifundefined{frontmatter}{%
+  \newcommand{\frontmatter}{\cleardoublepage\pagenumbering{roman}}
+}{}
+\@ifundefined{mainmatter}{%
+  \newcommand{\mainmatter}{\cleardoublepage\pagenumbering{arabic}}
+}{}
+\@ifundefined{backmatter}{%
+  \newcommand{\backmatter}{\cleardoublepage}
+}{}
+
+% Define \chapter if not defined (as in article class)
+\@ifundefined{chapter}{%
+  \newcommand{\chapter}{\section}
+}{}
+
+\makeatother

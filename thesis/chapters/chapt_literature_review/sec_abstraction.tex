@@ -10,7 +10,7 @@ As this section demonstrates, quantum computing has not yet realised the abstrac
 Establishing a principled, concrete definition of abstraction and a framework for differentiating abstraction levels is therefore a prerequisite for any rigorous evaluation of quantum programming systems.
 This section develops that baseline, drawing on classical computing literature, and applies it to characterise the current state of abstraction in quantum computing.
 
-The resulting framework is carried forward throughout the remainder of this literature review and underpins the critical analysis of quantum programming language abstractions presented in Chapter~\ref{chapt:pub_language_review}.
+The resulting framework is carried forward throughout the remainder of this literature review and underpins the critical analysis of quantum programming language abstractions presented in Chapter~\ref{chapt:pub_language_design}.
 
 \subsection{Defining Abstraction}\label{subsec:lit_rev:abstraction:defining_abstraction}
 While abstraction is useful both within and beyond computer science, this subsection focuses on its definition specifically in computer science and software engineering.
@@ -40,7 +40,7 @@ At the more specific end, the programming layer may be expanded to include high-
 
 \begin{figure}[h!]
     \centering
-    \includegraphics[width=0.75\linewidth]{../figures/fig:lit_rev:abstraction:abstraction_relationships}
+    \includegraphics[width=0.75\linewidth]{../figures/fig-lit_rev-abstraction-abstraction_relationships}
     \caption{A representation of the common programming, execution, hardware abstraction system with concrete examples for a C program.}
     \label{fig:lit_rev:abstraction:abstraction_relationships}
 \end{figure}
@@ -57,13 +57,13 @@ As an example, Table~\ref{tab:lit_rev:abstraction:abstraction_taxonomy} illustra
     \centering
     \caption{Taxonomy of abstractions illustrating the progression from fundamental concepts to computational implementations for both classical and quantum domains, adapted from Aho and Ullman~\cite{aho2022abstractions}.}
     \label{tab:lit_rev:abstraction:abstraction_taxonomy}
-    \begin{tabular}{@{}lll@{}}
+    \begin{tabular}{@{}ll@{}}
         \toprule
-        \textbf{Taxonomy Level} & \textbf{Classical Example}          \midrule
-        Fundamental & Dictionary (insert, delete, lookup) \\
-        Abstract & LinkedList, Map \\
-        Declarative & SQL Table/Query \\
-        Computational & Java/C implementation & QASM \\ \bottomrule
+        \textbf{Taxonomy Level} & \textbf{Classical Example}          \\ \midrule
+        Fundamental             & Dictionary (insert, delete, lookup) \\
+        Abstract                & LinkedList, Map                     \\
+        Declarative             & SQL Table/Query                     \\
+        Computational           & Java/C implementation               \\ \bottomrule
     \end{tabular}
 \end{table}
 
@@ -84,7 +84,7 @@ More precise vocabulary is therefore required that can:
     \item Categorise and place languages within systems of abstraction.
 \end{itemize}
 
-These tools will allow us to understand the roles of different quantum programming languages discussed in Section~\ref{sec:lit_rev:quantum_programming_languages} and develop the assessment frameworks in Chapter~\ref{chapt:pub_language_review}.
+These tools will allow us to understand the roles of different quantum programming languages discussed in Section~\ref{sec:lit_rev:quantum_programming_languages} and develop the assessment frameworks in Chapter~\ref{chapt:pub_language_design}.
 To arrive at our required definitions, we first need to explore the ways in which abstraction is used in programming.
 
 The journey to define abstraction within programming and computer science has been ongoing since the 20th century.
@@ -149,7 +149,7 @@ What matters here is the audience of the abstraction and how the choice of abstr
 
 \begin{figure}[h!]
     \centering
-    \includegraphics[width=0.75\linewidth]{../figures/fig:lit_rev:abstraction:classical_compiler_chains}
+    \includegraphics[width=0.75\linewidth]{../figures/fig-lit_rev-abstraction-classical_compiler_chains}
     \caption{An example of three different ways to interpret compiler chains showing a traditional application development chain, SQL database domain chain and Python's use in machine learning.}
     \label{fig:lit_rev:abstraction:classical_compiler_chains}
 \end{figure}
@@ -213,23 +213,73 @@ Table~\ref{tab:lit_rev:abstraction:assessing_sql_compiler_chain} applies these c
 Understanding what an abstraction is and how to assess it provides an insight into why abstraction exists and its role in simplifying complex systems.
 What these concepts do not provide is commentary on why it is important for the users of those systems or why it matters to the design of quantum computing languages.
 
-The criteria established here, information hiding, semantic preservation, formal definition, and complexity reduction will serve as the evaluative baseline when comparing quantum programming systems in the sections that follow.
+The criteria established here, information hiding, semantic preservation, formal definition and complexity reduction will serve as the evaluative baseline when comparing quantum programming systems in the sections that follow.
 
 In Subsection~\ref{subsec:lit_rev:abstraction:why_matters} a review concerning the importance of traditional and non-traditional abstraction systems is presented.
 The review provides qualitative results on why it is important to continue to examine abstraction in emerging systems and the benefits it provides their users.
 
-%% ------------------------ To be written --------------------------------------------------------------------------- %%
-
 \subsection{Why abstraction matters}\label{subsec:lit_rev:abstraction:why_matters}
-- Computational thinking and how it is described by languages
-- Incorporate natural language to SQL article
-- Incorporate article on phone number empirical comparison
-- Look at adoption statistics for LLM based systems
-- Accessibility of systems with higher levels of abstraction
-- aho2022 will be important her as well for historical relevance and importance of abstraction
-- What makes an abstraction worthwhile may be worth a cursory mention here to justify why it matters e.g abstraction when done well looks like A, this is useful because of B
-- Discuss tractability from Wing 2006 and link it back to findings from the quantum survey
+The properties of abstraction established in Subsections~\ref{subsec:lit_rev:abstraction:defining_abstraction} and~\ref{subsec:lit_rev:abstraction:levels_elements}: information hiding, modularity and layered complexity reduction, are foundational to understanding why abstraction matters in practice.
+Why abstraction matters really boils down to its ability to improve tractability of domains, to reduce complex problem spaces and map them to more manageable equivalents, and the ability of users to reason with a problem space, in and outside of computer science~\cite{Wing2006ComputationalThinking}.
+Where an abstraction fails to deliver this simplification, it fails to benefit its users.
 
+Traditional compiler chain abstractions discussed in Subsection~\ref{subsec:lit_rev:abstraction:levels_elements} are an easy example of that drive for improved tractability in a domain.
+Examining this more closely shows evidence that as abstractions become higher-level, they provide both comprehension gains and efficiency gains for developers~\cite{Prechelt2000EmpiricalComparison}.
+When presented with the same programming task, the use of a higher-level scripting language such as Python has been shown to half the time required to generate a working solution while also halving the size of that solution in terms of lines of code written~\cite{Prechelt2000EmpiricalComparison}.
+Comparatively in lower-level imperative or conventional languages, programmers are slower to produce a working solution and require more verbosity to do so~\cite{Prechelt2000EmpiricalComparison}.
+
+In this example the outcome of successful abstraction in the form of higher level languages promotes a reduction in cognitive burden on the user.
+An equivalent solution is producible more quickly and more succinctly, which indicates less time to reason with a domain and understand the available solution space.
+Abstraction matters because it promotes improved tractability even in unfamiliar or new problem areas.
+
+The development of natural language interfaces for structured data querying is another example of the benefits abstraction provides to tractability and access.
+SQL is a well-known domain query language for relational databases which enabled the querying of large data schemas without the need to re-implement search algorithms or data handling, this was pointed out as part of a domain specification abstraction in Figure~\ref{fig:lit_rev:abstraction:classical_compiler_chains}.
+SQL itself may simplify or abstract the way users interact with the writing or re-use of search algorithms, but it presents its own challenges by introducing a new, specific, domain language that potential users must learn to use and understand~\cite{IpeirotisZheng2025NLIDBUsers}.
+In the last decades evidence has mounted that natural language interfaces can lower the burden of entry for novice users of relational data stores by augmenting their use of SQL~\cite{simitsis2009dbmss, IpeirotisZheng2025NLIDBUsers}.
+In fact, the use of natural language to describe and execute relational data queries significantly reduces the onboarding time for novice users even in complex, highly relational data sets~\cite{fei2014, fei2016}.
+In these examples natural language acts as a higher abstraction level over SQL, increasing the layers in the system without reducing expressivity.
+Natural language improves the ability of a non-expert to express their intention, as long as there is a reliable translation layer to port this back into the query language~\cite{IpeirotisZheng2025NLIDBUsers}.
+
+Users of this higher-level interface consistently outperform peers with the same experience attempting to complete tasks in SQL\@.
+The time required to produce a working solution down-trends for NL interface users, indicating a meaningful reduction in cognitive load and barrier to entry; the abstraction is doing work that the user would otherwise have to perform themselves~\cite{IpeirotisZheng2025NLIDBUsers}.
+The runtime quality of their solutions also improves, evidence that the translation layer contributes more than mere access; by converting user intention into executable logic, it enables computationally sensical optimisations that the user need not reason about explicitly~\cite{IpeirotisZheng2025NLIDBUsers}.
+Comparatively, SQL users show flat or worsening performance on both measures, confirming that novices cannot achieve this level of optimisation through direct query authorship at first use.
+Evidence further suggests that the higher abstraction level reduced the need for iterative correction; users arrived at better solutions upfront, with fewer reformulations required~\cite{IpeirotisZheng2025NLIDBUsers}.
+Abstraction, good abstraction, results in a reduced lead time to success for new users.
+
+Interestingly, comparative studies showed that for experts in SQL, the natural language interface can at times hinder their ability to effectively interact with the system~\cite{IpeirotisZheng2025NLIDBUsers}.
+A takeaway here is that the effectiveness of an abstraction depends on its suitability for its audience; the quality of an abstraction should be measured against its ability to benefit its intended audience.
+
+Abstraction also influences the way in which we interact with a problem space.
+The natural language interface for data stores saw users prefer to reason semantically about the outcomes of their queries, that is to verify what they implement is what they intended rather than reason about the syntactic nature of their queries~\cite{IpeirotisZheng2025NLIDBUsers}.
+It can shift the cognitive burden from deciding how to do something to deciding what it is one wants to do.
+Abstraction, therefore, can have real-world impacts not only on how problems are solved but also how they are interpreted and perceived.
+Novel ideation and problem-solving approaches can be promoted by removing the need to spend cognitive energy on determining how to translate intent to action.
+
+The influence of tooling familiarity on adoption is further evidenced within the quantum computing domain itself.
+An empirical survey of quantum practitioners found that Qiskit, a Python-embedded quantum framework, accounted for over sixty percent of reported language use~\cite{unknown2024qplusage}.
+The authors attribute this dominance in part to the fact that the majority of respondents were already experienced Python programmers — the barrier to entry is reduced when the tooling meets users at their existing level of competency~\cite{unknown2024qplusage}.
+
+This is not merely a convenience argument.
+It is evidence that the abstraction level of a tool, and its proximity to the concepts and interfaces a user already commands, is a practical determinant of what gets adopted.
+An abstraction that demands practitioners to acquire an entirely new conceptual vocabulary before they can be productive will consistently lose to one that builds on existing fluency, even if the latter is technically inferior~\cite{unknown2024qplusage}.
+
+Abstraction matters, but only insofar as it is well-designed; abstractions that fail to improve tractability for their intended users become barriers rather than tools.
+
+Take, for example, a survey of over two hundred and fifty respondents working with quantum programming languages~\cite{unknown2024qplusage}.
+The majority were experienced classical programmers (over 83\% had five or more years of professional experience), yet the same proportion had minimal quantum language experience.
+Nearly half held computer science degrees, compared to 37\% from physics backgrounds.
+Despite this, the dominant languages in use impose physics-oriented conceptual vocabularies: circuit semantics, gate-level operations and quantum-specific constructs that have no classical analogue~\cite{unknown2024qplusage}.
+The result is a glossary burden; practitioners are required to acquire a new conceptual vocabulary before they can be productive, one misaligned with the background most of them bring.
+The survey confirms this: practitioners cited lack of conceptual quantum knowledge and challenging, inconsistent syntax as primary challenges, and over 31\% identified the absence of higher-level abstraction as a key missing feature~\cite{unknown2024qplusage}.
+Mapping clarity compounds the problem; even the most popular framework, Qiskit, was noted by users as low-level and architecturally complex despite its familiarity advantage.
+These findings point toward a specific standard for abstraction quality in this domain: abstractions must reduce glossary burden by aligning with existing intuitions, and must improve mapping clarity so that practitioners can reason about their problem without being forced to reason about the machine.
+
+In the current state of quantum computation, abstraction fails to provide sufficient tractability or advantages given the complexity of the domain.
+Abstraction does not result in a problem space that is easier to reason about for novices in quantum mechanics~\cite{unknown2024qplusage}.
+This will be discussed in more detail in Subsection~\ref{subsec:lit_rev:abstraction:in_quantum_computing}.
+
+%% ------------------------ To be written --------------------------------------------------------------------------- %%
 \subsection{Abstraction in quantum computing}\label{subsec:lit_rev:abstraction:in_quantum_computing}
 - Discuss DiMatteo here and begin to disect why that abstraction framework isn't enough
 - Need to nail down here the failures of abstraction in quantum computing, di matteo can help with this

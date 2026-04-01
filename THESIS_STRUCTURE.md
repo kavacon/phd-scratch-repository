@@ -50,7 +50,7 @@ Top-level:
 - `README.md`
 - `THESIS_STRUCTURE.md`
 - `preamble/` (Shared LaTeX configuration)
-    - `packages.tex`
+    - `packages.tex` (Global package imports, e.g., `import`, `booktabs`)
     - `macros.tex`
     - `bibliography.tex`
 - `thesis/` (The main thesis project)
@@ -110,11 +110,11 @@ Thesis-specific wrappers for the publication live at:
     - `preface.tex` (citation, venue, publication status)
     - `contribution_statement.tex` (authorship / your contribution)
     - `linking_commentary.tex` (how it fits the thesis; what differs vs published version)
-    - `include.tex` (stable include interface for the thesis chapter; includes the local wrappers and then the paper's `content.tex`)
+    - `include.tex` (stable include interface for the thesis chapter; uses `\subimport` to resolve relative paths in the paper content)
 
 Additionally, ensure advisory section files exist under `publications/publication_{unique_term}/` even before they’re finalized (they can be empty placeholders initially), e.g. `sec_introduction.tex`, `sec_related_work.tex`, etc.
 
-`thesis/chapters/chapt_pub_{unique_term}/include.tex` must be the stable interface that the thesis chapter inputs. It should input the local wrapper files, then input the paper’s `publications/publication_{unique_term}/content.tex`.
+`thesis/chapters/chapt_pub_{unique_term}/include.tex` must be the stable interface that the thesis chapter inputs. It should input the local wrapper files, then use `\subimport` to include the paper’s `publications/publication_{unique_term}/content.tex`. Using `\subimport` (from the `import` package) ensures that `\input` commands inside the paper's `content.tex` correctly resolve relative to the paper's directory, even when compiled as part of the main thesis.
 
 ## Quantum article style (Quantum journal) + Overleaf compatibility
 
