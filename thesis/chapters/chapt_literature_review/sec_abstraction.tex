@@ -22,9 +22,9 @@ Abstraction as used in this subsection may refer to either a layered system with
 This discussion distinguishes the two using the terms \textit{System (of abstraction)} and \textit{Abstraction (layer)} respectively.
 Regardless of which form is under discussion, any system of abstraction and the layers within it share a common set of defining elements:
 \begin{itemize}
-    \item Decomposition of complexity into generalised tractable domains: assumptions delimit the scope of the system, allowing complexity to be managed without exhaustive enumeration~\cite{Wing2006ComputationalThinking}
-    \item Presence of data models and operations over them: the system defines what it acts on and how~\cite{aho2022abstractions}
-    \item A mechanism for transitioning between more and less general layers: complexity can be recovered or removed as required~\cite{aho2022abstractions}
+    \item Decomposition of complexity into generalised tractable domains: assumptions delimit the scope of the system, allowing complexity to be managed without exhaustive enumeration~\cite{Wing2006ComputationalThinking}.
+    \item Presence of data models and operations over them: the system defines what it acts on and how~\cite{aho2022abstractions}.
+    \item A mechanism for transitioning between more and less general layers: complexity can be recovered or removed as required~\cite{aho2022abstractions}.
 \end{itemize}
 These three criteria are present in any system of abstraction.
 
@@ -93,9 +93,9 @@ The development of higher level programming languages and increasingly complex s
 Abstraction in programming defines more than just how languages within a compilation stack relate to each other, it also defines how systems are designed and modularised.
 The language used to describe both is rooted in the same general principles:
 \begin{itemize}
-    \item Abstraction hides information and defines boundaries of responsibilities~\cite{parnas1972criteria}
-    \item Abstraction preserves semantic intention between layers~\cite{yuan2025foundationalabstractions}
-    \item Abstraction improves a user's ability to reason with the layer of a system~\cite{DiMatteo2024AbstractionHierarchy}
+    \item Abstraction hides information and defines boundaries of responsibilities~\cite{parnas1972criteria}.
+    \item Abstraction preserves semantic intention between layers~\cite{yuan2025foundationalabstractions}.
+    \item Abstraction improves a user's ability to reason with the layer of a system~\cite{DiMatteo2024AbstractionHierarchy}.
 \end{itemize}
 
 In programming languages abstraction defines the responsibility of a language to both the user and the machine.
@@ -176,22 +176,27 @@ The layers of a compiler chain can be described as in Table~\ref{tab:lit_rev:abs
     \end{tabular}
 \end{table}
 
+The success of classical compiler chains is not accidental; it is grounded in the choice of abstract machine that underlies them.
+The von Neumann stored-program model succeeded not because it faithfully modelled the hardware executing it, but because its mental model; sequential instructions over addressable memory; aligned with human problem-solving idioms~\cite{elgotrobinson1964raspm}.
+It was that alignment that enabled the later proliferation of high-level languages; Fortran, ALGOL, COBOL each building a different surface over the same foundation.
+Abelson and Sussman capture the principle precisely: ``programs are meant to be read by humans and only incidentally meant for computers to execute''~\cite{abelson1996sicp}.
+
 While these layers appear well-structured, whether these compilation chains are effective needs to be qualified.
 Good abstraction must match the intention of the definition outlined in Subsection~\ref{subsec:lit_rev:abstraction:defining_abstraction}.
 To recap, that means:
 \begin{itemize}
-    \item Abstraction hides information and defines boundaries of responsibilities~\cite{parnas1972criteria}
-    \item Abstraction preserves semantic intention between layers~\cite{yuan2025foundationalabstractions}
-    \item Abstraction improves a user's ability to reason with the layer of a system~\cite{DiMatteo2024AbstractionHierarchy}
+    \item Abstraction hides information and defines boundaries of responsibilities~\cite{parnas1972criteria}.
+    \item Abstraction preserves semantic intention between layers~\cite{yuan2025foundationalabstractions}.
+    \item Abstraction improves a user's ability to reason with the layer of a system~\cite{DiMatteo2024AbstractionHierarchy}.
 \end{itemize}
 
 Effective abstractions guarantee that definition and can be assessed by the following criteria:
 \begin{itemize}
-    \item Correctness of execution can be verified through conditions and invariants~\cite{yuan2025foundationalabstractions, LiskovGuttag1986}
-    \item Data types define what they do, not how they do it~\cite{LiskovGuttag1986}
-    \item Procedures have formal, guaranteed definitions~\cite{LiskovGuttag1986}
-    \item Produced solutions reduce in complexity in higher layers~\cite{aho2022abstractions,DiMatteo2024AbstractionHierarchy}
-    \item Layers can be internally changed without \textit{requiring} changes in other layers~\cite{parnas1972criteria}
+    \item Correctness of execution can be verified through conditions and invariants~\cite{yuan2025foundationalabstractions, LiskovGuttag1986}.
+    \item Data types define what they do, not how they do it~\cite{LiskovGuttag1986}.
+    \item Procedures have formal, guaranteed definitions~\cite{LiskovGuttag1986}.
+    \item Produced solutions reduce in complexity in higher layers~\cite{aho2022abstractions,DiMatteo2024AbstractionHierarchy}.
+    \item Layers can be internally changed without \textit{requiring} changes in other layers~\cite{parnas1972criteria}.
 \end{itemize}
 
 Table~\ref{tab:lit_rev:abstraction:assessing_sql_compiler_chain} applies these criteria to the SQL compiler chain in Figure~\ref{fig:lit_rev:abstraction:classical_compiler_chains}.
@@ -228,6 +233,9 @@ Examining this more closely shows evidence that as abstractions become higher-le
 When presented with the same programming task, the use of a higher-level scripting language such as Python has been shown to half the time required to generate a working solution while also halving the size of that solution in terms of lines of code written~\cite{Prechelt2000EmpiricalComparison}.
 Comparatively in lower-level imperative or conventional languages, programmers are slower to produce a working solution and require more verbosity to do so~\cite{Prechelt2000EmpiricalComparison}.
 
+The cognitive science basis for these gains is well established: human working memory can sustain only a limited number of simultaneous concerns~\cite{miller1956magicalnumber}.
+Abstraction is the mechanism by which programming systems manage that bound, reducing the number of details a programmer must hold in mind at any one time.
+
 In this example the outcome of successful abstraction in the form of higher level languages promotes a reduction in cognitive burden on the user.
 An equivalent solution is producible more quickly and more succinctly, which indicates less time to reason with a domain and understand the available solution space.
 Abstraction matters because it promotes improved tractability even in unfamiliar or new problem areas.
@@ -257,7 +265,7 @@ Abstraction, therefore, can have real-world impacts not only on how problems are
 Novel ideation and problem-solving approaches can be promoted by removing the need to spend cognitive energy on determining how to translate intent to action.
 
 The influence of tooling familiarity on adoption is further evidenced within the quantum computing domain itself.
-An empirical survey of quantum practitioners found that Qiskit, a Python-embedded quantum framework, accounted for over sixty percent of reported language use~\cite{unknown2024qplusage}.
+An empirical survey of quantum practitioners found that Qiskit, a Python-embedded quantum framework, accounted for over sixty per cent of reported language use~\cite{unknown2024qplusage}.
 The authors attribute this dominance in part to the fact that the majority of respondents were already experienced Python programmers — the barrier to entry is reduced when the tooling meets users at their existing level of competency~\cite{unknown2024qplusage}.
 
 This is not merely a convenience argument.
@@ -295,14 +303,14 @@ An abstraction hierarchy for quantum computing has been suggested following the 
     \label{tab:lit_rev:abstraction:quantum_hierarchy}
     \begin{tabular}{@{}ll@{}}
         \toprule
-        \textbf{Hierarchy Layer} & \textbf{Primary Purpose} \\ \midrule
+        \textbf{Hierarchy Layer} & \textbf{Primary Purpose}                                   \\ \midrule
         Programming              & Expressing algorithm and intent using high-level concepts. \\
-        Execution                & Translation to gate-level instructions and circuits. \\
-        Hardware                 & Physical implementation and pulse sequences. \\ \bottomrule
+        Execution                & Translation to gate-level instructions and circuits.       \\
+        Hardware                 & Physical implementation and pulse sequences.               \\ \bottomrule
     \end{tabular}
 \end{table}
 
-Abstract machines like the Von Neumann random access memory (RAM) were critical in the successful development of productive classical systems.
+Abstract machines like the von Neumann random access memory (RAM) were critical in the successful development of productive classical systems.
 Abstract machines provide a conceptual framework for defining the responsibilities of lower and higher level abstractions.
 Candidate machines for quantum systems exist, such as quantum random access memory or the quantum Turing machine~\cite{nunez_corrales2025betterabstractmachines}
 Their suitability as foundations for productive programming abstractions has not been established.
@@ -353,9 +361,9 @@ It is not possible to operate solely within the programming layer because it lea
 
 Even the available abstract machines show consistent failures against the criteria most directly governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}.
 \begin{itemize}
-    \item Symbolic denotational syntax
-    \item Representation-independent data types
-    \item Stable instruction set architecture
+    \item Symbolic denotational syntax.
+    \item Representation-independent data types.
+    \item Stable instruction set architecture.
 \end{itemize}
 These criteria guarantee stable information hiding between programming interfaces and hardware implementations.
 Their violation demonstrates that there is no established model for abstraction that can guarantee appropriate information hiding.
