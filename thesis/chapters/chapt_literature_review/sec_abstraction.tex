@@ -1,7 +1,7 @@
 \section{Abstraction}\label{sec:lit_rev:abstraction}
-Abstraction is a fundamental concept in computer science and software engineering,providing the basis for tooling and development in both fields.
-Abstraction is equally fundamental as a mode of thinking in other domains,describing an approach that is useful for separating concerns and reducing complexity~\cite{Wing2006ComputationalThinking}.
-Examples of this cross-domain application appear in fields such as mathematics <TODO: example and citation>, physics <TODO: example and citation> and linguistics <TODO: example and citation>.
+Abstraction is a fundamental concept in computer science and software engineering, providing the basis for tooling and development in both fields.
+Abstraction is equally fundamental as a mode of thinking in other domains, describing an approach that is useful for separating concerns and reducing complexity~\cite{Wing2006ComputationalThinking}.
+Examples of this cross-domain application appear in fields such as mathematics in abstract algebra, physics with effective field theory~\cite{Burgess2020EFT} and linguistics with Chomsky's grammar hierarchy~\cite{Chomsky1957SyntacticStructures}.
 
 Good abstraction provides practitioners of any field with the ability to remove complexity without losing expressivity in the solutions they can explore and produce~\cite{parnas1972criteria,aho2022abstractions}.
 A well-designed abstraction reduces complexity for its user through well-defined interfaces, without constraining the space of solutions they can express or construct~\cite{parnas1972criteria}.
@@ -154,7 +154,7 @@ What matters here is the audience of the abstraction and how the choice of abstr
     \label{fig:lit_rev:abstraction:classical_compiler_chains}
 \end{figure}
 
-When Python acts as an ML DSL it provides the purpose of hiding common programming paradigms and simplifying the way ML engineers and data scientists interact with machines.
+When Python acts as an ML DSL, it provides the purpose of hiding common programming paradigms and simplifying the way ML engineers and data scientists interact with machines.
 SQL serves a similar purpose allowing non-programmers to interact with computational systems in a way that benefits their domain and level of understanding.
 What counts as the highest abstraction level is relative to the domain and intended audience; in both cases presented the audience loses control over memory management or algorithmic decisions.
 Despite these losses, the information they hide allows the user to experience a more tractable version of computation in line with their understanding.
@@ -269,23 +269,145 @@ Abstraction matters, but only insofar as it is well-designed; abstractions that 
 Take, for example, a survey of over two hundred and fifty respondents working with quantum programming languages~\cite{unknown2024qplusage}.
 The majority were experienced classical programmers (over 83\% had five or more years of professional experience), yet the same proportion had minimal quantum language experience.
 Nearly half held computer science degrees, compared to 37\% from physics backgrounds.
+
 Despite this, the dominant languages in use impose physics-oriented conceptual vocabularies: circuit semantics, gate-level operations and quantum-specific constructs that have no classical analogue~\cite{unknown2024qplusage}.
-The result is a glossary burden; practitioners are required to acquire a new conceptual vocabulary before they can be productive, one misaligned with the background most of them bring.
+The result is a glossary burden; practitioners are required to acquire new conceptual vocabulary before they can be productive, one misaligned with the background most of them bring.
 The survey confirms this: practitioners cited lack of conceptual quantum knowledge and challenging, inconsistent syntax as primary challenges, and over 31\% identified the absence of higher-level abstraction as a key missing feature~\cite{unknown2024qplusage}.
 Mapping clarity compounds the problem; even the most popular framework, Qiskit, was noted by users as low-level and architecturally complex despite its familiarity advantage.
-These findings point toward a specific standard for abstraction quality in this domain: abstractions must reduce glossary burden by aligning with existing intuitions, and must improve mapping clarity so that practitioners can reason about their problem without being forced to reason about the machine.
+These findings point toward a specific standard for abstraction quality in this domain: abstractions must reduce glossary burden by aligning with existing intuitions and must improve mapping clarity so that practitioners can reason about their problem without being forced to reason about the machine.
 
 In the current state of quantum computation, abstraction fails to provide sufficient tractability or advantages given the complexity of the domain.
 Abstraction does not result in a problem space that is easier to reason about for novices in quantum mechanics~\cite{unknown2024qplusage}.
 This will be discussed in more detail in Subsection~\ref{subsec:lit_rev:abstraction:in_quantum_computing}.
 
-%% ------------------------ To be written --------------------------------------------------------------------------- %%
 \subsection{Abstraction in quantum computing}\label{subsec:lit_rev:abstraction:in_quantum_computing}
-- Discuss DiMatteo here and begin to disect why that abstraction framework isn't enough
-- Need to nail down here the failures of abstraction in quantum computing, di matteo can help with this
-- Is conceptual abstraction missing or too low level? Maybe comment on the prevalence of functional abstractions
+The current state of quantum computing systems is a spectrum of languages and frameworks; consistent with the abstraction hierarchy established in Subsection~\ref{subsec:lit_rev:abstraction:defining_abstraction}; spanning assembly-like languages such as OpenQASM~\cite{cross2022openqasm3}, embedded frameworks like Qiskit~\cite{aleksandrowicz2019qiskit} and high-level structured programming languages such as Silq~\cite{bichsel2020silq} and Qmod~\cite{vax2025qmodexpressivehighlevelquantum}.
+Each layer progressively hides the complexity required to interact with it.
+Embedded frameworks such as Qiskit enable a user to define quantum circuits without considering pulse or transition timings which would be required by OpenQASM specifications.
+Silq and Qmod likewise provide methods of uncomputation that remove the need to directly implement reversal routines~\cite{bichsel2020silq, vax2025qmodexpressivehighlevelquantum}.
 
-\subsection{Transition (TBC)}\label{subsec:lit_rev:abstraction:transition}
-- Pull together the points and findings of the other subsections here to justify that abstraction is the core missing piece of quantum computing
-- Make a point that we are missing a level of abstraction by comparing the presence of python and SQL in classical languages
-- Provide bridging here that we must focus through that lens for the rest of the review and how it will motivate the thesis.
+Formalisation of these abstractions, how they are defined and their role in quantum computing design has become a literary focus~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
+An abstraction hierarchy for quantum computing has been suggested following the same \textbf{Programming}, \textbf{Execution} and \textbf{Hardware} layers as classical systems~\cite{DiMatteo2024AbstractionHierarchy} as shown in Table~\ref{tab:lit_rev:abstraction:quantum_hierarchy}.
+
+\begin{table}[htbp]
+    \centering
+    \caption{The suggested abstraction hierarchy for quantum computing consisting of three primary layers~\cite{DiMatteo2024AbstractionHierarchy}.}
+    \label{tab:lit_rev:abstraction:quantum_hierarchy}
+    \begin{tabular}{@{}ll@{}}
+        \toprule
+        \textbf{Hierarchy Layer} & \textbf{Primary Purpose} \\ \midrule
+        Programming              & Expressing algorithm and intent using high-level concepts. \\
+        Execution                & Translation to gate-level instructions and circuits. \\
+        Hardware                 & Physical implementation and pulse sequences. \\ \bottomrule
+    \end{tabular}
+\end{table}
+
+Abstract machines like the Von Neumann random access memory (RAM) were critical in the successful development of productive classical systems.
+Abstract machines provide a conceptual framework for defining the responsibilities of lower and higher level abstractions.
+Candidate machines for quantum systems exist, such as quantum random access memory or the quantum Turing machine~\cite{nunez_corrales2025betterabstractmachines}
+Their suitability as foundations for productive programming abstractions has not been established.
+Criteria to assess their suitability has been suggested building on what makes classical abstract machines successful and what is required in general for productive programming with fifteen criteria established as shown in Table~\ref{tab:lit_rev:abstraction:qam_criteria}~\cite{nunez_corrales2025betterabstractmachines}.
+
+\begin{longtable}[htbp]{@{}p{7cm}p{7cm}@{}}
+    \caption{Fifteen criteria for assessing the suitability and effectiveness of abstract machines for quantum computing~\cite{nunez_corrales2025betterabstractmachines}.}
+    \label{tab:lit_rev:abstraction:qam_criteria} \\
+    \toprule
+    \textbf{Criterion} & \textbf{Description} \\ \midrule
+    1. Turing completeness & Can perform the same computations as any other classical or quantum machine; can simulate other machines and run any valid program without new features. \\
+    2. Finite symbolic state & Available resources, symbols, memory, and states are finite and known; state can be decomposed into addressable subunits. \\
+    3. Symbolic denotational syntax & Reasoning in terms of how operations impact system state (side effects) without needing to understand hardware execution; no circuit elements. \\
+    4. Representation-independent data types & No reference to low-level, specific circuit elements (bits, qubits, etc.) for data types; data representation does not impact programming. \\
+    5. Stable instruction set architecture & Instructions are finite, limited, and can express all programs; they remain constant across different hardware and are compact enough for humans to remember. \\
+    6. Verifiable formal content & Operations are mathematically defined and independent of their specific hardware implementation. \\
+    7. Compact instruction representation & The size of storing an instruction is constant and not influenced by the complexity of its hardware implementation. \\
+    8. Classical-quantum regularity & Classical and quantum instructions coexist in the same machine at the same level of importance; neither requires hardware knowledge to reason about. \\
+    9. Degeneracy of implementation & Building and running instructions does not violate physics; specific hardware is not required to preserve contracts between instructions or outcomes. \\
+    10. Predictable procedural composability & Instructions can be combined into procedures with known outcomes and predictable system impact. \\
+    11. Intrinsic ensemble semantics & Instructions can receive multiple inputs and produce multiple outputs; distribution data types are well-defined; the number of shots required is elided. \\
+    12. Resource constructible functions & Time and space complexity can be reasoned about in abstract units rather than physical hardware realizations. \\
+    13. Standard instruction cycle & Instructions execute within a single, mechanizable control loop dependent only on addressable units, not their internal workings. \\
+    14. Classical control flow & Classical control structures can be implemented succinctly using the provided instruction set. \\
+    15. Quantum/hybrid control flow & Quantum or hybrid control structures can be implemented succinctly using the instruction set. \\ \bottomrule
+\end{longtable}
+
+Quantum computing systems have made and continue to make progress towards higher levels of productive abstraction.
+That progress has focused on improving the functional abstractions within the conceptual circuit model, providing easier ways to produce and describe quantum circuits; this represents an improvement to the operational surface of the circuit model rather than to its conceptual foundations.
+The circuit model does not represent an abstract machine model capable of meaningful productivity~\cite{nunez_corrales2025betterabstractmachines} and reduction in cognitive load for end users; qubits, gates, phases are all still required knowledge.
+
+Improving the way in which programmers interact with the circuit model does not meaningfully progress towards a state of abstraction where \textit{intent} can be described using concepts shared by the programmer and machine~\cite{DiMatteo2024AbstractionHierarchy}.
+Instead, the circuit model represents concepts defined by the machine and learned by the programmer and will fail to provide the necessary ``leap'' that would mirror the ``Cambrian explosion'' of languages and algorithms seen after the advent of RAM~\cite{nunez_corrales2025betterabstractmachines}.
+That leap will only be possible when conceptual barriers to entry are eliminated by improved high-level abstractions as shown in Subsection~\ref{subsec:lit_rev:abstraction:why_matters}.
+
+The hierarchy previously presented represents one of the first systematic attempts to define and critically examine abstraction within quantum computing, formally establishing what functionality is intended to be owned by different types of languages or frameworks.
+Through that definition it is shown clearly that there is significant ``bleed through'' between these layers or leaky abstractions~\cite{DiMatteo2024AbstractionHierarchy} as illustrated in Figure~\ref{fig:lit_rev:abstraction:abstraction_bleed_through}.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.75\linewidth]{../figures/fig-lit_rev-abstraction-abstraction_bleed_through}
+    \caption{An example showing how Silq bleeds abstractions from the programming to execution layers while implementing Grover's algorithm, note this may not be fully syntactically valid Silq~\cite{bichsel2020silq}.}
+    \label{fig:lit_rev:abstraction:abstraction_bleed_through}
+\end{figure}
+
+The presence of leaky abstractions in higher level languages is further evidence that a productive or meaningful abstraction level has not yet been established.
+It is not possible to operate solely within the programming layer because it leaks considerably into the execution layer.
+
+Even the available abstract machines show consistent failures against the criteria most directly governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}.
+\begin{itemize}
+    \item Symbolic denotational syntax
+    \item Representation-independent data types
+    \item Stable instruction set architecture
+\end{itemize}
+These criteria guarantee stable information hiding between programming interfaces and hardware implementations.
+Their violation demonstrates that there is no established model for abstraction that can guarantee appropriate information hiding.
+
+Positive progress has been made towards genuine information hiding abstractions in quantum computing.
+Silq is among the first high-level quantum programming languages to introduce automatic uncomputation managed by a compiler~\cite{bichsel2020silq}.
+Unlike languages such as Q\# or Qmod which provide programmer led methods for marking the need for uncomputation~\cite{vax2025qmodexpressivehighlevelquantum} Silq uses its type system to guarantee situations requiring uncomputation can be identified and actioned by the compiler.
+Automatic uncomputation could be seen as akin to the development of garbage collection in classical computing representing automated clean-up of allocated resources.
+
+Silq and Qmod both offer strong type systems that show linearity and prevent physical violations such as no-cloning.
+These features all represent improvements to the developer experience and a step towards information hiding and correctness guarantees we expect from higher abstraction levels.
+
+Like garbage collection in classical computing, automatic uncomputation and improved type safety reduce programmer burden within the existing abstraction layer; they do not constitute a transition to a new conceptual space.
+Silq, like Qiskit or Q\#, still uses qubits, gates, phases and the circuit as its primary conceptual programming model.
+
+Advanced circuit development frameworks like Qiskit or Pennylane~\cite{bergholm2018pennylane} can be similarly judged.
+They improve the experience of programming a circuit by providing embedded Python frameworks but still require the user to know about the circuit model.
+These all represent leaky abstractions if they are considered as part of any kind of programming layer as defined by the hierarchy.
+
+The systems and languages described here all serve a single conceptual audience, experts in physics or quantum mechanics; their abstractions serve to improve that audience's interactions with the system.
+What they fail to offer is an abstraction that can increase the reach or audience beyond that domain; this problem is categorised throughout the literature~\cite{cobb2022higherlevelabstractions, unknown2024qplusage}.
+
+Empirical evidence from practitioners reflects this directly: over 40\% believe too many quantum languages have already been developed, with 31\% explicitly identifying the need for higher-level languages and inadequate abstraction tooling as a primary challenge~\cite{unknown2024qplusage}.
+Notably, the majority of quantum programming practitioners are experienced classical software engineers~\cite{unknown2024qplusage}; a community that already reasons fluently with high-level abstractions.
+The barrier is not programming competence; it is the conceptual distance between the circuit model and the abstractions that the community is equipped to work with.
+Continued iteration within the circuit model risks compounding that fatigue without addressing its cause.
+
+Meaningful and productive abstraction in quantum computing is challenging, quantum computation represents a paradigmatic shift in how computational processes are perceived and designed~\cite{furntratt2024higherabstractionlevels}.
+It is no longer possible to work with standard classical assumptions that underpin the way abstractions have historically been reasoned with, such as data representation being independent of its environment and being able to copy, pass and inspect data freely~\cite{LiskovGuttag1986, yuan2025foundationalabstractions}.
+Superpositions cannot be inspected without losing information in the system, superpositions cannot be copied due to the no-cloning theorem.
+
+Formal analysis establishes that arbitrary classical control flows cannot be implemented in superposition without violating unitarity~\cite{yuan2025foundationalabstractions}.
+Quantum languages must either restrict expressible control flows or introduce semantic models with no classical precedent~\cite{yuan2025foundationalabstractions}.
+Data represented as quantum states can be entangled with its environment, representations can be influenced by that entanglement; this cannot be reasoned with in traditional classical abstractions~\cite{yuan2025foundationalabstractions}.
+
+The quantum abstraction landscape shows genuine and sustained progress, but that progress is concentrated in the ergonomic boundary of the circuit model.
+The programmer's required mental model has not fundamentally changed: quantum vocabulary remains mandatory, and the abstraction ceiling is consistently below what the classical criteria from Subsection~\ref{subsec:lit_rev:abstraction:levels_elements} require.
+This is not a failure of engineering effort; it reflects that quantum computation is structurally \textit{different}; it requires novel conceptual foundations for abstraction, not refinement of classical ones.
+
+\subsection{Looking forward}\label{subsec:lit_rev:abstraction:looking_forward}
+The preceding subsections establish what abstraction is, what makes it effective and where quantum computing stands in relation to it.
+Effective abstraction hides implementation detail, preserves semantic intention and reduces the cognitive burden on practitioners; evidence from classical systems demonstrates that when these properties are achieved, practitioners become more productive, arrive at better solutions faster and reason at the level of their problem rather than the level of the machine~\cite{Prechelt2000EmpiricalComparison,IpeirotisZheng2025NLIDBUsers}.
+Quantum computing has made genuine progress toward this goal: layer separation has been formalised, type safety and automatic uncomputation have reduced certain classes of programmer error, hybrid execution models have improved interoperability with classical systems.
+However, as Subsection~\ref{subsec:lit_rev:abstraction:in_quantum_computing} demonstrates, this progress remains within the operational boundary of the circuit model; the programmer's conceptual vocabulary has not changed, and the abstraction ceiling is constrained by structural properties of quantum mechanics that the classical abstraction framework was not designed to accommodate.
+
+The classical compiler chain illustrates the missing piece.
+As established in Subsection~\ref{subsec:lit_rev:abstraction:levels_elements}, mature classical systems place a general-purpose source layer; languages like C and Java; above the assembly and hardware layers.
+That source layer is hardware-independent, formally defined and expressive enough to allow practitioners to describe problems in their domain without knowledge of the machine executing the solution.
+Quantum computing does not yet have an equivalent to that layer.OpenQASM and pulse-level languages sit at the assembly tier; Silq, Q\# and Qmod are positioned above them, but all three still require the programmer to reason in qubits, gates, and circuits: concepts defined by the machine, not the problem.
+A C programmer does not need to know the instruction set of the processor executing their code; a Silq programmer cannot avoid reasoning about the circuit model.
+The gap is not that quantum lacks a domain-level abstraction comparable to SQL or Python; it is that it lacks the source-layer foundation that classical computing built those domain abstractions on top of.
+
+The remainder of this literature review examines the quantum programming stack through the abstraction lens developed here.
+The sections that follow survey quantum programming language families and execution models, analyse intermediate representations and compilation pipelines and assess the degree to which each layer meets the criteria for effective abstraction established in Subsections~\ref{subsec:lit_rev:abstraction:defining_abstraction}and~\ref{subsec:lit_rev:abstraction:levels_elements}, with the aim of arriving at a precise characterisation of what a source-layer abstraction for quantum computing would require. That characterisation
+motivates the language design contribution presented in Chapter~\ref{chapt:pub_language_design}.
