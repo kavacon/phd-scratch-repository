@@ -45,72 +45,68 @@ Employing the Constructive Research Method, it will deliver a C-like language an
 
 % Introduction
 \section{Introduction}
-This research aims to explore and resolve the missing link between high-level programming languages and quantum programming.
-
 In the last 10 years profound progress has been made towards unlocking higher level and interoperable quantum programming languages.
 
-OpenQASM (Open Quantum Assembly Language) is a low-level quantum programming language introduced in 2017. OpenQASM provides a hardware-agnostic interface for specifying quantum operations and control sequences. It abstracts the quantum circuit, with a focus on gate-level instructions, expressing quantum algorithms directly in terms of qubits, gates, and measurements \cite{cross2017open}.
+OpenQASM (Open Quantum Assembly Language) is a low-level quantum programming language introduced in 2017. OpenQASM provides a hardware-agnostic interface for specifying quantum operations and control sequences~\cite{cross2017open}.
+OpenQASM lacks high-level abstraction and relies on circuit and gate instructions.
 
-While powerful for precise quantum hardware control, OpenQASM lacks high-level abstractions, such as quantum-native control flows or modular algorithm design, often present in classical high-level languages.
+Languages like \textbf{Qiskit}~\cite{qiskit} and \textbf{PennyLane QML}~\cite{pennylane} provide Python-based interfaces that facilitate quantum programming and compile into QASM.
+These languages still rely on direct manipulation of circuits and gates.
 
-Built on top of QASM we see progress towards high-level, C or Java-like languages. For instance, \textbf{Qiskit}~\cite{qiskit} and \textbf{PennyLane QML}~\cite{pennylane} provide Python-based interfaces that facilitate quantum programming, yet they rely heavily on low-level constructs and manual control flows.
-Despite recent progress, most quantum programming languages remain close to circuit-level abstractions, requiring users to manipulate gates and qubits explicitly.
+Efforts toward higher-level abstractions include \textbf{Silq}~\cite{silq2024}, \textbf{Qmod}~\cite{qmod2025}, \textbf{Qrisp}~\cite{qrisp2024}, \textbf{Qutes}~\cite{qutes2025}, and \textbf{ONDA}~\cite{onda2024}. 
+Collectively these languages introduce automatic uncomputation, quantum-native numeric types, high-level expressiveness and the abstraction of hardware details. \textbf{ONDA} incorporates conditional branching and sequential logic, approaching the structure of classical control flows.
 
-Efforts toward higher-level abstractions include \textbf{Silq}~\cite{silq2024}, \textbf{Qmod}~\cite{qmod2025}, \textbf{Qrisp}~\cite{qrisp2024}, \textbf{Qutes}~\cite{qutes2025}, and \textbf{ONDA}~\cite{onda2024}. \textbf{Silq} introduces automatic uncomputation, reducing programmer overhead, and improving type safety. \textbf{Qmod} emphasizes quantum-native numeric types and high-level expressiveness. \textbf{Qrisp} brings software engineering paradigms into quantum development, with the aim of maintainability and abstraction. \textbf{Qutes} simplifies quantum development by abstracting hardware details while remaining interoperable with Qiskit. \textbf{ONDA} incorporates conditional branching and sequential logic, approaching the structure of classical control flows within a quantum context.
+These languages represent significant advances.
+None fully match the abstraction levels found in classical languages like C or Python.
 
-These languages represent significant advances, but are still emerging, with limited adoption and tooling. None fully match the abstraction levels found in mature classical languages like C or Python.
+These languages rely on circuit primitives and a fundamental understanding of how these operate in a quantum mechanical context.
+An ideal high-level language would abstract the need for this in depth understanding..
+\textbf{Quff}~\cite{quff2024}, a high-level C-like quantum language heads in that direction. 
 
-At their core, these languages still rely on circuit primitives or bit-wise operations and a fundamental understanding of how these operate in a quantum mechanical context.
-An ideal high-level language would abstract the need for this in depth understanding and provide new, operational abstractions instead.
-\textbf{Quff}~\cite{quff2024}, a high-level C-like quantum language, provides a push in the right direction to achieve this result. 
+\textbf{Quff} still relies on generating circuits in QASM, requiring a classical machine to in its compilation.
 
-\textbf{Quff} like the other examples provided still relies on dynamically generated circuits, requiring a classical machine to be involved in its compilation.
-Our current high-level quantum languages are not yet ready to support a general purpose QPU with static circuit structures.
+We aim with to address the remaining gaps in existing high-level quantum languages by defining new high-level software operations for quantum programs, paradigms for compiling them into low-level assembly and circuits.
 
-We aim with this research to address the remaining gaps in existing high-level quantum languages by defining new high-level software operations for quantum programs, paradigms for compiling them into low-level assembly and circuits and a programming language that describes the new operations.
-
-Our research will focus on a language capable of running to completion on a standalone QPU. 
-It is not a focus or within our initial scope to explore or develop implementations of quantum random access memory or storage.
+We will focus on a language capable of running to completion on a standalone QPU. 
+We will not explore or develop implementations of quantum random access memory or storage.
 
 % Research Design
 \section{Research Design}
 \subsection{Research Aims}
-The study aims to achieve the following outcomes which will form the basis for a high-level quantum software paradigm and programming language.
+The study will aim to:
 \begin{itemize}
-    \item Defining quantum operation (not bit-wise) primitives and their associated circuit structures.
-    \item Defining a new quantum programming language and syntax built with these operations.
-    \item Building an OpenQASM compiler for our language for dynamic circuit generation.
-    \item Defining a novel general purpose circuit structure and microcode architecture for static compilation.
+    \item Define quantum operation (not bit-wise) primitives and their associated circuit structures.
+    \item Define a new quantum programming language and syntax built with these operations.
+    \item Build an OpenQASM compiler for our language for dynamic circuit generation.
+    \item Define a general purpose circuit structure and microcode architecture for static compilation.
 \end{itemize}
 
-The language will be unique in that it will not require an understanding of circuit registers or quantum mechanics to be used.
-Instead, we will develop a quantum programming language in which data can be defined intuitively as in classical languages such as C.
-Quantum gates such as the Hadamard, CNOT and rotations will not be considered primary operations in this language, which will instead abstract the effects of these operators into well-defined software operations and functions.
-The language will define new, quantum specific operations that may not have analgoues in classical languages but can described and taught based on their software outcomes rather than physical or quantum mechnical outcomes.
+The language will not require an understanding of circuit registers or quantum mechanics.
+We will develop a quantum programming language in which data can be defined intuitively as in classical languages such as C.
+Quantum gates, Hadamard, CNOT and rotations will not be considered primary operations in this language.
+Instead the effects of these operators will be abstracted into well-defined software operations and functions.
+The language will define quantum specific operations that may not have analogues in classical languages but can described and taught based on their software outcomes rather than physical or quantum mechanical outcomes.
 
-We will answer the following questions with our research:
+We will answer the following questions:
 \begin{itemize}
     \item Can quantum operations be abstracted away from bit-wise actions?
-    \item Can a high-level programming language provide sufficient flexbility with more abstraction for non-expert quantum programmers?
+    \item Can a high-level programming language provide sufficient flexibility with more abstraction for non-expert quantum programmers?
     \item Can generic quantum programs be run on a static and shared circuit structure?
 \end{itemize}
-
-By building a new quantum programming language with novel compilation techniques we can answer these questions.
 
 \subsection{Methodology}
 We will use the Constructive Research Method, which is well-suited for the development of innovative artifacts in computing \cite{lukka2003constructive}. 
 
-The methodology focuses on constructing a novel programming language grounded in theoretical analysis of quantum programming limitations. 
-The process includes the systematic design, development, and demonstration of the language, followed by evaluation through case studies and comparisons with existing approaches. 
+Our focus will be constructing a novel programming language grounded in theoretical analysis of quantum computation. 
+The process includes, the systematic design, development, and demonstration of the language, followed by evaluation through case studies and comparisons with existing approaches. 
 Emphasis is placed on the practical relevance of the artifact as a solution to real-world problems in quantum software engineering.
 
-The \textit{Constructive Research Method} is applied in computer science for developing practical artifacts. Examples include work on trans-disciplinary innovation~\cite{mcgregor2018}, studies on computational models~\cite{dodig2010}, and guidelines for industry-related software tools~\cite{lassenius2001}.
+The \textit{Constructive Research Method} is applied in computer science when developing practical artifacts. Examples include work on trans-disciplinary innovation~\cite{mcgregor2018}, studies on computational models~\cite{dodig2010}, and guidelines for industry-related software tools~\cite{lassenius2001}.
 
 \subsection{Success Criteria}
-Our research will focus on physical outcomes and the development of a project.
-Success will be measured based on the completion of each milestone and its ability to meet its objectives as outlined in Section~\ref{sec:timeline-plan}.
+Success will be measured based on the completion of each milestone and the objectives outlined in Section~\ref{sec:timeline-plan}.
 
-The research must meet the following general outcomes to be considered successful:
+To be successful we must demonstrate:
 \begin{itemize}
     \item Creation of a high-level and compilable quantum programming language.
     \item Successful writing and running of a program in that language on quantum hardware.
@@ -235,8 +231,8 @@ Future Directions & Explores opportunities for extending the language, optimizin
 % Study Implications
 \section{Study Implications}
 This study will significantly enhance accessibility in quantum computing by introducing a high-level programming language with C-like abstraction. 
-By decoupling low-level quantum mechanics from software design, the language enables software engineers to write quantum programs without expertise in quantum mechanics. 
-The ability to compile into a general, static circuit structure promotes cross-platform compatibility, reducing hardware dependency and fostering broader adoption. 
+By decoupling low-level quantum mechanics from software design, the language will enable software engineers to write quantum programs without expertise in quantum mechanics. 
+The ability to compile into a general, static circuit structure promotes cross-platform compatibility, reducing hardware dependency. 
 The static circuit will provide a starting point for the development of steady state QPUs that do not require complex classical controllers to load and run circuit configurations.
 We will lay the groundwork for scalable quantum software development, supporting clearer reasoning, improved tooling, and future integration with classical systems. 
 
