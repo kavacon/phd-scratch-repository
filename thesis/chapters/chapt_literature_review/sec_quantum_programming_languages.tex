@@ -1,18 +1,63 @@
-\section{Quantum Programming languages}\label{sec:lit_rev:quantum_programming_languages}
+\section{Quantum Programming Languages}\label{sec:lit_rev:qpl}
+Programming languages are the tool with which computer scientists and software engineers convey their algorithmic intent to machines for execution.
+As described in Section~\ref{sec:lit_rev:abstraction} programming languages come in many types and families, each serving a different role within the execution stack or compilation chain.
+These roles include high-level languages, designed to make human intent as easy as possible to express, intermediate representations which make program structure explicit for compiler analysis and transformation and assembly languages which describe execution in terms machines directly operate on.
 
-\subsection{Defining Quantum Programming Language}\label{subsec:lit_rev:quantum_programming_languages:defining_language}
+This section explores the current state of quantum programming languages; those intended to execute on quantum computers.
+It examines which layers of the compilation chain are represented, what they offer and whether they support the expression of human intent without requiring programmers to reason at the level of the quantum machine.
+The evidence shows genuine progress across all layers; no existing system, however, enables sustained human-centred reasoning: the programmer's required mental model remains machine-centred throughout.
 
-\subsection{Taxonomy of Quantum Languages}\label{subsec:lit_rev:quantum_programming_languages:taxonomy}
+\subsection{Scope and Vocabulary}\label{subsec:lit_rev:qpl:scope}
+The review presented in this section will analyse quantum programming languages across four categories or families.
+Each of those families is described in Table~\ref{tab:lit_rev:qpl:language_families}.
+The definitions of these families, their taxonomy and critical analyses are expanded in Subsection~\ref{subsec:lit_rev:qpl:taxonomy}.
+Other frameworks assess quantum languages on their semantic or syntactic principles, such as imperative and functional languages~\cite{Gay2006QPLSurvey}.
+The review presented here does not do that and instead focuses on the intended purpose in the compilation stack.
 
-\subsection{Evaluating the suitability of language types}\label{subsec:lit_rev:quantum_programming_languages:evaluating_languages}
+\begin{table}[htbp]
+    \centering
+    \caption{Summary of quantum programming languages families identified in the current literature.}
+    \label{tab:lit_rev:qpl:language_families}
+    \begin{tabularx}{\textwidth}{@{}lX@{}}
+        \toprule
+        \textbf{Family} & \textbf{Description}          \\ \midrule
+        High-level & Human-readable algorithmic logic; quantum resource management abstractions.. \\
+        Embedded framework & Frameworks or libraries for interacting with quantum hardware hosted in classical languages like Python, also referred to as hosted languages~\cite{corralesgarro2025productivityexpressiveness}. \\
+        Intermediate representation (IR) & Machine-independent optimization and canonical representation (IR). \\
+        Assembly & Mapping logic to hardware-level gate sequences and qubit registers. \\ \bottomrule
+    \end{tabularx}
+\end{table}
 
-\subsection{Opportunities (TBC)}\label{subsec:lit_rev:quantum_programming_languages:opportunities}
+Each family represents a different role in the compilation and execution of quantum programs or provides ergonomic or abstraction benefits.
+The families of languages selected represent languages that are used by programmers in the development of quantum programs or those required to demonstrate the full compilation chains and comparisons of complexity.
+From those criteria languages eligible for inclusion are embedded frameworks in classical languages, intermediate representation languages, quantum assembly languages and high-level quantum development languages.
+Languages that solely represent hardware control and vendor or specific machine level languages are excluded from review as they are either not intended for human development or fail to add value to discussions about abstraction.
 
+To evaluate the current state of quantum programming languages, the review will consider the following elements of each language and family:
+\begin{itemize}
+    \item Abstraction level: The degree to which a system exposes machine-level quantum detail to a programmer~\cite{DiMatteo2024AbstractionHierarchy}
+    \item Required quantum knowledge: What quantum mechanical understanding a programmer must have to productively use the language~\cite{Myers2016PLUsabilitySIG, ferreira2024qplusage}
+    \item System portability: Whether the language can be used to target multiple hardware backends without programmer intervention~\cite{DiMatteo2024AbstractionHierarchy, nunez_corrales2025betterabstractmachines}
+\end{itemize}
+Together these criteria represent existing evaluation frameworks and known areas of friction for practitioners of quantum programming.
+The level to which a language adheres to them is a signifier of its ability to advance the current state of quantum programming languages.
 
+Each language family will have a different aspirational level for the criteria presented, intermediate representations will require a higher degree of quantum knowledge than high-level languages.
+The criteria are applied contextually based on the purpose of each language family.
 
-- Look at existing HLL
-- Look at assembly QASM and its use cases
-- Look at classical languages used to program circuits (e.g Qiskit in Python)
-- Provide an evaluation framework
-- Discuss missing level of language (quantum implicitness) although this may also be suitable in the language design secton??
-- Computational thinking and how it is described by languages
+%% ------------------- TO BE WRITTEN ------------------- %%
+\subsection{Taxonomy and the Missing Tier}\label{subsec:lit_rev:qpl:taxonomy}
+
+\subsection{Reading the Language Landscape}\label{subsec:lit_rev:qpl:reading}
+- gay 2006 provides great points about whats missing and why high level abstraction is critical, they may help ground discussions
+
+\subsubsection{Assembly Languages}\label{subsubsec:lit_rev:qpl:assembly}
+
+\subsubsection{Intermediate Representations}\label{subsubsec:lit_rev:qpl:ir}
+
+\subsubsection{Embedded Frameworks}\label{subsubsec:lit_rev:qpl:frameworks}
+
+\subsubsection{High-Level Languages}\label{subsubsec:lit_rev:qpl:highlevel}
+
+\subsection{The Usability Ceiling}\label{subsec:lit_rev:qpl:ceiling}
+- gay 2006 provides great points about whats missing and why high level abstraction is critical, they may help ground discussions

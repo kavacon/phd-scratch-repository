@@ -84,7 +84,7 @@ More precise vocabulary is therefore required that can:
     \item Categorise and place languages within systems of abstraction.
 \end{itemize}
 
-These tools will allow us to understand the roles of different quantum programming languages discussed in Section~\ref{sec:lit_rev:quantum_programming_languages} and develop the assessment frameworks in Chapter~\ref{chapt:pub_language_design}.
+These tools will allow us to understand the roles of different quantum programming languages discussed in Section~\ref{sec:lit_rev:qpl} and develop the assessment frameworks in Chapter~\ref{chapt:pub_language_design}.
 To arrive at our required definitions, we first need to explore the ways in which abstraction is used in programming.
 
 The journey to define abstraction within programming and computer science has been ongoing since the 20th century.
@@ -265,27 +265,27 @@ Abstraction, therefore, can have real-world impacts not only on how problems are
 Novel ideation and problem-solving approaches can be promoted by removing the need to spend cognitive energy on determining how to translate intent to action.
 
 The influence of tooling familiarity on adoption is further evidenced within the quantum computing domain itself.
-An empirical survey of quantum practitioners found that Qiskit, a Python-embedded quantum framework, accounted for over sixty per cent of reported language use~\cite{unknown2024qplusage}.
-The authors attribute this dominance in part to the fact that the majority of respondents were already experienced Python programmers — the barrier to entry is reduced when the tooling meets users at their existing level of competency~\cite{unknown2024qplusage}.
+An empirical survey of quantum practitioners found that Qiskit, a Python-embedded quantum framework, accounted for over sixty per cent of reported language use~\cite{ferreira2024qplusage}.
+The authors attribute this dominance in part to the fact that the majority of respondents were already experienced Python programmers — the barrier to entry is reduced when the tooling meets users at their existing level of competency~\cite{ferreira2024qplusage}.
 
 This is not merely a convenience argument.
 It is evidence that the abstraction level of a tool, and its proximity to the concepts and interfaces a user already commands, is a practical determinant of what gets adopted.
-An abstraction that demands practitioners to acquire an entirely new conceptual vocabulary before they can be productive will consistently lose to one that builds on existing fluency, even if the latter is technically inferior~\cite{unknown2024qplusage}.
+An abstraction that demands practitioners to acquire an entirely new conceptual vocabulary before they can be productive will consistently lose to one that builds on existing fluency, even if the latter is technically inferior~\cite{ferreira2024qplusage}.
 
 Abstraction matters, but only insofar as it is well-designed; abstractions that fail to improve tractability for their intended users become barriers rather than tools.
 
-Take, for example, a survey of over two hundred and fifty respondents working with quantum programming languages~\cite{unknown2024qplusage}.
+Take, for example, a survey of over two hundred and fifty respondents working with quantum programming languages~\cite{ferreira2024qplusage}.
 The majority were experienced classical programmers (over 83\% had five or more years of professional experience), yet the same proportion had minimal quantum language experience.
 Nearly half held computer science degrees, compared to 37\% from physics backgrounds.
 
-Despite this, the dominant languages in use impose physics-oriented conceptual vocabularies: circuit semantics, gate-level operations and quantum-specific constructs that have no classical analogue~\cite{unknown2024qplusage}.
+Despite this, the dominant languages in use impose physics-oriented conceptual vocabularies: circuit semantics, gate-level operations and quantum-specific constructs that have no classical analogue~\cite{ferreira2024qplusage}.
 The result is a glossary burden; practitioners are required to acquire new conceptual vocabulary before they can be productive, one misaligned with the background most of them bring.
-The survey confirms this: practitioners cited lack of conceptual quantum knowledge and challenging, inconsistent syntax as primary challenges, and over 31\% identified the absence of higher-level abstraction as a key missing feature~\cite{unknown2024qplusage}.
+The survey confirms this: practitioners cited lack of conceptual quantum knowledge and challenging, inconsistent syntax as primary challenges, and over 31\% identified the absence of higher-level abstraction as a key missing feature~\cite{ferreira2024qplusage}.
 Mapping clarity compounds the problem; even the most popular framework, Qiskit, was noted by users as low-level and architecturally complex despite its familiarity advantage.
 These findings point toward a specific standard for abstraction quality in this domain: abstractions must reduce glossary burden by aligning with existing intuitions and must improve mapping clarity so that practitioners can reason about their problem without being forced to reason about the machine.
 
 In the current state of quantum computation, abstraction fails to provide sufficient tractability or advantages given the complexity of the domain.
-Abstraction does not result in a problem space that is easier to reason about for novices in quantum mechanics~\cite{unknown2024qplusage}.
+Abstraction does not result in a problem space that is easier to reason about for novices in quantum mechanics~\cite{ferreira2024qplusage}.
 This will be discussed in more detail in Subsection~\ref{subsec:lit_rev:abstraction:in_quantum_computing}.
 
 \subsection{Abstraction in quantum computing}\label{subsec:lit_rev:abstraction:in_quantum_computing}
@@ -384,10 +384,10 @@ They improve the experience of programming a circuit by providing embedded Pytho
 These all represent leaky abstractions if they are considered as part of any kind of programming layer as defined by the hierarchy.
 
 The systems and languages described here all serve a single conceptual audience, experts in physics or quantum mechanics; their abstractions serve to improve that audience's interactions with the system.
-What they fail to offer is an abstraction that can increase the reach or audience beyond that domain; this problem is categorised throughout the literature~\cite{cobb2022higherlevelabstractions, unknown2024qplusage}.
+What they fail to offer is an abstraction that can increase the reach or audience beyond that domain; this problem is categorised throughout the literature~\cite{cobb2022higherlevelabstractions, ferreira2024qplusage}.
 
-Empirical evidence from practitioners reflects this directly: over 40\% believe too many quantum languages have already been developed, with 31\% explicitly identifying the need for higher-level languages and inadequate abstraction tooling as a primary challenge~\cite{unknown2024qplusage}.
-Notably, the majority of quantum programming practitioners are experienced classical software engineers~\cite{unknown2024qplusage}; a community that already reasons fluently with high-level abstractions.
+Empirical evidence from practitioners reflects this directly: over 40\% believe too many quantum languages have already been developed, with 31\% explicitly identifying the need for higher-level languages and inadequate abstraction tooling as a primary challenge~\cite{ferreira2024qplusage}.
+Notably, the majority of quantum programming practitioners are experienced classical software engineers~\cite{ferreira2024qplusage}; a community that already reasons fluently with high-level abstractions.
 The barrier is not programming competence; it is the conceptual distance between the circuit model and the abstractions that the community is equipped to work with.
 Continued iteration within the circuit model risks compounding that fatigue without addressing its cause.
 
