@@ -35,9 +35,9 @@ Languages that solely represent hardware control and vendor or specific machine 
 
 To evaluate the current state of quantum programming languages, the review will consider the following elements of each language and family:
 \begin{itemize}
-    \item Abstraction level: The degree to which a system exposes machine-level quantum detail to a programmer~\cite{DiMatteo2024AbstractionHierarchy}
-    \item Required quantum knowledge: What quantum mechanical understanding a programmer must have to productively use the language~\cite{Myers2016PLUsabilitySIG, ferreira2024qplusage}
-    \item System portability: Whether the language can be used to target multiple hardware backends without programmer intervention~\cite{DiMatteo2024AbstractionHierarchy, nunez_corrales2025betterabstractmachines}
+    \item Abstraction level: The degree to which a system exposes machine-level quantum detail to a programmer~\cite{DiMatteo2024AbstractionHierarchy}.
+    \item Required quantum knowledge: What quantum mechanical understanding a programmer must have to productively use the language~\cite{Myers2016PLUsabilitySIG, ferreira2024qplusage}.
+    \item System portability: Whether the language can be used to target multiple hardware backends without programmer intervention~\cite{DiMatteo2024AbstractionHierarchy, nunez_corrales2025betterabstractmachines}.
 \end{itemize}
 Together these criteria represent existing evaluation frameworks and known areas of friction for practitioners of quantum programming.
 The level to which a language adheres to them is a signifier of its ability to advance the current state of quantum programming languages.
@@ -115,11 +115,35 @@ Embedded frameworks achieve this effectively, but it is not an adequate solution
 High-level languages come closest, but their fundamental coupling to quantum circuit primitives and resource management requires the programmer to have a quantum mechanical mental model.
 These languages do not enable problems and solutions to be formulated purely algorithmically.
 
-%% ------------------- TO BE WRITTEN ------------------- %%
-
 \subsection{Reading the Language Landscape}\label{subsec:lit_rev:qpl:reading}
-- gay 2006 provides great points about whats missing and why high level abstraction is critical, they may help ground discussions
+Quantum programming language development continues to focus on improving computability and tractability within quantum domains rather than focusing on improving the experience of programmers~\cite{corralesgarro2025productivityexpressiveness}.
+Assessing programming languages solely against their computability biases success towards machine concerns rather than human factors and programmer experience.
 
+Current quantum programming languages suffer from a usability issue failing to be addressed at a fundamental level~\cite{ferreira2024qplusage, nunez_corrales2025betterabstractmachines}.
+A survey of active quantum programming projects on GitHub showed a lack of novel development or algorithmic investigation~\cite{murillo2022sequantumprogramming}.
+Surveys of embedded framework usage found that their popularity can be attributed to the improved programmer experience when using a classical language; however, programmers still struggled with the circuit architecture~\cite{ferreira2024qplusage}.
+Programmers consistently report quantum domain knowledge, vocabulary and concepts as barriers to entry and understanding of quantum languages~\cite{ferreira2024qplusage, murillo2022sequantumprogramming}.
+
+Subsection~\ref{subsec:lit_rev:qpl:scope} established three criteria that can be used to critically examine quantum programming languages, these criteria are directly related to the programmer experience:
+\begin{itemize}
+    \item Abstraction level.
+    \item Required quantum knowledge.
+    \item System portability.
+\end{itemize}
+
+High-level programming languages realise the abstraction requirements described in Section~\ref{sec:lit_rev:abstraction}.
+In classical programming language theory they provide a control plane that reduces a programmer's exposure to machine concerns~\cite{scott2009plp}.
+
+In the remainder of this subsection, the various language families in quantum computing are described in detail.
+Their definitions are presented and members of the family analysed for their features and success as programming languages.
+Languages are assessed on the degree to which they support computational thinking paradigms~\cite{Wing2006ComputationalThinking}, graded based on their family and position in the compilation stack.
+
+Each language family is assessed on its suitability to support the ideal quantum abstract machine~\cite{nunez_corrales2025betterabstractmachines} described in Section~\ref{sec:lit_rev:abstraction} with respect to its role in compilation.
+High-level languages are assessed with additional rigour against their ability to shield programmers from inherent constraints in quantum programming not present in classical programming.
+\textit{Representation exposure}; the degree to which a programmer is required to reason about internal quantum state directly, due to the inability to copy or inspect it without disturbing the computation.
+\textit{Semantic mismatch}; the degree to which invalid equivalence with classical concepts is assumed~\cite{yuan2025foundationalabstractions}.
+
+%% ------------------- TO BE WRITTEN ------------------- %%
 \subsubsection{Assembly Languages}\label{subsubsec:lit_rev:qpl:assembly}
 
 \subsubsection{Intermediate Representations}\label{subsubsec:lit_rev:qpl:ir}
