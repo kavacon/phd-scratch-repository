@@ -21,7 +21,7 @@ The review presented here does not do that and instead focuses on the intended p
     \begin{tabularx}{\textwidth}{@{}lX@{}}
         \toprule
         \textbf{Family} & \textbf{Description}          \\ \midrule
-        High-level & Human-readable algorithmic logic; quantum resource management abstractions.. \\
+        High-level & Human-readable algorithmic logic; quantum resource management abstractions. \\
         Embedded framework & Frameworks or libraries for interacting with quantum hardware hosted in classical languages like Python, also referred to as hosted languages~\cite{corralesgarro2025productivityexpressiveness}. \\
         Intermediate representation (IR) & Machine-independent optimization and canonical representation (IR). \\
         Assembly & Mapping logic to hardware-level gate sequences and qubit registers. \\ \bottomrule
@@ -45,8 +45,77 @@ The level to which a language adheres to them is a signifier of its ability to a
 Each language family will have a different aspirational level for the criteria presented, intermediate representations will require a higher degree of quantum knowledge than high-level languages.
 The criteria are applied contextually based on the purpose of each language family.
 
-%% ------------------- TO BE WRITTEN ------------------- %%
 \subsection{Taxonomy and the Missing Tier}\label{subsec:lit_rev:qpl:taxonomy}
+Sections~\ref{subsec:lit_rev:abstraction:levels_elements} and~\ref{subsec:lit_rev:abstraction:looking_forward} established that quantum programming lacks a machine-independent source layer.
+This section grounds that finding in an examination of what each language family aspires to and whether any family achieves it.
+
+The defining aspiration of quantum programming language development is quantum-agnostic application development~\cite{nunez_corrales2025betterabstractmachines}.
+A family of languages that fulfills this aspiration would not require fundamental knowledge of quantum mechanics or quantum circuits to program.
+Variations of this aspiration exist; some argue that quantum agnosticism could be achieved by improving circuit generation techniques to remove quantum pre-requisite knowledge~\cite{cobb2022higherlevelabstractions}.
+Others identify a lack of separation between instructions and circuit primitives as preventing the formulation of a genuine source-layer language~\cite{nunez_corrales2025betterabstractmachines}.
+Additional analysis has shown a lack of complex data structures and quantum control sequence support~\cite{Gay2006QPLSurvey} as further barriers.
+
+Regardless of the path, the literature converges on fundamental principles such a language family would adhere to:
+\begin{itemize}
+    \item Minimal or no understanding of fundamental quantum mechanics required to write programs.
+    \item No direct manipulation of the quantum circuit model or equivalents in other hardware.
+    \item The programmers mental model exists in the problem space; not quantum mechanics or circuits.
+\end{itemize}
+
+Four language families are identified in the literature and introduced in Subsection~\ref{subsec:lit_rev:qpl:scope}:
+\begin{itemize}
+    \item High-level
+    \item Embedded framework
+    \item Intermediate representation
+    \item Assembly
+\end{itemize}
+
+Each offers different aspirational goals in the quantum programming domain.
+A summary is provided in Table~\ref{tab:lit_rev:qpl:language_family_taxonomy}.
+This subsection characterises each family; Subsection~\ref{subsec:lit_rev:qpl:reading} examines them in detail.
+\begin{table}[htbp]
+    \centering
+    \caption{Summary of quantum programming languages families and their defined aspirations.}
+    \label{tab:lit_rev:qpl:language_family_taxonomy}
+    \begin{tabularx}{\textwidth}{@{}>{\hsize=0.2\hsize}X>{\hsize=0.2\hsize}X>{\hsize=0.6\hsize}X@{}}
+        \toprule
+        \textbf{Family} & \textbf{Language Example} & \textbf{Description}          \\ \midrule
+        High-level & Silq & Algorithmic expression with compiler-managed quantum obligations. \\
+        Embedded framework & Qiskit & Ecosystem integration, hardware portability and simulation access; hosted in familiar classical environments.  \\
+        Intermediate representation (IR) & QIR & Stable compilation substrate enabling optimisation passes, toolchain portability across front-ends, and a formal verification surface for cross-layer equivalence. \\
+        Assembly & OpenQASM & Portable, complete execution-level specification; hardware-independent circuit interchange. \\ \bottomrule
+    \end{tabularx}
+\end{table}
+
+Assembly languages such as OpenQASM aspire to offer a portable, hardware-agnostic specification of quantum circuits.
+They describe circuit primitives alongside hardware concerns such as pulses, timing delays and qubit rotations or gates~\cite{cross2022openqasm3}.
+OpenQASM achieves these aspirations.
+
+Intermediate representations (IRs) offer the same aspirations for quantum programming as their classical counterparts.
+A productive IR is machine-independent and stable across the compilation stack; both forward and backward compatible~\cite{irreview2024}.
+IRs retain the intent of the source layer while enabling compiler optimisation passes and formal verification~\cite{irreview2024}.
+Current quantum IRs may or may not encode quantum-physical constraints such as no-cloning or teleportation.
+QIR and Q-MLIR achieve these outcomes~\cite{irreview2024}.
+
+Embedded frameworks enable ecosystem integration for remote execution and simulation of quantum programs from within a classical programming language, providing ergonomic tools for common quantum algorithms and circuit compilation for quantum execution systems.
+Qiskit~\cite{aleksandrowicz2019qiskit} is a representative example, offering Python libraries for circuit construction, compilation across multiple hardware backends and remote execution.
+PennyLane~\cite{bergholm2018pennylane} offers comparable tooling with a focus on variational quantum circuits and machine learning techniques.
+
+High-level languages aspire to provide a layer where algorithmic thinking drives the programmer.
+These languages aim to provide an abstraction level where the compiler can reason about quantum obligations such as physical correctness and resource management.
+As Section~\ref{subsec:lit_rev:abstraction:in_quantum_computing} showed, Silq, Qmod and Q\# offer many high-level tools to support algorithmic programming.
+However, many of these tools still require the programmer to understand the quantum-mechanical and circuit-level principles underlying their programs.
+High-level languages do not divorce the quantum from quantum programming.
+
+The taxonomy reveals a missing ``fifth-tier'' of quantum programming languages.
+The quantum-agnostic, application programming paradigm aspired to in the literature is not realisable with any of the language families presented.
+Assembly and intermediate representations are explicitly quantum by design, requiring a fundamental understanding of circuit primitives and hardware concerns.
+Embedded frameworks were not intended to produce quantum-agnosticism; their goal is to improve access to near-term quantum computers and remote execution of quantum circuit definitions.
+Embedded frameworks achieve this effectively, but it is not an adequate solution to the missing tier.
+High-level languages come closest, but their fundamental coupling to quantum circuit primitives and resource management requires the programmer to have a quantum mechanical mental model.
+These languages do not enable problems and solutions to be formulated purely algorithmically.
+
+%% ------------------- TO BE WRITTEN ------------------- %%
 
 \subsection{Reading the Language Landscape}\label{subsec:lit_rev:qpl:reading}
 - gay 2006 provides great points about whats missing and why high level abstraction is critical, they may help ground discussions

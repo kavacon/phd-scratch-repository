@@ -106,14 +106,14 @@ But abstraction also defines the limitations of control a user of a language has
 Abstraction in programming removes responsibility over details or actions that can be assumed or hidden, which also removes the ability to control them.
 A canonical example in classical programming is the presence or absence of garbage collection in a given language.
 
-Now can it be said that Java is a higher abstraction of C given one implements garbage collection and the other doesn't?
-Most definitions of abstraction in programming would acknowledge Java is higher-level but wouldn't necessarily place it at a higher \textit{abstraction layer} within a programming system.
+Now can it be said that Java is a higher abstraction of C given one implements garbage collection and the other does not?
+Most definitions of abstraction in programming would acknowledge Java is higher-level but would not necessarily place it at a higher \textit{abstraction layer} within a programming system.
 Why is that?
 
 Abstraction in programming is defined by more than just information hiding or reduction in control.
 In programming intention influences abstraction, the intention of a language in concert with the actions or control it permits is what places it at a certain layer in a system.
 Languages like C or Java sit at the same layer in parallel systems of abstraction because they inhabit the same intention, for example, application development.
-It's for this reason we don't look at C as being an assembly language despite its ability to have low-level control over memory; that's not its intended purpose.
+It's for this reason we do not look at C as being an assembly language despite its ability to have low-level control over memory; that's not its intended purpose.
 
 The preceding discussion motivates the following definitions, which are used throughout this review.
 
@@ -412,7 +412,8 @@ However, as Subsection~\ref{subsec:lit_rev:abstraction:in_quantum_computing} dem
 The classical compiler chain illustrates the missing piece.
 As established in Subsection~\ref{subsec:lit_rev:abstraction:levels_elements}, mature classical systems place a general-purpose source layer; languages like C and Java; above the assembly and hardware layers.
 That source layer is hardware-independent, formally defined and expressive enough to allow practitioners to describe problems in their domain without knowledge of the machine executing the solution.
-Quantum computing does not yet have an equivalent to that layer.OpenQASM and pulse-level languages sit at the assembly tier; Silq, Q\# and Qmod are positioned above them, but all three still require the programmer to reason in qubits, gates, and circuits: concepts defined by the machine, not the problem.
+Quantum computing does not yet have an equivalent to that layer.
+OpenQASM and pulse-level languages sit at the assembly tier; Silq, Q\# and Qmod are positioned above them, but all three still require the programmer to reason in qubits, gates, and circuits: concepts defined by the machine, not the problem.
 A C programmer does not need to know the instruction set of the processor executing their code; a Silq programmer cannot avoid reasoning about the circuit model.
 The gap is not that quantum lacks a domain-level abstraction comparable to SQL or Python; it is that it lacks the source-layer foundation that classical computing built those domain abstractions on top of.
 
