@@ -90,6 +90,10 @@ This subsection characterises each family; Subsection~\ref{subsec:lit_rev:qpl:re
 Assembly languages such as OpenQASM aspire to offer a portable, hardware-agnostic specification of quantum circuits.
 They describe circuit primitives alongside hardware concerns such as pulses, timing delays and qubit rotations or gates~\cite{cross2022openqasm3}.
 OpenQASM achieves these aspirations.
+Quantum assembly languages differ fundamentally from their classical analogues; they don't describe microprocessor instructions, they describe circuits.
+Quantum assembly languages at their most fundamental are a mathematical abstraction over circuit construction, offering hardware independent ways to describe that structure.
+While they do offer lower level control such as pulses and timing, predominantly \textit{how} to physically realise a logical gate is left up to toolchains specific to the hardware.
+Classical assembly languages such as RISC or x86 conversely describe instructions given to hardware but have no mathematical description of how those instructions are physically built in a circuit.
 
 Intermediate representations (IRs) offer the same aspirations for quantum programming as their classical counterparts.
 A productive IR is machine-independent and stable across the compilation stack; both forward and backward compatible~\cite{irreview2024}.
@@ -143,8 +147,67 @@ High-level languages are assessed with additional rigour against their ability t
 \textit{Representation exposure}; the degree to which a programmer is required to reason about internal quantum state directly, due to the inability to copy or inspect it without disturbing the computation.
 \textit{Semantic mismatch}; the degree to which invalid equivalence with classical concepts is assumed~\cite{yuan2025foundationalabstractions}.
 
-%% ------------------- TO BE WRITTEN ------------------- %%
 \subsubsection{Assembly Languages}\label{subsubsec:lit_rev:qpl:assembly}
+Assembly languages describe quantum computation at the level of the execution model: explicit instructions over named quantum resources, applied in a sequence that hardware can directly interpret.
+OpenQASM is the canonical representative of this family~\cite{cross2017openqasm, cross2022openqasm3}.
+
+OpenQASM states its primary goal is to serve as an intermediate representation for communicating with quantum hardware, with allowances made for human usability~\cite{cross2022openqasm3}.
+The language describes quantum circuits using explicit qubit register declarations, named gate operations and measurement instructions.
+Gates are drawn from the CNOT-plus-SU(2) basis: the controlled-NOT gate, which entangles two qubits, and the special unitary group SU(2), which encompasses all single-qubit rotations; together these are enough for universal quantum computation~\cite{cross2017openqasm}.
+
+Version 3.0 extended the language with classical types (\texttt{int}, \texttt{float}, \texttt{bool}, \texttt{angle}), control flow constructs (\texttt{if}/\texttt{while}/\texttt{for}), real-time feed-forward and explicit timing and scheduling directives~\cite{cross2022openqasm3}.
+An optional pulse-level calibration mechanism, introduced via the \texttt{defcal} keyword and OpenPulse grammar, allows gate implementations to be overridden with hardware-specific microwave pulse sequences applied directly to qubits, extending the language's reach below the circuit model when required~\cite{cross2022openqasm3}.
+Like classical assembly languages, which provide a symbolic, near-one-to-one representation of machine instructions~\cite{scott2009plp}, OpenQASM presents quantum operations in terms that correspond directly to what the underlying hardware performs.
+Portability is achieved through a shared vocabulary of quantum operations: hardware-specific gate sets and timing constraints are resolved downstream, not at the language level.
+
+\begin{figure}[htbp]
+    \centering
+    % PLACEHOLDER: Replace with final figure file
+    % Left column: classical high-level expression -> x86 assembly (registers, opcodes)
+    % Right column: equivalent quantum workflow -> OpenQASM (qubit declaration, gate application, measurement)
+    \fbox{\parbox{0.9\textwidth}{\centering [Figure to be inserted: Classical and quantum assembly translation comparison]}}
+    \caption{Translation of a representative operation into classical assembly (x86) and quantum assembly (OpenQASM), illustrating the structural parallel: in both cases the programmer's vocabulary is the machine's vocabulary.}
+    \label{fig:lit_rev:qpl:assembly_comparison}
+\end{figure}
+
+As shown in Figure~\ref{fig:lit_rev:qpl:assembly_comparison} the assembly label, while conventional, overstates the analogy with classical computing.
+Classical assembly converges programmer vocabulary with hardware execution: a MOV or ADD instruction corresponds directly to what the processor does.
+OpenQASM, by contrast, describes logical gate primitives that are hardware-independent by design; the physical realisation; pulse shaping, basis gate decomposition, timing calibration; lives below it in vendor toolchains the programmer never touches.
+The quantum programmer-facing model is therefore removed from the specific hardware, yet the full cognitive burden of circuit-level reasoning is still a hard requirement.
+
+In practice, OpenQASM programs are authored by compilers and toolchains rather than human programmers directly.
+Evaluating OpenQASM using the framework established in Subsection~\ref{subsec:lit_rev:qpl:reading} can be achieved by analysing a representative workflow; the analysis surfaces the abstraction level and quantum knowledge requirements the language imposes.
+
+Creating a superposition and conditioning later execution on a measurement outcome is one such workflow.
+To achieve that workflow, the programmer must declare a qubit register, apply a Hadamard gate (\texttt{h q}) to create superposition, collect a measurement outcome into a classical bit register and write a control flow conditioned on that result as described in Figure~\ref{fig:lit_rev:qpl:open_qasm_example}.
+At no point does the language offer a layer at which this workflow can be expressed without direct reference to qubits, gates and measurement mechanics: the circuit is the expression of thought.
+
+\begin{figure}[htbp]
+    \centering
+    \fbox{\parbox{0.9\textwidth}{\centering [Figure to be inserted: OpenQASM code snippet]}}
+    \caption{An example of preparing and measuring a superposition in OpenQASM.}
+    \label{fig:lit_rev:qpl:open_qasm_example}
+\end{figure}
+
+The classical control flow introduced in version 3.0 merits specific attention because it is presented as evidence of abstraction-level progress~\cite{cross2022openqasm3}.
+The syntax is C-like: typed variables, \texttt{while} loops, \texttt{if}/\texttt{else} constructs and familiar operator precedence.
+A programmer arriving from classical software development will recognise these constructs immediately.
+What the syntax does not expose is the constraint on their semantics: classical operations in OpenQASM execute on a real-time quantum controller, bounded by the feed-forward window imposed by qubit coherence times; operations that cannot complete within this window must be delegated to \texttt{extern} functions, which are opaque to the OpenQASM layer and executed by an external classical processor~\cite{cross2022openqasm3}.
+The specification acknowledges this directly: the language is not designed for general-purpose classical computation~\cite{cross2022openqasm3}.
+The C-like syntax provides coordination scaffolding for quantum circuits; it does not provide a general classical programming model, and it leaves the quantum substrate entirely unchanged.
+
+The structural position of OpenQASM provides insight into the difficulties being faced with improved abstraction in quantum computing~\cite{ferreira2024qplusage}.
+Classical abstraction could progressively absorb hardware detail because the lowest programmer concepts were already close to the machine~\cite{nunez_corrales2025betterabstractmachines}.
+The quantum stack conceptually begins by conflating mathematical circuit description with low-level programming
+Abstracting away from it requires not just hiding hardware detail but replacing a circuit-oriented mental model entirely; a qualitatively greater undertaking.
+
+OpenQASM achieves what it sets out to do: it provides a portable, complete execution-level specification that functions as a hardware-independent circuit interchange format.
+Version 3.0 is a richer format than its predecessor.
+In classical programming language theory, however, raising a language's abstraction level means reducing the programmer's required exposure to machine-level concerns~\cite{scott2009plp}; adding features that expand expressiveness without reducing that exposure does not constitute a change of level.
+The programmer using OpenQASM, regardless of version, must reason in terms of qubit registers, gate operations and measurement outcomes.
+The language's position in the compilation stack is fixed by design intent, not by implementation immaturity.
+
+%% ------------------- TO BE WRITTEN ------------------- %%
 
 \subsubsection{Intermediate Representations}\label{subsubsec:lit_rev:qpl:ir}
 
