@@ -207,9 +207,121 @@ In classical programming language theory, however, raising a language's abstract
 The programmer using OpenQASM, regardless of version, must reason in terms of qubit registers, gate operations and measurement outcomes.
 The language's position in the compilation stack is fixed by design intent, not by implementation immaturity.
 
-%% ------------------- TO BE WRITTEN ------------------- %%
-
 \subsubsection{Intermediate Representations}\label{subsubsec:lit_rev:qpl:ir}
+Intermediate representations occupy a distinct role in any compilation stack: they are machine-independent substrates designed not for human authorship, but for compiler analysis, optimisation and transformation~\cite{scott2009plp, irreview2024}.
+In classical programming language theory, an IR sits between the source layer and assembly; high-level source code is lowered into an IR, optimisation passes are applied and the result is lowered again into assembly for hardware execution~\cite{scott2009plp}.
+Two representative quantum IRs are examined here.
+Quantum Intermediate Representation (QIR) is an LLVM-based standard developed by the QIR Alliance~\cite{qiralliance_spec}.
+Q-MLIR is a family of MLIR-based quantum dialects enabling progressive lowering through multiple compiler stages~\cite{McCaskey2021MLIRDialectQASM}.
+Both languages claim to offer a common substrate enabling multiple front-end languages, reusable compiler passes and a formal verification surface across the quantum software stack~\cite{irreview2024}.
+
+As with assembly, the IR label implies a classical relationship that does not hold in the quantum stack.
+In classical computing, IR sits \textit{above} assembly in the pipeline; it is the layer that assembly is compiled \textit{from}.
+In quantum computing the pipeline inverts: OpenQASM programs are parsed into MLIR quantum dialect representations, progressively lowered to LLVM IR adherent to QIR specifications and transformed into backend-specific executable code~\cite{McCaskey2021MLIRDialectQASM}.
+Quantum IR therefore sits \textit{below} quantum assembly in the compilation pipeline, a position with no direct classical analogue.
+In classical stacks there is nothing below assembly except machine code, which is an encoding concern rather than a programmable layer.
+This inversion compounds the structural asymmetry identified in Section~\ref{subsubsec:lit_rev:qpl:assembly}: the quantum programmer-facing floor is already more abstract than classical assembly relative to the hardware, and below it lies a rich IR infrastructure that classical abstraction journeys never encountered.
+
+QIR is constructed as an extension of LLVM IR, the foundational intermediate representation of the classical LLVM compiler infrastructure~\cite{scott2009plp}.
+Where LLVM IR represents values as typed references that classical code can read,write and pass freely, QIR introduces two dedicated abstract resource types: one for qubits and one for measurement results~\cite{qiralliance_spec}.
+These types are defined without any internal structure accessible to the programmer; classical code cannot read, copy, or directly manipulate them, and all interactions must go through a defined set of quantum operations.
+This restriction encodes a foundational quantum constraint at the IR layer: qubits are physical resources that cannot be duplicated or inspected without disturbing their state.
+All quantum operations in QIR are declared as external functions whose implementations are deferred to hardware backends.
+The IR specifies \textit{that} an operation exists and what resources it acts on, but not \textit{how} it is physically realised, allowing the same QIR program to target diverse hardware without modification~\cite{qiralliance_spec}.
+An explicit resource lifecycle model tracks when qubits are acquired and released.
+Hooks are provided for detecting unsafe patterns such as operating on a qubit after it has been freed, analogous to memory safety analysis in classical compilation~\cite{qiralliance_spec, qirformalization2024}.
+Figure~\ref{fig:lit_rev:qpl:openqasm_to_qir} illustrates how a Bell state preparation in OpenQASM translates into its QIR equivalent.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{minipage}[t]{0.46\textwidth}
+        \centering
+        \textbf{OpenQASM 3.0}
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
+            frame=single,label={lst:lit\_rev:qpl:openqasm\_to\_qir\_openqasm}]
+OPENQASM 3.0;
+include "stdgates.inc";
+
+qubit[2] q;
+bit[2]   c;
+
+h  q[0];
+cx q[0], q[1];
+
+c[0] = measure q[0];
+c[1] = measure q[1];
+        \end{lstlisting}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.5\textwidth}
+        \centering
+        \textbf{QIR (LLVM IR)}
+        \begin{lstlisting}[basicstyle=\ttfamily\tiny,
+            frame=single,label={lst:lit\_rev:qpl:openqasm\_to\_qir\_qir}]]
+%Qubit  = type opaque
+%Result = type opaque
+
+define void @bell_state() {
+entry:
+  %q0 = call %Qubit*
+    @__quantum__rt__qubit_allocate()
+  %q1 = call %Qubit*
+    @__quantum__rt__qubit_allocate()
+
+  call void @__quantum__qis__h__body(
+    %Qubit* %q0)
+  call void @__quantum__qis__cnot__body(
+    %Qubit* %q0, %Qubit* %q1)
+
+  %r0 = call %Result*
+    @__quantum__qis__mz__body(%Qubit* %q0)
+  %r1 = call %Result*
+    @__quantum__qis__mz__body(%Qubit* %q1)
+
+  call void @__quantum__rt__qubit_release(
+    %Qubit* %q0)
+  call void @__quantum__rt__qubit_release(
+    %Qubit* %q1)
+  ret void
+}
+        \end{lstlisting}
+    \end{minipage}
+    \caption{Bell state preparation in OpenQASM 3.0 (left) and its QIR equivalent
+        (right), showing gate operations as external runtime calls and qubits as managed
+        abstract resource handles.}
+    \label{fig:lit_rev:qpl:openqasm_to_qir}
+\end{figure}
+
+A more fundamental limitation is that QIR's specification remains informal, described in natural language without formal semantics~\cite{qirformalization2024}.
+Formalisation efforts~\cite{qirformalization2024} are themselves motivated by this gap, noting that the absence of formal definitions creates interpretational ambiguity when implementing compilation toolchains.
+A concrete illustration of this instability is a known incompatibility between QIR's typed resource handles and a change introduced in LLVM 15, which replaced all typed pointer representations with a single generic pointer type; this conflict remains unresolved in the QIR specification~\cite{qiralliance_spec}.
+Taken together, these findings position QIR as a promising but incomplete substrate whose verification guarantees are real but not yet fully realised.
+
+Q-MLIR approaches the IR problem through a different architectural strategy: rather than a single standardised target format, it provides a framework for building domain-specific compiler pipelines using MLIR's dialect mechanism~\cite{McCaskey2021MLIRDialectQASM}.
+A dialect defines a set of operations specific to a domain, each with a name, typed inputs and outputs and compile-time attributes; conversion rules specify how operations in one dialect are progressively rewritten into another until a common hardware-compatible base is reached.
+A representative quantum dialect provides a minimal operation set: register allocation and deallocation, qubit addressing within a register, and general gate application~\cite{McCaskey2021MLIRDialectQASM}.
+A key design feature is the use of static single assignment (SSA) form, in which each value is defined exactly once and consumed explicitly.
+SSA applied to quantum resources makes dataflow visible to the compiler and allows constraints such as the no cloning theorem to be enforced structurally rather than by convention~\cite{McCaskey2021MLIRDialectQASM}.
+Q-MLIR and QIR are linked through compilation.
+MLIR dialects provide the multi-level lowering infrastructure.
+QIR serves as the standardised LLVM-compatible target MLIR lowers into.
+MLIR's built-in LLVM dialect provides established conversion routines, so a quantum dialect need only define rewrite rules from its own operations to LLVM primitives and the remaining lowering path is inherited~\cite{McCaskey2021MLIRDialectQASM}.
+The viability of this approach in production toolchains is demonstrated by Catalyst~\cite{PennyLaneCatalystMLIRDialectsDocs}, PennyLane's MLIR-based compiler.
+Catalyst lowers differentiable quantum programs through a custom quantum dialect pipeline to hardware-executable targets, illustrating how the dialect mechanism scales from prototype to industrial deployment.
+
+Comparative assessment places both systems similarly: high ratings for hardware agnosticism and optimisation capability, low ratings for tooling accessibility and ease of use~\cite{irreview2024}.
+A shared structural limitation reinforces this picture: neither system can distinguish qubits on the same processor from those on separate networked nodes.
+Distributed quantum computation is unrepresentable at the IR layer~\cite{irreview2024}.
+Proposed extensions~\cite{cardama2024netqir} address this by introducing communication primitives that abstract internode state transfer, mirroring how classical distributed IRs such as OpenCL approach heterogeneous compute.
+This suggests that compatibility with classical IR infrastructure is a more productive path than independent reinvention.
+
+The IR family sits below quantum assembly and above hardware execution in the compilation stack, and its intended audience is compiler and toolchain authors rather than application programmers.
+Applying the computational thinking framework established in Section~\ref{sec:lit_rev:abstraction}, the IR layer does not support problem-space mental models.
+The contribution of IRs is enabling stable, reusable transformations between layers, not reducing the programmer's required quantum vocabulary.
+The IR layer is providing the abstraction boundary its design intends: a stable, hardware-agnostic substrate that absorbs low-level concerns below the programmer-facing stack~\cite{irreview2024, qiralliance_spec}.
+Whether the layers above it consistently exploit that boundary is explored in discussions on Embedded Frameworks and High level languages.
+
+%% ------------------- TO BE WRITTEN ------------------- %%
 
 \subsubsection{Embedded Frameworks}\label{subsubsec:lit_rev:qpl:frameworks}
 
