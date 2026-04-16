@@ -39,7 +39,7 @@ To evaluate the current state of quantum programming languages, the review will 
     \item Required quantum knowledge: What quantum mechanical understanding a programmer must have to productively use the language~\cite{Myers2016PLUsabilitySIG, ferreira2024qplusage}.
     \item System portability: Whether the language can be used to target multiple hardware backends without programmer intervention~\cite{DiMatteo2024AbstractionHierarchy, nunez_corrales2025betterabstractmachines}.
 \end{itemize}
-Together these criteria represent existing evaluation frameworks and known areas of friction for practitioners of quantum programming.
+Together these criteria represent existing evaluation frameworks and known areas of friction for programmers of quantum programming.
 The level to which a language adheres to them is a signifier of its ability to advance the current state of quantum programming languages.
 
 Each language family will have a different aspirational level for the criteria presented, intermediate representations will require a higher degree of quantum knowledge than high-level languages.
@@ -324,6 +324,163 @@ Whether the layers above it consistently exploit that boundary is explored in di
 %% ------------------- TO BE WRITTEN ------------------- %%
 
 \subsubsection{Embedded Frameworks}\label{subsubsec:lit_rev:qpl:frameworks}
+Embedded frameworks represent a third design response to the quantum programming problem.
+Rather than defining a new standalone language, they extend an existing general-purpose host to accommodate quantum constructs through library APIs and domain-specific abstractions.
+Python is the dominant host language in this family, though not the exclusive one.
+Haskell-hosted frameworks such as quAPL occupy the same structural position~\cite{corralesgarro2025productivityexpressiveness}.
+The defining design choice reflects a deliberate premise: programmers already possess proficiency in classical languages, and quantum programming tools should meet them there rather than require adoption of a new language environment.
+The family's stated goal is not the elimination of quantum prerequisites; it is the acceleration of programmers in expressing quantum algorithms reliably and portably, with a reduction in manually specifying low-level circuit concerns at every step~\cite{corralesgarro2025productivityexpressiveness}.
+
+Three systems are examined here, selected to represent the breadth and internal limits of this family's design space.
+\textbf{Qiskit} is the most widely adopted embedded framework~\cite{murillo2022sequantumprogramming}.
+Its model centres on the circuit object as the primary artefact.
+The programmer constructs quantum circuits through Python API calls, applies transpilation passes to target a specific backend and submits the compiled circuit for execution or simulation~\cite{aleksandrowicz2019qiskit}.
+Hardware portability across backends and access to a mature ecosystem of algorithm libraries are Qiskit's primary value proposition~\cite{aleksandrowicz2019qiskit}.
+\textbf{PennyLane} occupies a distinct design position within the family~\cite{bergholm2018pennylane}.
+It treats quantum circuits as differentiable functions, \textit{QNodes}, that can be composed with classical computation and differentiated automatically, targeting hybrid quantum-classical machine learning workflows directly.
+Its strongest abstraction claim is specific to this workflow class: the variational and optimisation loop is largely managed by the framework, reducing manual programmer burden for that pattern while leaving the general quantum programming model unchanged~\cite{bergholm2018pennylane}.
+\textbf{Qrisp} represents the furthest step towards higher abstraction in this family~\cite{seidel2024qrisp}.
+Qrisp introduces a typed quantum variable hierarchy, \texttt{QuantumVariable}, \texttt{QuantumFloat}, \texttt{QuantumArray} and \texttt{QuantumDictionary}, alongside dynamic qubit allocation, compiler-managed arithmetic between quantum types and an \texttt{auto\_uncompute} decorator.
+The decorator automates clean-up of temporary quantum states within a function's scope.
+Its design targets top-down algorithm expression, positioning quantum type management as a compiler obligation rather than a programmer task~\cite{seidel2024qrisp}.
+In doing so, Qrisp shares design features with standalone high-level languages; the significance of that proximity is examined in the analysis that follows and in Section~\ref{subsubsec:lit_rev:qpl:highlevel}.
+
+In documented practice, the Qiskit and PennyLane workflows centre on the circuit object or QNode as the primary artefact: the programmer constructs, transforms and executes circuits in Python.
+A survey of active quantum programmers found that 83\% come from classical software development backgrounds, confirming that the Python host addresses a documented accessibility gap~\cite{ferreira2024qplusage}.
+Repository mining of projects using major quantum frameworks found that most projects replicate known circuits rather than investigate novel algorithms, pointing to a limit on what improved tooling alone unlocks~\cite{murillo2022sequantumprogramming}.
+Quantum vocabulary remains the primary reported barrier in both studies: qubits, gates, measurement operations, transpilation constraints and device connectivity limits surface in typical workflows regardless of the ergonomic improvements the framework provides~\cite{ferreira2024qplusage, murillo2022sequantumprogramming}.
+
+PennyLane's differentiable programming model introduces a design that warrants separate examination.
+Treating a quantum circuit as a differentiable function allows the variational and optimisation loop to be managed by the framework.
+The programmer composes quantum and classical components using automatic differentiation idioms without specifying parameter update mechanics manually~\cite{bergholm2018pennylane}.
+Within that workflow class, a class of manual circuit management is removed from the programmer's scope.
+Outside it, the general quantum programming model is unchanged; a programmer not working within the variational paradigm faces the same circuit construction requirements as in Qiskit~\cite{bergholm2018pennylane, rodriguezdiaz2024qiskitpennylane}.
+
+Qrisp takes the furthest step within the family toward removing mandatory circuit description from the programmer's workflow.
+Its typed quantum variable hierarchy abstracts register allocation, compiler-managed arithmetic and type-level operations, removing the need to specify individual gate sequences for operations such as addition or comparison~\cite{seidel2024qrisp}.
+The compiler manages Qubit allocation dynamically; the programmer does not sequence or assign registers~\cite{seidel2024qrisp}.
+The \texttt{auto\_uncompute} decorator addresses the clean-up of temporary quantum state after a function completes, a class of obligation that high-level quantum languages have sought to automate~\cite{bichsel2020silq, seidel2024qrisp}.
+The mechanism is sometimes compared to garbage collection in managed languages because both address resource clean-up without explicit action at every call site; the comparison, however, overstates the similarity.
+Garbage collection operates transparently and requires the programmer to have no awareness of memory management as a concern.
+\texttt{auto\_uncompute} is an explicit annotation that must be applied by a programmer who already understands that uncomputation is an obligation.
+Automatic uncomputation here is closer to structured resource management patterns such as RAII in C++ or \texttt{defer} in Go, reducing the burden of fulfilling an obligation without removing the programmer's awareness of it~\cite{seidel2024qrisp}.
+
+The limits of Qrisp's abstractions are visible at the points where the type hierarchy cannot generalise further.
+Creating superposition within a \texttt{QuantumFloat} requires the programmer to apply a Hadamard gate to a specific qubit index within the composite type.
+The framework provides no higher-level construct for initialising a typed variable into superposition, as shown in Figure~\ref{fig:lit_rev:qpl:superposition_comparison}~\cite{seidel2024qrisp}.
+Instantiating any \texttt{QuantumVariable} requires specifying a qubit count.
+Specifying precision for a numerical type is a familiar practice in classical languages: \texttt{int32\_t} and \texttt{float64} both encode a storage decision.
+In Qrisp, the qubit count carries additional constraints arising from the structure of quantum state: the number of qubits determines representational capacity within the computation, and the programmer must reason about those constraints to write correct programs~\cite{seidel2024qrisp}.
+Implementing controlled variants of user-defined operations requires explicit annotation of function definitions and an understanding of the circuit-level distinction between controlled and uncontrolled execution~\cite{seidel2024qrisp}.
+Comparative complexity analysis found that Qrisp's array abstractions reduce code verbosity through broadcast operations across registers.
+The reduction is in expression length rather than in the quantum knowledge required for correct authorship~\cite{corralesgarro2025productivityexpressiveness}.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{minipage}[t]{0.46\textwidth}
+        \centering
+        \textbf{OpenQASM 3.0 (Assembly)}
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
+            frame=single,
+            label={lst:lit\_rev:qpl:superposition\_openqasm}]
+OPENQASM 3.0;
+include "stdgates.inc";
+
+qubit[4] q;
+bit[4]   c;
+
+h q[0];
+h q[1];
+h q[2];
+h q[3];
+
+c = measure q;
+        \end{lstlisting}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.46\textwidth}
+        \centering
+        \textbf{Qiskit (Embedded Framework)}
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
+            language=Python,
+            frame=single,
+            label={lst:lit\_rev:qpl:superposition\_qiskit}]
+from qiskit import QuantumCircuit
+
+qc = QuantumCircuit(4)
+qc.h(0)
+qc.h(1)
+qc.h(2)
+qc.h(3)
+qc.measure_all()
+        \end{lstlisting}
+    \end{minipage}
+
+    \vspace{1em}
+
+    \begin{minipage}[t]{0.46\textwidth}
+        \centering
+        \textbf{PennyLane (Embedded Framework)}
+        \begin{lstlisting}[basicstyle=\ttfamily\tiny,
+            language=Python,
+            frame=single,
+            label={lst:lit\_rev:qpl:superposition\_pennylane}]
+import pennylane as qml
+
+dev = qml.device("default.qubit", wires=4)
+
+@qml.qnode(dev)
+def circuit():
+    qml.Hadamard(wires=0)
+    qml.Hadamard(wires=1)
+    qml.Hadamard(wires=2)
+    qml.Hadamard(wires=3)
+    return qml.probs(wires=range(4))
+
+probs = circuit()
+        \end{lstlisting}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.46\textwidth}
+        \centering
+        \textbf{Qrisp (Embedded Framework)}
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
+            language=Python,
+            frame=single,
+            label={lst:lit\_rev:qpl:superposition\_qrisp}]
+from qrisp import QuantumFloat, h
+
+qf = QuantumFloat(4)
+
+h(qf[0])
+h(qf[1])
+h(qf[2])
+h(qf[3])
+
+print(qf)
+        \end{lstlisting}
+    \end{minipage}
+    \caption{Uniform superposition over a 4-bit value across all embedded frameworks and assembly languages.
+    Qrisp's \texttt{QuantumFloat} abstracts arithmetic but not state initialisation; explicit gate application to qubit indices is required in every case.}
+    \label{fig:lit_rev:qpl:superposition_comparison}
+\end{figure}
+
+Evaluating the family against the three criteria established in Subsection~\ref{subsec:lit_rev:qpl:scope} clarifies what has and has not been achieved.
+Abstraction level has been raised in specific dimensions: resource allocation, arithmetic synthesis and structured uncomputation are managed at a layer above the circuit model~\cite{seidel2024qrisp, aleksandrowicz2019qiskit}.
+System portability is a documented contribution across all three systems, with hardware-agnostic compilation pipelines that target multiple backends without programmer intervention~\cite{aleksandrowicz2019qiskit, bergholm2018pennylane}.
+Required quantum knowledge is where the family's characteristic limit is most clearly visible.
+The embedded framework premise is that programmers can remain within a familiar classical reasoning mode and delegate quantum concerns to the framework~\cite{Wing2006ComputationalThinking}.
+The Python layer supports this, but engaging the quantum substrate requires a mode switch into circuit-level reasoning.
+Gate selection, qubit wiring, measurement mechanics and transpilation constraints become unavoidable in the typical workflow regardless of which framework is used~\cite{ferreira2024qplusage, murillo2022sequantumprogramming}.
+The computational thinking boundary sits inside the typical workflow rather than at the system's edge.
+
+Tooling accessibility and conceptual simplicity are separable dimensions; the embedded framework family has advanced the first without the second~\cite{ferreira2024qplusage, murillo2022sequantumprogramming}.
+The literature's stated abstraction trajectory, programming without quantum-mechanical prerequisites~\cite{cobb2022higherlevelabstractions}, is not approached by any system in this family.
+
+Qrisp's position at the family's boundary raises a question for the next family.
+Its typed variable hierarchy, compiler-managed uncomputation and dynamic resource allocation are features present in standalone high-level languages such as Silq.
+The distinction is the Python host model and the persistence of circuit-level reasoning at specific points in the workflow.
+Whether a standalone compiled language with stronger type-theoretic guarantees escapes these same constraints is examined in Section~\ref{subsubsec:lit_rev:qpl:highlevel}.
 
 \subsubsection{High-Level Languages}\label{subsubsec:lit_rev:qpl:highlevel}
 
