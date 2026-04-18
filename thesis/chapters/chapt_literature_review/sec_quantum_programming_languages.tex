@@ -655,7 +655,63 @@ Type restrictions on classical values in superposition, the distinction between 
 Understanding why they exist is a prerequisite for correct authorship; the programmer's required mental model remains quantum throughout.
 ONDA's position in the family is singular: the only proposal that eliminates the classical host dependency at the execution level, it defines what autonomous quantum execution requires at the hardware level and clarifies that the classical control dependency in the other languages reflects the constraints of current hardware rather than a language design choice~\cite{degregorio2024onda}.
 
-%% ------------------- TO BE WRITTEN ------------------- %%
-
 \subsection{The Usability Ceiling}\label{subsec:lit_rev:qpl:ceiling}
-- gay 2006 provides great points about whats missing and why high level abstraction is critical, they may help ground discussions
+The four families examined in this section arrive at a consistent limitation: no system reviewed supports problem-space reasoning throughout a complete quantum programming workflow.
+Assembly exposes the execution model by design.
+Intermediate representations target toolchain authors; their abstraction boundary does not propagate upward to the programmer's experience.
+Embedded frameworks lower ergonomic costs without changing the programmer's required mental model.
+High-level languages manage specific obligations through type systems and compiler annotations, but the programmer's conceptual vocabulary remains quantum-explicit.
+These are not independent shortcomings: they are four manifestations of a shared ceiling.
+A survey of 251 active quantum programmers found that 83\% hold at least five years of classical programming experience, yet quantum vocabulary, comprising qubits, gates, measurement mechanics and circuit architecture, remains the primary reported barrier to productive use across all frameworks~\cite{ferreira2024qplusage}.
+Thirty-one per cent of those surveyed explicitly identified the need for higher-level languages, and over 40\% reported the language landscape as over-proliferated relative to what the field requires~\cite{ferreira2024qplusage}.
+Complexity measurements across language families do not consistently decrease at higher abstraction levels, indicating that abstraction-level labels are not reliable proxies for programmer burden~\cite{corralesgarro2025productivityexpressiveness}.
+
+The failure modes established in Section~\ref{subsec:lit_rev:qpl:reading} account for why this ceiling appears across all four families.
+\textit{Representation exposure} manifests wherever an interface exposes qubit types or requires annotations such as \texttt{const}, \texttt{qfree} or \texttt{Adjoint}.
+Quantum state cannot be copied or inspected without disturbing the computation, so no module boundary at which quantum and classical code meet can be made quantum-opaque in the way classical interfaces are.
+Dynamically typed systems defer rather than eliminate this exposure, surfacing quantum-mechanical constraints as runtime violations rather than static annotations~\cite{wright2024quff}.
+\textit{Semantic mismatch} is visible in the type restrictions documented across the high-level family.
+The annotation requirements that make safe uncomputation, inversion and controlled-operation synthesis possible are surface evidence of where classically valid operations have no general quantum equivalent~\cite{yuan2025foundationalabstractions}.
+Both failure modes place the programmer at the quantum substrate regardless of the abstraction level the language claims to occupy.
+Applying Wing's definition of computational thinking, the ceiling is the point at which every reviewed system requires the programmer to reason in terms of the quantum machine rather than the problem domain~\cite{Wing2006ComputationalThinking}.
+
+The languages surveyed did not arrive at this ceiling for identical reasons, and not all of those reasons are equally resistant to change.
+Automatic uncomputation is the clearest case of a language design problem that has been partially resolved.
+The obligation to manually reverse temporary quantum computations, an unavoidable programmer task in early high-level quantum languages, is now managed by the compiler in Silq, Q\# and Qrisp~\cite{bichsel2020silq, MicrosoftQSharpOverview, seidel2024qrisp}.
+The annotation requirements that make compiler management possible, \texttt{qfree},\texttt{const} and adjoint constraints, remain visible to the programmer; the obligation has been lifted, but awareness that uncomputation is a quantum-specific concern has not.
+Progress in syntactic modularity, evident in Q\#'s operation model and controlled-operation synthesis, has not produced semantic modularity.
+Representation exposure prevents module boundaries from being made quantum-opaque in the way classical interfaces are, because any boundary at which a quantum type is passed or returned must expose its quantum-mechanical constraints to the caller~\cite{scott2009plp, yuan2025foundationalabstractions}.
+Compiler-managed obligations have reduced programmer workload without changing the conceptual structure the programmer operates within.
+The abstraction analysis establishes that general quantum control flow cannot be faithfully embedded into a circuit model without reference to circuit primitives a result known as the No-Embedding Theorem~\cite{yuan2025foundationalabstractions}.
+The annotation requirements that make safe inversion and controlled-operation synthesis possible are its surface manifestation across every high-level family reviewed.
+The field's own abstract machine analysis confirms the structural dimension of this picture: no quantum abstract machine candidate satisfies the criteria for symbolic reasoning about operations without reference to circuit primitives.
+No production language is built on a substrate that meets those conditions~\cite{nunez_corrales2025betterabstractmachines}.
+Advancing beyond the current ceiling requires not incremental improvements to existing language designs but a different premise about what the programmer-facing model should contain.
+
+The progress the reviewed languages have made is measurable and confined to specific dimensions.
+Where compiler management is available, the programmer is relieved of specifying how quantum state management is performed.
+Uncomputation in Silq and Qrisp removes the obligation to manually reverse temporary registers, and automatic inversion via Quff's \texttt{invertF} combinator and Q\#'s \texttt{Adjoint} functor synthesis removes the obligation to specify how a quantum operation is reversed~\cite{bichsel2020silq, seidel2024qrisp,wright2024quff, MicrosoftQSharpOverview}.
+These advances reduce a specific source of cognitive overhead without requiring the programmer to reason at the circuit level for the covered cases~\cite{corralesgarro2025productivityexpressiveness}.
+The type systems of Silq and Q\# formalise the semantic mismatch boundary, converting a class of runtime errors into compile-time guarantees; the mismatch itself is not resolved, but its consequences are made explicit and checkable~\cite{bichsel2020silq, MicrosoftQSharpOverview}.
+Hardware portability in Q\# and PennyLane's differentiable circuit integration address structural concerns, porting cost and hybrid workflow management, that are distinct from the conceptual vocabulary barrier~\cite{MicrosoftQSharpOverview,bergholm2018pennylane}.
+None of these advances address the primary barrier identified in surveys of quantum programmers: quantum vocabulary, comprising qubits, gates and measurement, remains the required conceptual currency across every reviewed system~\cite{ferreira2024qplusage}.
+The ceiling has not moved; the obligations within it have been partially rationalised.
+
+The gap between what the reviewed languages offer and what quantum programming productivity requires was identified in the literature two decades before the systems surveyed here were built.
+A survey of quantum programming language design published in 2006 identified the absence of complex data structure abstractions and expressive quantum control constructs as the primary missing elements for raising quantum programming above the circuit level~\cite{Gay2006QPLSurvey}.
+Neither gap has been closed in the systems reviewed in this section.
+Recent practical experience with quantum programming corroborates the assessment: requiring programmers to construct bespoke quantum circuits for each problem class has been compared to the 1940s and 1950s model of physical computer reconfiguration.
+Each new task required hardware rewiring rather than software specification~\cite{cobb2022higherlevelabstractions}.
+
+Theoretical work on quantum abstraction demonstrates that the data structure gap is not necessarily permanent.
+A quantum data structure model can be constructed to satisfy three properties required for safe abstract use: \textit{history independence}, where observable behaviour does not depend on allocation history; \textit{reversibility}, where all operations can be undone; and \textit{bounded-time execution}, where operation costs are independent of internal state~\cite{yuan2025foundationalabstractions}.
+Such a structure can be used correctly without reasoning about its internal quantum state.
+It therefore satisfies the precondition for a data abstraction tier that does not expose quantum-mechanical vocabulary at the programmer interface.
+Every family reviewed in this section requires circuit-level reasoning at specific workflow points consistent with the finding that no existing abstract machine substrate separates instruction symbols from circuit primitives~\cite{nunez_corrales2025betterabstractmachines}.
+Qutes demonstrates both the promise and the limit of approaching this tier through built-in algorithm abstractions: Grover's algorithm is completely hidden behind an ordinary string operation, but any algorithm outside the small set of built-in constructs requires direct gate instructions at the source level~\cite{faro2025qutes}.
+Quff advances furthest on vocabulary reduction through dynamic type inference, while Silq provides the strongest compile-time safety guarantees against quantum-mechanical misuse~\cite{wright2024quff,bichsel2020silq}.
+None provides the data structure model or quantum control constructs that a language occupying this absent tier would require.
+A programming layer at this tier would supply abstract data types whose interfaces do not expose qubit-level mechanics.
+Quantum control constructs would not require circuit-level specification, and module boundaries would not propagate quantum-mechanical constraints to their callers.
+These are the conditions under which programmers without quantum-mechanical expertise could reason about quantum algorithms using classical software engineering concepts.
+What such a layer would require of a language design is the question Chapter~\ref{chapt:pub_language_design} addresses.
