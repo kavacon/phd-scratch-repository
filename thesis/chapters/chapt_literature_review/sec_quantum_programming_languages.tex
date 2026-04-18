@@ -128,13 +128,6 @@ A survey of active quantum programming projects on GitHub showed a lack of novel
 Surveys of embedded framework usage found that their popularity can be attributed to the improved programmer experience when using a classical language; however, programmers still struggled with the circuit architecture~\cite{ferreira2024qplusage}.
 Programmers consistently report quantum domain knowledge, vocabulary and concepts as barriers to entry and understanding of quantum languages~\cite{ferreira2024qplusage, murillo2022sequantumprogramming}.
 
-Subsection~\ref{subsec:lit_rev:qpl:scope} established three criteria that can be used to critically examine quantum programming languages, these criteria are directly related to the programmer experience:
-\begin{itemize}
-    \item Abstraction level.
-    \item Required quantum knowledge.
-    \item System portability.
-\end{itemize}
-
 High-level programming languages realise the abstraction requirements described in Section~\ref{sec:lit_rev:abstraction}.
 In classical programming language theory they provide a control plane that reduces a programmer's exposure to machine concerns~\cite{scott2009plp}.
 
@@ -202,7 +195,6 @@ The quantum stack conceptually begins by conflating mathematical circuit descrip
 Abstracting away from it requires not just hiding hardware detail but replacing a circuit-oriented mental model entirely; a qualitatively greater undertaking.
 
 OpenQASM achieves what it sets out to do: it provides a portable, complete execution-level specification that functions as a hardware-independent circuit interchange format.
-Version 3.0 is a richer format than its predecessor.
 In classical programming language theory, however, raising a language's abstraction level means reducing the programmer's required exposure to machine-level concerns~\cite{scott2009plp}; adding features that expand expressiveness without reducing that exposure does not constitute a change of level.
 The programmer using OpenQASM, regardless of version, must reason in terms of qubit registers, gate operations and measurement outcomes.
 The language's position in the compilation stack is fixed by design intent, not by implementation immaturity.
@@ -224,7 +216,7 @@ This inversion compounds the structural asymmetry identified in Section~\ref{sub
 
 QIR is constructed as an extension of LLVM IR, the foundational intermediate representation of the classical LLVM compiler infrastructure~\cite{scott2009plp}.
 Where LLVM IR represents values as typed references that classical code can read,write and pass freely, QIR introduces two dedicated abstract resource types: one for qubits and one for measurement results~\cite{qiralliance_spec}.
-These types are defined without any internal structure accessible to the programmer; classical code cannot read, copy, or directly manipulate them, and all interactions must go through a defined set of quantum operations.
+These types are defined without any internal structure accessible to the programmer; classical code cannot read, copy, or directly manipulate them, and all interactions must go through a defined set of quantum operations~\cite{qiralliance_spec}.
 This restriction encodes a foundational quantum constraint at the IR layer: qubits are physical resources that cannot be duplicated or inspected without disturbing their state.
 All quantum operations in QIR are declared as external functions whose implementations are deferred to hardware backends.
 The IR specifies \textit{that} an operation exists and what resources it acts on, but not \textit{how} it is physically realised, allowing the same QIR program to target diverse hardware without modification~\cite{qiralliance_spec}.
@@ -321,8 +313,6 @@ The contribution of IRs is enabling stable, reusable transformations between lay
 The IR layer is providing the abstraction boundary its design intends: a stable, hardware-agnostic substrate that absorbs low-level concerns below the programmer-facing stack~\cite{irreview2024, qiralliance_spec}.
 Whether the layers above it consistently exploit that boundary is explored in discussions on Embedded Frameworks and High level languages.
 
-%% ------------------- TO BE WRITTEN ------------------- %%
-
 \subsubsection{Embedded Frameworks}\label{subsubsec:lit_rev:qpl:frameworks}
 Embedded frameworks represent a third design response to the quantum programming problem.
 Rather than defining a new standalone language, they extend an existing general-purpose host to accommodate quantum constructs through library APIs and domain-specific abstractions.
@@ -360,7 +350,7 @@ Qrisp takes the furthest step within the family toward removing mandatory circui
 Its typed quantum variable hierarchy abstracts register allocation, compiler-managed arithmetic and type-level operations, removing the need to specify individual gate sequences for operations such as addition or comparison~\cite{seidel2024qrisp}.
 The compiler manages qubit allocation dynamically; the programmer does not sequence or assign registers~\cite{seidel2024qrisp}.
 The \texttt{auto\_uncompute} decorator addresses the clean-up of temporary quantum state after a function completes, a class of obligation that high-level quantum languages have sought to automate~\cite{bichsel2020silq, seidel2024qrisp}.
-The mechanism is sometimes compared to garbage collection in managed languages because both address resource clean-up without explicit action at every call site; the comparison, however, overstates the similarity.
+The mechanism can be compared to garbage collection in managed languages because both address resource clean-up without explicit action at every call site; the comparison, however, overstates the similarity.
 Garbage collection operates transparently and requires the programmer to have no awareness of memory management as a concern.
 \texttt{auto\_uncompute} is an explicit annotation that must be applied by a programmer who already understands that uncomputation is an obligation.
 Automatic uncomputation here is closer to structured resource management patterns such as RAII in C++ or \texttt{defer} in Go, reducing the burden of fulfilling an obligation without removing the programmer's awareness of it~\cite{seidel2024qrisp}.
@@ -368,7 +358,7 @@ Automatic uncomputation here is closer to structured resource management pattern
 The limits of Qrisp's abstractions are visible at the points where the type hierarchy cannot generalise further.
 Creating superposition within a \texttt{QuantumFloat} requires the programmer to apply a Hadamard gate to a specific qubit index within the composite type.
 The framework provides no higher-level construct for initialising a typed variable into superposition, as shown in Figure~\ref{fig:lit_rev:qpl:superposition_comparison}~\cite{seidel2024qrisp}.
-Instantiating any \texttt{QuantumVariable} requires specifying a qubit count.
+Instantiating any \texttt{QuantumVariable} requires specifying a qubit count~\cite{seidel2024qrisp}.
 Specifying precision for a numerical type is a familiar practice in classical languages: \texttt{int32\_t} and \texttt{float64} both encode a storage decision.
 In Qrisp, the qubit count carries additional constraints arising from the structure of quantum state: the number of qubits determines representational capacity within the computation, and the programmer must reason about those constraints to write correct programs~\cite{seidel2024qrisp}.
 Implementing controlled variants of user-defined operations requires explicit annotation of function definitions and an understanding of the circuit-level distinction between controlled and uncontrolled execution~\cite{seidel2024qrisp}.
@@ -488,8 +478,8 @@ The family includes Silq~\cite{bichsel2020silq}, Q\#~\cite{MicrosoftQSharpOvervi
 Each language targets a different point in the design space; taken together, they reveal both the range of strategies available and the structural limits that remain unresolved across the family.
 
 Silq~\cite{bichsel2020silq} introduced automatic uncomputation as the defining contribution of the high-level paradigm.
-Temporary ancilla qubits, prepared during computation and ordinarily requiring explicit reversal to avoid entangling the primary register at measurement, are uncomputed by the compiler wherever the type system can guarantee safety.
-The conditions are precise: uncomputation is permitted when the temporary value was produced by a \texttt{qfree} function, one whose semantics can be described classically and when the variables used to produce it remain available.
+Temporary ancilla qubits, prepared during computation and ordinarily requiring explicit reversal to avoid entangling the primary register at measurement, are uncomputed by the compiler wherever the type system can guarantee safety~\cite{bichsel2020silq}.
+The conditions are precise: uncomputation is permitted when the temporary value was produced by a \texttt{qfree} function, one whose semantics can be described classically and when the variables used to produce it remain available~\cite{bichsel2020silq}.
 Silq encodes these conditions through its annotation system (\texttt{const}, \texttt{qfree}, \texttt{lifted}, \texttt{mfree}), which allows the type-checker to reject programs that would induce implicit measurement without programmer awareness.
 The result is a language in which algorithmic structure can be written at a level closer to classical pseudocode, with ancilla management handled implicitly.
 Q\#~\cite{MicrosoftQSharpOverview} pursues the same goal through explicit functor annotations (\texttt{Adjoint}, \texttt{Controlled}) that the compiler uses to synthesise inverse and controlled variants of operations, making uncomputation expressible without manual circuit reversal.
@@ -508,7 +498,7 @@ Figures~\ref{fig:lit_rev:qpl:grover_comparison} and~\ref{fig:lit_rev:qpl:qft_com
     \begin{minipage}[t]{0.48\textwidth}
         \textbf{Silq}~\cite{bichsel2020silq,bezganovic2024silq}
         \begin{lstlisting}[basicstyle=\tiny\ttfamily,
-            frame=single, xleftmargin=2pt, xrightmargin=2pt]
+            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit\_rev:qpl:grover\_comparison:silq}]
 def grover[n:!N](f: const uint[n] !=> lifted B,
 marks: !N): !N {
   nIterations :=floor(pi* sqrt(2^n / marks)/ 4);
@@ -529,7 +519,7 @@ marks: !N): !N {
     \begin{minipage}[t]{0.48\textwidth}
         \textbf{Quff}~\cite{wright2024quff}
         \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,
-            frame=single, xleftmargin=2pt, xrightmargin=2pt]
+            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit\_rev:qpl:grover\_comparison:quff}]
 val f = { x ->
   x *= 3u;
   x += 5u;
@@ -548,7 +538,7 @@ H: (var q = 0u{n}) {
         \vspace{1em}
         \textbf{Qutes}~\cite{faro2025qutes}
         \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,
-            frame=single, xleftmargin=2pt, xrightmargin=2pt]
+            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit\_rev:qpl:grover\_comparison:qutes}]
 qustring b = "1110111";
 if ("01" in b) {
   print "Match!";
@@ -567,7 +557,7 @@ if ("01" in b) {
     \begin{minipage}[t]{0.48\textwidth}
         \textbf{Q\#}~\cite{MicrosoftQSharpOverview}
         \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,
-            frame=single, xleftmargin=2pt, xrightmargin=2pt]
+            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit\_rev:qpl:qft\_comparison:q\#}]
 for i in 0..n-1 {
   H(qs[i]);
   for j in i+1..n-1 {
@@ -586,7 +576,7 @@ for i in 0..n/2-1 {
     \begin{minipage}[t]{0.48\textwidth}
         \textbf{Qutes}~\cite{faro2025qutes}
         \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,
-            frame=single, xleftmargin=2pt, xrightmargin=2pt]
+            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit\_rev:qpl:qft\_comparison:qutes}]
 hadamard x_1;
 mcp x_1, x_2 by (pi/2);
 mcp x_1, x_2, x_3 by (pi/4);
@@ -621,47 +611,51 @@ In Qutes, built-in operations hide quantum structure entirely, but the abstracti
 Neither language removes the need to reason about the underlying quantum state in the general case; they raise the vocabulary in which that reasoning is expressed at specific, pre-chosen points.
 The classical control structure governing when and how quantum operations are applied remains explicitly in the programmer's hands.
 
-ONDA~\cite{degregorio2024onda} occupies a singular position among the languages examined here: where Silq, Q\# and Qmod all depend on a classical coprocessor to manage control flow, ONDA targets a proposed QPU that executes sequentially and branches autonomously.
-Control is therefore not absorbed by a classical host; it is exposed as a formal object within the QPU's own execution model.
-The language introduces an update register \texttt{\$ur}, a quantum register whose value is added to the program counter each cycle, and a garbage pointer \texttt{\$grp}, tracking a pre-initialised ancilla region into which temporary values are swapped rather than reset (an alternative to automatic uncomputation).
-Each cycle, every instruction in the QPU's fixed ISA executes in parallel; unitarity requires a fixed-size operation per cycle, so the activation qubit selects the effective instruction by routing operands only to the active circuit via controlled swaps, while inactive circuits operate on ancillae.
-A reversal step uncomputes the fetch and decode overhead to restore the chip state.
-Branching is implemented through \texttt{caddi}, a conditional add immediate that adjusts \texttt{\$ur} by a signed offset in response to a condition operand that may itself be a quantum state; since \texttt{\$ur} is added to the program counter each cycle, a conditional offset addition determines how many instructions the counter advances, encoding the branch decision as arithmetic within the QPU rather than as a signal delegated to an external classical processor.
+ONDA~\cite{degregorio2024onda} occupies a singular position among the languages examined here: where the others depend on a classical coprocessor to manage control flow, ONDA targets a proposed QPU that executes sequentially and branches autonomously.
+Control is not absorbed by a classical host; it is encoded directly in the QPU's execution model through an update register \texttt{\$ur} that increments the program counter each cycle and a garbage pointer \texttt{\$grp} that tracks a pre-initialised ancilla region into which temporary values are swapped rather than uncomputed.
+Branching is implemented through \texttt{caddi}, a conditional add immediate that adjusts \texttt{\$ur} by a signed offset in response to a condition operand that may itself be a quantum state.
+The branch decision is encoded as arithmetic within the QPU rather than delegating it to an external classical processor.
 ONDA's QPU flow structure is demonstrated in Figure~\ref{fig:lit_rev:qpl:onda_execution}.
+
 \begin{figure}[htbp]
     \centering
-% TODO: Generate diagram illustrating ONDA execution flow.
-% The diagram should show: (1) the update register $ur advancing with each
-% instruction; (2) the garbage pointer $grp incrementing as ancillae are
-% produced; (3) parallel instruction circuits governed by activation qubits;
-% (4) the reversal phase decrementing $grp and restoring the update register.
-% Style: circuit/flowchart hybrid, consistent with thesis figure conventions.
-    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}
-    [PLACEHOLDER: ONDA execution flow diagram]\vspace{2cm}}}
-    \caption{Execution flow of an ONDA program, showing the classical update register
-    \texttt{\$ur}, garbage pointer \texttt{\$grp}, activation qubits governing parallel
-    instruction circuits, and the reversal phase responsible for uncomputation.}
+% TODO: Generate diagram illustrating ONDA's two key runtime mechanisms.
+% Left panel: \$ur register controlling the program counter, with caddi
+%   adjusting the offset in response to a classical or quantum condition
+%   operand — showing branching as arithmetic rather than a classical signal.
+% Right panel: \$grp growing monotonically as temporaries accumulate in the
+%   pre-initialised ancilla region across successive operations.
+% Style: simple register/flow diagram consistent with thesis figure conventions.
+% No need to show parallel instruction circuits or reversal phase.
+    \fbox{\parbox{0.9\textwidth}{\centering\vspace{1.5cm}
+    [PLACEHOLDER: ONDA register model \texttt{\$ur} branching and
+    \texttt{\$grp} accumulation]\vspace{1.5cm}}}
+    \caption{The two runtime mechanisms central to ONDA's design: the update
+    register \texttt{\$ur} encoding branching decisions as arithmetic on the
+    program counter, and the garbage pointer \texttt{\$grp} accumulating
+    temporary values in a pre-initialised ancilla region across the
+    computation.}
     \label{fig:lit_rev:qpl:onda_execution}
 \end{figure}
 
 Loops conditioned on quantum data with no classically bounded exit condition are unsound: a loop whose termination depends on a quantum measurement cannot be compiled to a finite circuit~\cite{yuan2025foundationalabstractions}.
-ONDA addresses this by requiring the loop exit condition to be a classically determined quantity; the Grover implementation bounds iteration by \texttt{(pi/4)*sqrt(arr\_length)}, a value fixed before execution.
-When that bound is reached, \texttt{caddi} applies an offset to \texttt{\$ur} that advances the program counter past the loop body; the exit is a branch, and the branch is arithmetic on a register whose value the compiler can verify is classically bounded.
+ONDA addresses this by requiring the loop exit condition to be a classically determined quantity and\texttt{caddi} advances the program counter past the loop body when that bound is reached.
 
-The garbage register in ONDA grows monotonically as the computation proceeds.
-Arithmetic operations that produce temporary values, reassignment and multiplication among them, advance \texttt{\$grp} as each temporary is swapped into the pre-initialised ancilla region.
-The accumulated ancillae are parked indefinitely.
-ONDA provides no mechanism for reclaiming them within the computation, and the pre-initialised region must be sized to accommodate the worst-case accumulation of the entire program~\cite{degregorio2024onda}.
-
-Silq, Q\# and Quff address the same obligation through automatic uncomputation: reversal is inserted at the point a value leaves scope, on demand via adjoint synthesis, or at function boundaries respectively, reclaiming the qubit by reversing the operations that created the temporary.
-Each approach trades circuit depth for qubit reuse.
-ONDA's garbage swap strategy parks the temporary at negligible circuit cost, but the qubit is never reclaimed; computation trades qubit count for circuit depth, accumulating ancillae across the program rather than reversing them at each use site.
+The garbage register grows monotonically as the computation proceeds.
+Temporary values produced by arithmetic operations are swapped into the pre-initialised ancilla region and parked indefinitely; ONDA provides no mechanism for reclaiming them.
+The region must be sized to accommodate the worst-case accumulation of the entire program~\cite{degregorio2024onda}.
+Silq, Q\# and Quff address the same obligation through automatic uncomputation: reversal is inserted at the point a value leaves scope, on demand via adjoint synthesis, or at function boundaries respectively.
+The qubit is reclaimed by reversing the operations that created the temporary~\cite{bichsel2020silq,MicrosoftQSharpOverview, wright2024quff}.
+ONDA's swap strategy parks temporaries at negligible circuit cost, but the qubit is never reclaimed; the design trades qubit count for circuit depth, accumulating ancillae across the program rather than reversing them at each use site.
 
 Abstraction level is the highest of any reviewed family: uncomputation, adjoint synthesis and runtime inversion are compiler obligations rather than programmer tasks.
 Required quantum knowledge is reduced; programmers using Silq or Quff do not schedule reversals manually, and ONDA confines its quantum-specific vocabulary to three operators.
 System portability is where the family is weakest: Silq and Qmod target specific toolchains, Q\# targets the Microsoft quantum stack and ONDA targets a QPU architecture that does not yet exist.
-Type restrictions on classical values in superposition, the distinction between adjoint and non-adjoint functions and the injectivity requirement on runtime-inverted operations are constraints with no classical analogue; understanding why they exist is a prerequisite for correct authorship, and the programmer's required mental model remains quantum throughout.
+Type restrictions on classical values in superposition, the distinction between adjoint and non-adjoint functions and the injectivity requirement on runtime-inverted operations are the surface manifestations of the\textit{representation exposure} and \textit{semantic mismatch} properties established in Section~\ref{subsec:lit_rev:qpl:reading}.
+Understanding why they exist is a prerequisite for correct authorship; the programmer's required mental model remains quantum throughout.
 ONDA's position in the family is singular: the only proposal that eliminates the classical host dependency at the execution level, it defines what autonomous quantum execution requires at the hardware level and clarifies that the classical control dependency in the other languages reflects the constraints of current hardware rather than a language design choice~\cite{degregorio2024onda}.
+
+%% ------------------- TO BE WRITTEN ------------------- %%
 
 \subsection{The Usability Ceiling}\label{subsec:lit_rev:qpl:ceiling}
 - gay 2006 provides great points about whats missing and why high level abstraction is critical, they may help ground discussions
