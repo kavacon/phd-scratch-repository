@@ -155,11 +155,45 @@ Portability is achieved through a shared vocabulary of quantum operations: hardw
 
 \begin{figure}[htbp]
     \centering
-    % PLACEHOLDER: Replace with final figure file
-    % Left column: classical high-level expression -> x86 assembly (registers, opcodes)
-    % Right column: equivalent quantum workflow -> OpenQASM (qubit declaration, gate application, measurement)
-    \fbox{\parbox{0.9\textwidth}{\centering [Figure to be inserted: Classical and quantum assembly translation comparison]}}
-    \caption{Translation of a representative operation into classical assembly (x86) and quantum assembly (OpenQASM), illustrating the structural parallel: in both cases the programmer's vocabulary is the machine's vocabulary.}
+    \begin{minipage}[t]{0.46\textwidth}
+        \centering
+        \textbf{x86 Assembly (Classical)}
+        \begin{lstlisting}[basicstyle=\ttfamily\tiny,
+            frame=single,
+            label={lst:lit_rev:qpl:assembly_comparison_x86}]
+; Flip all bits in a register (bitwise NOT)
+; eax holds the value to invert
+
+section .text
+global _start
+
+_start:
+    mov  eax, 0b10110100  ; load value
+    not  eax              ; bitwise NOT
+    ; eax now holds 0b01001011
+        \end{lstlisting}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.46\textwidth}
+        \centering
+        \textbf{OpenQASM 3.0 (Quantum)}
+        \begin{lstlisting}[basicstyle=\ttfamily\tiny,
+            frame=single,
+            label={lst:lit_rev:qpl:assembly_comparison_openqasm}]
+OPENQASM 3.0;
+include "stdgates.inc";
+
+// Flip a qubit (Pauli-X / quantum NOT)
+qubit q;
+bit   c;
+
+x q;         // apply X gate (NOT)
+c = measure q;
+        \end{lstlisting}
+    \end{minipage}
+    \caption{Translation of a representative operation into classical assembly (x86)
+        and quantum assembly (OpenQASM), illustrating the structural parallel: in both
+        cases the programmer's vocabulary is the machine's vocabulary.}
     \label{fig:lit_rev:qpl:assembly_comparison}
 \end{figure}
 
@@ -177,7 +211,32 @@ At no point does the language offer a layer at which this workflow can be expres
 
 \begin{figure}[htbp]
     \centering
-    \fbox{\parbox{0.9\textwidth}{\centering [Figure to be inserted: OpenQASM code snippet]}}
+    \begin{minipage}[t]{0.6\textwidth}
+        \centering
+        \textbf{OpenQASM 3.0}
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
+            frame=single,
+            label={lst:lit_rev:qpl:open_qasm_example}]
+OPENQASM 3.0;
+include "stdgates.inc";
+
+qubit[3] q;
+bit[3]   c;
+
+// place each qubit into superposition
+h q[0];
+h q[1];
+h q[2];
+
+// collect all measurement outcomes
+c = measure q;
+
+// execution conditioned on measurement result
+if (c[0] == 1) {
+    x q[0];
+}
+        \end{lstlisting}
+    \end{minipage}
     \caption{An example of preparing and measuring a superposition in OpenQASM.}
     \label{fig:lit_rev:qpl:open_qasm_example}
 \end{figure}
@@ -230,7 +289,7 @@ Figure~\ref{fig:lit_rev:qpl:openqasm_to_qir} illustrates how a Bell state prepar
         \centering
         \textbf{OpenQASM 3.0}
         \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
-            frame=single,label={lst:lit\_rev:qpl:openqasm\_to\_qir\_openqasm}]
+            frame=single,label={lst:lit_rev:qpl:openqasm_to_qir_openqasm}]
 OPENQASM 3.0;
 include "stdgates.inc";
 
@@ -249,7 +308,7 @@ c[1] = measure q[1];
         \centering
         \textbf{QIR (LLVM IR)}
         \begin{lstlisting}[basicstyle=\ttfamily\tiny,
-            frame=single,label={lst:lit\_rev:qpl:openqasm\_to\_qir\_qir}]]
+            frame=single,label={lst:lit_rev:qpl:openqasm_to_qir_qir}]]
 %Qubit  = type opaque
 %Result = type opaque
 
@@ -330,7 +389,7 @@ Hardware portability across backends and access to a mature ecosystem of algorit
 It treats quantum circuits as differentiable functions, \textit{QNodes}, that can be composed with classical computation and differentiated automatically, targeting hybrid quantum-classical machine learning workflows directly.
 Its strongest abstraction claim is specific to this workflow class: the variational and optimisation loop is largely managed by the framework, reducing manual programmer burden for that pattern while leaving the general quantum programming model unchanged~\cite{bergholm2018pennylane}.
 \textbf{Qrisp} represents the furthest step towards higher abstraction in this family~\cite{seidel2024qrisp}.
-Qrisp introduces a typed quantum variable hierarchy, \texttt{QuantumVariable}, \texttt{QuantumFloat}, \texttt{QuantumArray} and \texttt{QuantumDictionary}, alongside dynamic qubit allocation, compiler-managed arithmetic between quantum types and an \texttt{auto\_uncompute} decorator.
+Qrisp introduces a typed quantum variable hierarchy, \texttt{QuantumVariable}, \texttt{QuantumFloat}, \texttt{QuantumArray} and \texttt{QuantumDictionary}, alongside dynamic qubit allocation, compiler-managed arithmetic between quantum types and an \texttt{auto_uncompute} decorator.
 The decorator automates clean-up of temporary quantum states within a function's scope.
 Its design targets top-down algorithm expression, positioning quantum type management as a compiler obligation rather than a programmer task~\cite{seidel2024qrisp}.
 In doing so, Qrisp shares design features with standalone high-level languages; the significance of that proximity is examined in the analysis that follows and in Section~\ref{subsubsec:lit_rev:qpl:highlevel}.
@@ -349,17 +408,17 @@ Outside it, the general quantum programming model is unchanged; a programmer not
 Qrisp takes the furthest step within the family toward removing mandatory circuit description from the programmer's workflow.
 Its typed quantum variable hierarchy abstracts register allocation, compiler-managed arithmetic and type-level operations, removing the need to specify individual gate sequences for operations such as addition or comparison~\cite{seidel2024qrisp}.
 The compiler manages qubit allocation dynamically; the programmer does not sequence or assign registers~\cite{seidel2024qrisp}.
-The \texttt{auto\_uncompute} decorator addresses the clean-up of temporary quantum state after a function completes, a class of obligation that high-level quantum languages have sought to automate~\cite{bichsel2020silq, seidel2024qrisp}.
+The \texttt{auto_uncompute} decorator addresses the clean-up of temporary quantum state after a function completes, a class of obligation that high-level quantum languages have sought to automate~\cite{bichsel2020silq, seidel2024qrisp}.
 The mechanism can be compared to garbage collection in managed languages because both address resource clean-up without explicit action at every call site; the comparison, however, overstates the similarity.
 Garbage collection operates transparently and requires the programmer to have no awareness of memory management as a concern.
-\texttt{auto\_uncompute} is an explicit annotation that must be applied by a programmer who already understands that uncomputation is an obligation.
+\texttt{auto_uncompute} is an explicit annotation that must be applied by a programmer who already understands that uncomputation is an obligation.
 Automatic uncomputation here is closer to structured resource management patterns such as RAII in C++ or \texttt{defer} in Go, reducing the burden of fulfilling an obligation without removing the programmer's awareness of it~\cite{seidel2024qrisp}.
 
 The limits of Qrisp's abstractions are visible at the points where the type hierarchy cannot generalise further.
 Creating superposition within a \texttt{QuantumFloat} requires the programmer to apply a Hadamard gate to a specific qubit index within the composite type.
 The framework provides no higher-level construct for initialising a typed variable into superposition, as shown in Figure~\ref{fig:lit_rev:qpl:superposition_comparison}~\cite{seidel2024qrisp}.
 Instantiating any \texttt{QuantumVariable} requires specifying a qubit count~\cite{seidel2024qrisp}.
-Specifying precision for a numerical type is a familiar practice in classical languages: \texttt{int32\_t} and \texttt{float64} both encode a storage decision.
+Specifying precision for a numerical type is a familiar practice in classical languages: \texttt{int32_t} and \texttt{float64} both encode a storage decision.
 In Qrisp, the qubit count carries additional constraints arising from the structure of quantum state: the number of qubits determines representational capacity within the computation, and the programmer must reason about those constraints to write correct programs~\cite{seidel2024qrisp}.
 Implementing controlled variants of user-defined operations requires explicit annotation of function definitions and an understanding of the circuit-level distinction between controlled and uncontrolled execution~\cite{seidel2024qrisp}.
 Comparative complexity analysis found that Qrisp's array abstractions reduce code verbosity through broadcast operations across registers.
@@ -372,7 +431,7 @@ The reduction is in expression length rather than in the quantum knowledge requi
         \textbf{OpenQASM 3.0 (Assembly)}
         \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
             frame=single,
-            label={lst:lit\_rev:qpl:superposition\_openqasm}]
+            label={lst:lit_rev:qpl:superposition_openqasm}]
 OPENQASM 3.0;
 include "stdgates.inc";
 
@@ -394,7 +453,7 @@ c = measure q;
         \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
             language=Python,
             frame=single,
-            label={lst:lit\_rev:qpl:superposition\_qiskit}]
+            label={lst:lit_rev:qpl:superposition_qiskit}]
 from qiskit import QuantumCircuit
 
 qc = QuantumCircuit(4)
@@ -414,7 +473,7 @@ qc.measure_all()
         \begin{lstlisting}[basicstyle=\ttfamily\tiny,
             language=Python,
             frame=single,
-            label={lst:lit\_rev:qpl:superposition\_pennylane}]
+            label={lst:lit_rev:qpl:superposition_pennylane}]
 import pennylane as qml
 
 dev = qml.device("default.qubit", wires=4)
@@ -437,7 +496,7 @@ probs = circuit()
         \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
             language=Python,
             frame=single,
-            label={lst:lit\_rev:qpl:superposition\_qrisp}]
+            label={lst:lit_rev:qpl:superposition_qrisp}]
 from qrisp import QuantumFloat, h
 
 qf = QuantumFloat(4)
@@ -498,7 +557,7 @@ Figures~\ref{fig:lit_rev:qpl:grover_comparison} and~\ref{fig:lit_rev:qpl:qft_com
     \begin{minipage}[t]{0.48\textwidth}
         \textbf{Silq}~\cite{bichsel2020silq,bezganovic2024silq}
         \begin{lstlisting}[basicstyle=\tiny\ttfamily,
-            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit\_rev:qpl:grover\_comparison:silq}]
+            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit_rev:qpl:grover_comparison:silq}]
 def grover[n:!N](f: const uint[n] !=> lifted B,
 marks: !N): !N {
   nIterations :=floor(pi* sqrt(2^n / marks)/ 4);
@@ -519,7 +578,7 @@ marks: !N): !N {
     \begin{minipage}[t]{0.48\textwidth}
         \textbf{Quff}~\cite{wright2024quff}
         \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,
-            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit\_rev:qpl:grover\_comparison:quff}]
+            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit_rev:qpl:grover_comparison:quff}]
 val f = { x ->
   x *= 3u;
   x += 5u;
@@ -538,7 +597,7 @@ H: (var q = 0u{n}) {
         \vspace{1em}
         \textbf{Qutes}~\cite{faro2025qutes}
         \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,
-            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit\_rev:qpl:grover\_comparison:qutes}]
+            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit_rev:qpl:grover_comparison:qutes}]
 qustring b = "1110111";
 if ("01" in b) {
   print "Match!";
@@ -557,7 +616,7 @@ if ("01" in b) {
     \begin{minipage}[t]{0.48\textwidth}
         \textbf{Q\#}~\cite{MicrosoftQSharpOverview}
         \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,
-            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit\_rev:qpl:qft\_comparison:q\#}]
+            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit_rev:qpl:qft_comparison:q\#}]
 for i in 0..n-1 {
   H(qs[i]);
   for j in i+1..n-1 {
@@ -576,7 +635,7 @@ for i in 0..n/2-1 {
     \begin{minipage}[t]{0.48\textwidth}
         \textbf{Qutes}~\cite{faro2025qutes}
         \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,
-            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit\_rev:qpl:qft\_comparison:qutes}]
+            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit_rev:qpl:qft_comparison:qutes}]
 hadamard x_1;
 mcp x_1, x_2 by (pi/2);
 mcp x_1, x_2, x_3 by (pi/4);
@@ -615,28 +674,27 @@ ONDA~\cite{degregorio2024onda} occupies a singular position among the languages 
 Control is not absorbed by a classical host; it is encoded directly in the QPU's execution model through an update register \texttt{\$ur} that increments the program counter each cycle and a garbage pointer \texttt{\$grp} that tracks a pre-initialised ancilla region into which temporary values are swapped rather than uncomputed.
 Branching is implemented through \texttt{caddi}, a conditional add immediate that adjusts \texttt{\$ur} by a signed offset in response to a condition operand that may itself be a quantum state.
 The branch decision is encoded as arithmetic within the QPU rather than delegating it to an external classical processor.
-ONDA's QPU flow structure is demonstrated in Figure~\ref{fig:lit_rev:qpl:onda_execution}.
+ONDA's QPU flow structure is demonstrated in Figure~\ref{fig:lit_rev:qpl:onda_execution} and Figure~\ref{fig:lit_rev:qpl:onda_garbage_register}.
 
 \begin{figure}[htbp]
     \centering
-% TODO: Generate diagram illustrating ONDA's two key runtime mechanisms.
-% Left panel: \$ur register controlling the program counter, with caddi
-%   adjusting the offset in response to a classical or quantum condition
-%   operand — showing branching as arithmetic rather than a classical signal.
-% Right panel: \$grp growing monotonically as temporaries accumulate in the
-%   pre-initialised ancilla region across successive operations.
-% Style: simple register/flow diagram consistent with thesis figure conventions.
-% No need to show parallel instruction circuits or reversal phase.
-    \fbox{\parbox{0.9\textwidth}{\centering\vspace{1.5cm}
-    [PLACEHOLDER: ONDA register model \texttt{\$ur} branching and
-    \texttt{\$grp} accumulation]\vspace{1.5cm}}}
-    \caption{The two runtime mechanisms central to ONDA's design: the update
+    \includegraphics[width=0.75\linewidth]{../figures/fig-lit_rev-qpl-onda_execution}
+    \caption{One runtime mechanism central to ONDA's design: the update
     register \texttt{\$ur} encoding branching decisions as arithmetic on the
-    program counter, and the garbage pointer \texttt{\$grp} accumulating
-    temporary values in a pre-initialised ancilla region across the
-    computation.}
+    program counter. This varies from classical computing where the PC always increments by 1 instruction.
+    The change enables retention of unitary operations on a QPU.}
     \label{fig:lit_rev:qpl:onda_execution}
 \end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.75\linewidth]{../figures/fig-lit_rev-qpl-onda_garbage_register}
+    \caption{One runtime mechanism central to ONDA's design: the garbage pointer \texttt{\$grp} accumulating
+    temporary values in a pre-initialised ancilla region across the
+    computation. This is an alternative to automatic uncomputation.}
+    \label{fig:lit_rev:qpl:onda_garbage_register}
+\end{figure}
+
 
 Loops conditioned on quantum data with no classically bounded exit condition are unsound: a loop whose termination depends on a quantum measurement cannot be compiled to a finite circuit~\cite{yuan2025foundationalabstractions}.
 ONDA addresses this by requiring the loop exit condition to be a classically determined quantity and\texttt{caddi} advances the program counter past the loop body when that bound is reached.
