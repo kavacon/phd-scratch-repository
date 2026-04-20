@@ -143,9 +143,10 @@ The C chain describes a common separation of layers in programming abstraction w
 The other two examples build on this with the SQL-led chain showing an extended compiler chain with a domain specification language (DSL) included.
 The Python chain provides a discussion point.
 
-Based on Figure~\ref{fig:lit_rev:abstraction:classical_compiler_chains} Python is serving as a machine learning (ML) DSL as it has come to be used in recent years~\cite{agrawal2019tensorflow}.
-However, Python can also be a scripting or programming layer; this is an example of how the compilation chains are flexible based on the intention of a layer.
-What matters here is the audience of the abstraction and how the choice of abstraction benefits or hinders their ability to interact with it~\cite{DiMatteo2024AbstractionHierarchy}.
+Figure~\ref{fig:lit_rev:abstraction:classical_compiler_chains} illustrates that the domain tier is audience-relative.
+Python acting as an ML DSL hides programming paradigms for data scientists; SQL hides relational algebra for analysts~\cite{agrawal2019tensorflow,DiMatteo2024AbstractionHierarchy}.
+The audience trades control over low-level decisions for a more tractable version of computation aligned with their domain understanding.
+What constitutes the highest abstraction level is determined by whom is being served, not by compilation depth alone.
 
 \begin{figure}[h!]
     \centering
@@ -153,11 +154,6 @@ What matters here is the audience of the abstraction and how the choice of abstr
     \caption{An example of three different ways to interpret compiler chains showing a traditional application development chain, SQL database domain chain and Python's use in machine learning.}
     \label{fig:lit_rev:abstraction:classical_compiler_chains}
 \end{figure}
-
-When Python acts as an ML DSL, it provides the purpose of hiding common programming paradigms and simplifying the way ML engineers and data scientists interact with machines.
-SQL serves a similar purpose allowing non-programmers to interact with computational systems in a way that benefits their domain and level of understanding.
-What counts as the highest abstraction level is relative to the domain and intended audience; in both cases presented the audience loses control over memory management or algorithmic decisions.
-Despite these losses, the information they hide allows the user to experience a more tractable version of computation in line with their understanding.
 
 The layers of a compiler chain can be described as in Table~\ref{tab:lit_rev:abstraction:compiler_layers}.
 
@@ -178,8 +174,30 @@ The layers of a compiler chain can be described as in Table~\ref{tab:lit_rev:abs
 
 The success of classical compiler chains is not accidental; it is grounded in the choice of abstract machine that underlies them.
 The von Neumann stored-program model succeeded not because it faithfully modelled the hardware executing it, but because its mental model; sequential instructions over addressable memory; aligned with human problem-solving idioms~\cite{elgotrobinson1964raspm}.
-It was that alignment that enabled the later proliferation of high-level languages; Fortran, ALGOL, COBOL each building a different surface over the same foundation.
+It was that alignment that enabled the later proliferation of high-level languages, beginning with Fortran, ALGOL and COBOL, each building a different surface over the same foundation.
+That progression deepened through the object-oriented type systems of C++ and Java, the functional models of Haskell and Python and the resource-safety advances of Rust.
+Each extending what programmers can express and verify without descending the compilation stack.
 Abelson and Sussman capture the principle precisely: ``programs are meant to be read by humans and only incidentally meant for computers to execute''~\cite{abelson1996sicp}.
+
+The alignment between mental model and hardware was not always treated as fixed.
+The Lisp machine project at MIT demonstrated the inverse design strategy, redesigning hardware to match the language rather than adapting the language to fit the available hardware~\cite{greenblatt1975lisp}.
+The resulting design axis, whether to raise the language above the machine or shape the machine toward the language, recurs in the quantum computing literature and remains unresolved~\cite{steele1993evolution}.
+
+Within the conventional compilation model, abstraction has continued to deepen through language mechanism evolution rather than architectural redesign.
+The C++ standards progression from C++11 onward illustrates this: move semantics and \texttt{std::unique\_ptr} introduced resource-lifetime guarantees at the language level.
+Lambda expressions made first-class function values a mainstream feature of a systems language.
+\texttt{auto} type deduction reduced the syntactic overhead of generic programming without sacrificing static guarantees~\cite{stroustrup2015resource}.
+Each addition extended what a programmer can express without specifying how the machine should achieve it, while remaining within the same compilation tier.
+Abstraction depth within a layer is not fixed at its inception; it is an ongoing design dimension.
+
+The functional programming tradition formalises this within the source layer.
+Higher-order functions (functions that accept or return other functions) introduce a qualitative shift in what the programmer must specify.
+Rather than describing a traversal, the programmer states a transformation; the mechanism of application is supplied by the language~\cite{pierce2002tapl-doc9}.
+The canonical expression of this shift is \texttt{map}, defined once for any container whose type constructor satisfies the required kinding constraint, parameterising over both container and transformation without fixing either~\cite{pierce2002tapl-doc9}.
+The what-versus-how separation, stating intent rather than procedure, is the abstraction property that the higher layers of language design seek to extend.
+
+At the frontier of language-level abstraction, dependent type systems such as those realised in Agda permit types to carry value-level specifications, encoding correctness properties directly in the type signature rather than in external verification tools~\cite{norell2009dependently}.
+These systems mark the current outer limit of static analysis at the programming layer and establish the standard against which any new language family can be assessed.
 
 While these layers appear well-structured, whether these compilation chains are effective needs to be qualified.
 Good abstraction must match the intention of the definition outlined in Subsection~\ref{subsec:lit_rev:abstraction:defining_abstraction}.
