@@ -1,4 +1,171 @@
-\chapter{Methodology}
-\label{chapt:methodology}
+\chapter{Methodology}\label{chapt:methodology}
 
-\input{chapters/chapt_methodology/sec_overview}
+
+\section{Research design}\label{sec:methodology:design}
+This thesis is situated within the constructive research tradition of computer science: its primary contribution is a designed and built artefact rather than an empirical observation or theoretical derivation.
+The researcher functions as a designer and builder throughout; the research question is answered by demonstrating that a solution can be constructed and that it satisfies stated criteria.
+
+Design Science Research (DSR)~\cite{Hevner2004DesignScienceIS} is the governing methodology.
+DSR is the established framework for research whose contribution is a novel IT artefact evaluated against a practical problem; it provides both a process model for artefact construction and an evaluative standard grounded in utility rather than optimality~\cite{Hevner2004DesignScienceIS}.
+This thesis satisfies that condition directly: the contribution is a quantum-implicit programming language and its supporting formal and computational infrastructure, evaluated against the abstraction gap identified in the quantum programming language literature.
+
+The IS Research Framework~\cite{Hevner2004DesignScienceIS} structures the relationship between the research and its broader context through two connecting cycles.
+The \textit{relevance cycle} links the research to the environment that motivates it: the abstraction gap in quantum programming languages, established via the literature review and the QPL systematic review in Chapter~\ref{chapt:pub_qpl_review}.
+Chapter~\ref{chapt:pub_qpl_review} defines the problem and supplies the requirements the artefact must satisfy.
+The \textit{rigor cycle} links the research to the knowledge base it draws upon and contributes to: the formal methods and type theory that supply the theoretical foundations, and the systematic review methodology that governs the QPL survey.
+
+The thesis produces artefacts across all four of the types identified by the IS Research Framework~\cite{Hevner2004DesignScienceIS}.
+Table~\ref{tab:methodology:artefact-types} catalogues them.
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{lp{0.65\textwidth}}
+        \toprule
+        \textbf{Artefact type} & \textbf{This thesis}                                                                                              \\
+        \midrule
+        Constructs             & The quantum-implicit definition; the abstraction spectrum; the quantum bias checklist.                            \\
+        Models                 & The QPL scoring rubric; the QPL taxonomy produced by the systematic review in Chapter~\ref{chapt:pub_qpl_review}. \\
+        Methods                & The QPL systematic review protocol; the compilation pipeline.                                                     \\
+        Instantiation          & The quantum-implicit language and its compiler.                                                                   \\
+        \bottomrule
+    \end{tabular}
+    \caption{Artefact types present in this thesis~\cite{Hevner2004DesignScienceIS}.}
+    \label{tab:methodology:artefact-types}
+\end{table}
+
+Three alternative research designs are considered and rejected.
+Empirical and experimental methods require a pre-existing system to observe or experiment upon; no such system exists prior to this work.
+A proof-only approach would establish the formal properties of the type system and compilation pipeline but cannot account for the design and construction of the language and compiler as research contributions.
+Qualitative methods are not applicable to artefact construction.
+DSR explicitly supports the iterative design-build-evaluate cycle appropriate for language and compiler development and is therefore the appropriate choice.
+
+The most substantive objection to the research design is that improved compilation technology renders a new source language unnecessary.
+If a compiler can automatically infer quantum-level decisions, a quantum-implicit language provides no additional value.
+This objection fails because a compiler can only infer what the source language provides.
+Quantum-explicit languages encode quantum-level decisions at the vocabulary level; gate-level vocabulary encodes circuit structure directly, leaving no higher-level intent for a compiler to recover.
+The QPL Silq~\cite{bichsel2020silq} illustrates the ceiling of this approach: automated uncomputation reduces programmer burden, yet the programmer's mental model remains quantum-explicit throughout.
+Circuit-level optimisation techniques such as ZX-calculus rewriting and VOQC are valuable at the compilation layer; they do not address the source-level abstraction gap this thesis targets.
+
+DSR evaluates artefacts against utility for the stated problem rather than against a standard of optimality~\cite{Hevner2004DesignScienceIS}.
+The formal proofs in Chapters~\ref{chapt:pub_formal_theory} and~\ref{chapt:pub_compilation} establish the internal correctness of the artefact's \textit{methods}: the type system and the compilation pipeline as processes.
+They do not independently establish the usability of the \textit{instantiation} or the validity of the \textit{constructs}, which are addressed separately through the evaluation criteria in Section~\ref{sec:methodology:evaluation}.
+
+
+\section{DSR process mapping}\label{sec:methodology:process}
+This research follows a problem-centred entry point into the DSRM process~\cite{Peffers2007DSRM}: the abstraction gap in quantum programming languages is established as the motivating problem before solution goals are defined.
+The QPL systematic review in Chapter~\ref{chapt:pub_qpl_review} clarifies the solution requirements, grounding the entry point in goal-centred form.
+Table~\ref{tab:methodology:dsrm-mapping} maps each DSRM activity to the corresponding thesis contribution.
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{lp{0.55\textwidth}}
+        \toprule
+        \textbf{DSRM activity}                & \textbf{This thesis}                                                                                                                                                                                               \\
+        \midrule
+        Problem identification and motivation & Abstraction gap in quantum programming languages: quantum vocabulary is required by all existing languages; established via literature review and the QPL systematic review in Chapter~\ref{chapt:pub_qpl_review}. \\
+        Objectives of a solution              & A quantum-implicit language: programming language abstraction model,compilable to gate-based quantum hardware, accessible to programmers without quantum expertise.                                                \\
+        Design and development                & Language specification, formal theoretical basis and compilation framework in Chapters~\ref{chapt:pub_language_design},~\ref{chapt:pub_formal_theory}and~\ref{chapt:pub_compilation}.                              \\
+        Demonstration                         & Proof-of-concept programs; compiler output on simulators and NISQ hardware in Chapter~\ref{chapt:pub_compilation}.                                                                                                 \\
+        Evaluation                            & Formal type-safety proof; compilation correctness for a core fragment; evaluation against the success criteria defined in Section~\ref{sec:methodology:evaluation}.                                                \\
+        Communication                         & Four incorporated publications and this thesis.                                                                                                                                                                    \\
+        \bottomrule
+    \end{tabular}
+    \caption{DSRM activity mapping for this thesis~\cite{Peffers2007DSRM}.}
+    \label{tab:methodology:dsrm-mapping}
+\end{table}
+
+The central research question (CRQ) and subsidiary research questions (SRQ1--SRQ3), defined in Chapter~\ref{chapt:introduction}, map directly onto this activity structure.
+Table~\ref{tab:methodology:srq-mapping} shows the method, evidence and evaluation criteria corresponding to each question.
+
+\begin{table}[h]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.6}
+    \begin{tabular}{@{}p{0.3\textwidth}p{0.22\textwidth}p{0.22\textwidth}p{0.18\textwidth}@{}}
+        \toprule
+        \textbf{Question}              & \textbf{Method}                                                             & \textbf{Evidence}                                                                                       & \textbf{Criteria} \\
+        \midrule
+        CRQ: quantum-implicit language & DSR end-to-end; answered collectively across thesis& All artefact components& All six criteria \\
+        SRQ1: Language design          & Formal language design                                                      & Language specification; formal syntax, semantics and type system& Criteria 5--6 \\
+        SRQ2: Type safety              & Formal proof (progress and preservation)                                    & Type-safety proof in Chapter~\ref{chapt:pub_formal_theory}& Criterion 1 \\
+        SRQ3: Compilation correctness  & Formal semantic preservation argument; end-to-end compilation demonstration& Proofs in Chapter~\ref{chapt:pub_formal_theory}; compiler output in Chapter~\ref{chapt:pub_compilation}& Criteria 2--4 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Research question to method and evidence mapping; for full question
+    wording see Chapter~\ref{chapt:introduction}.}
+    \label{tab:methodology:srq-mapping}
+\end{table}
+
+The formal proofs span the design and development and evaluation activities simultaneously: they constitute both a component of the design deliverable and the primary evaluation mechanism for SRQ2 and SRQ3.
+This dual role reflects the nature of constructive programming language research,in which correctness is demonstrated by construction rather than by post-hoc testing.
+The DSRM framework makes explicit a research design that computing research typically treats as implicit~\cite{Peffers2007DSRM}.
+
+
+\section{Artefact definition and scope}\label{sec:methodology:artefact}
+The artefact comprises three integrated components.
+The \textit{language specification} provides a formal definition of the syntax, semantics and type system; it constitutes the primary design contribution and is the subject of Chapter~\ref{chapt:pub_language_design}.
+The \textit{formal theoretical basis} establishes type safety (progress and preservation) for the core language and semantic preservation for a defined core fragment of the compilation pipeline; this is developed in Chapter~\ref{chapt:pub_formal_theory}.
+The \textit{compilation framework} lowers programs in the source language to executable form on gate-based NISQ hardware; the compilation target is selected and justified in Chapter~\ref{chapt:pub_compilation}.
+
+The thesis adopts a \textit{gate-based quantum computing} model: computation proceeds via discrete gate operations on qubits.
+Measurement-based quantum computing and other execution paradigms are out of scope.
+The artefact scope also excludes: hardware-specific scheduling and pulse-level control; quantum error correction at the language level; and full compiler verification, which is identified as future work.
+
+Several design assumptions govern the artefact definition.
+The gate-based execution model is assumed throughout; this boundary delimits the scope of all formal claims.
+The term \textit{compilable} is operationally defined: the thesis demonstrates compilation to a quantum assembly representation with a formal correctness argument for the core fragment only.
+The formal proofs establish the internal correctness of the artefact's \textit{methods}: the type system and compilation pipeline as processes.
+They do not, of themselves, establish the usability of the \textit{instantiation} or the validity of the \textit{constructs} against real-world programming tasks; these are addressed through the evaluation criteria in Section~\ref{sec:methodology:evaluation}.
+The specific compilation target is selected during the design phase based on fitness for purpose and reported in Chapter~\ref{chapt:pub_compilation}.
+
+
+\section{Evaluation criteria and thresholds}\label{sec:methodology:evaluation}
+DSR evaluates artefacts against utility for the stated problem~\cite{Hevner2004DesignScienceIS}.
+Six criteria operationalise this standard for the artefact defined in Section~\ref{sec:methodology:artefact}.
+
+\begin{enumerate}
+
+    \item \textbf{Type safety.} A formal proof of progress and preservation~\cite{WrightFelleisen1994TypeSoundness} is produced for the core language.
+    \textit{Threshold: the proof is mechanically checkable or peer-reviewed as part of the language specification publication.}
+
+    \item \textbf{Compilation correctness.} Semantic preservation is formally established for a defined core fragment of the language; the proof technique is determined during the language formalisation phase.
+    \textit{Threshold: a published formal argument covering the core fragment, with
+    scope boundaries and limitations stated.}
+
+    \item \textbf{Executability.} Executability is the primary success criterion for this thesis.
+    Programs written in the language compile and execute on gate-based NISQ hardware; hardware access is provided through the University of Melbourne's membership of the IBM Quantum Network~\cite{UoMIBMQuantumHub}.
+    \textit{Threshold: at minimum, demonstrated execution on a simulator; execution on NISQ hardware is the target goal.}
+
+    \item \textbf{Expressiveness.} Representative quantum algorithms can be written in the language without resorting to escape hatches.
+    \textit{Threshold: at least two non-trivial algorithms are implemented and
+    compiled.}
+
+    \item \textbf{Programming language abstraction model.} Programs can be written and reasoned about using the abstractions of programming language design: types, functions, control flow and data structures.
+    This criterion concerns the vocabulary of reasoning, not the execution model: programs execute on quantum hardware, but the programmer is not required to model or engage with that hardware directly.
+    Quantum-mechanical vocabulary is not required for correct use of the language in the common case.
+    \textit{Threshold: representative algorithmic tasks are expressible using programming language abstractions only, without requiring quantum vocabulary.}
+
+    \item \textbf{Absence of mandatory quantum vocabulary.} A computer scientist without a quantum mechanics background can learn and use the language from its documentation.
+    \textit{Threshold: case studies and example programs demonstrate that a programmer with a classical background can engage with the language without quantum vocabulary; a formal usability study is identified as future work and is not a current deliverable of this thesis.}
+
+\end{enumerate}
+
+
+\section{Scope and limitations}\label{sec:methodology:scope}
+Two limitations of the evaluation design are declared in advance.
+
+First, the evidence basis for Criterion~6 (absence of mandatory quantum vocabulary) is informal.
+Accessibility to programmers without quantum domain knowledge is demonstrated via case studies and example programs; a controlled usability study is not a deliverable of this thesis and is identified as future work.
+This is a declared threat to the validity of claims concerning Criterion~6; the informal evidence basis is appropriate for a first-generation language design but does not constitute the same quality of evidence as a formal proof or peer-reviewed empirical study.
+
+Second, execution on NISQ hardware is subject to availability and device characteristics at the time of evaluation.
+Simulator execution constitutes the primary evidence base for Criterion~3 (executability); NISQ hardware execution is the target goal and is supported by the University of Melbourne's membership of the IBM Quantum Network~\cite{UoMIBMQuantumHub}.
+Claims concerning hardware execution are bounded by the devices available during the evaluation period.
+
+
+\section{Reproducibility}\label{sec:methodology:reproducibility}
+All artefacts produced by this thesis are maintained in a public version-controlled repository: source code, language specification, formal proofs and compilation framework.
+Build instructions and compilation pipeline documentation are included to allow independent reproduction of the compilation claims in Chapter~\ref{chapt:pub_compilation}.
+The specific repository location and artefact licensing are reported in Chapter~\ref{chapt:pub_compilation}; at the time of submission, the repository is publicly accessible.
+
+The formal proofs in Chapter~\ref{chapt:pub_formal_theory} are presented in a self-contained form; proof verification does not depend on access to the compilation toolchain.
