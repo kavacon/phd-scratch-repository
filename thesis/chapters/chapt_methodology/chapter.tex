@@ -114,6 +114,7 @@ The artefact scope also excludes: hardware-specific scheduling and pulse-level c
 Several design assumptions govern the artefact definition.
 The gate-based execution model is assumed throughout; this boundary delimits the scope of all formal claims.
 The term \textit{compilable} is operationally defined: the thesis demonstrates compilation to a quantum assembly representation with a formal correctness argument for the core fragment only.
+The precise scope of that fragment and the proof technique employed are determined during the language formalisation phase and stated in Chapter~\ref{chapt:pub_formal_theory}.
 The formal proofs establish the internal correctness of the artefact's \textit{methods}: the type system and compilation pipeline as processes.
 They do not, of themselves, establish the usability of the \textit{instantiation} or the validity of the \textit{constructs} against real-world programming tasks; these are addressed through the evaluation criteria in Section~\ref{sec:methodology:evaluation}.
 The specific compilation target is selected during the design phase based on fitness for purpose and reported in Chapter~\ref{chapt:pub_compilation}.
@@ -132,8 +133,7 @@ Six criteria operationalise this standard for the artefact defined in Section~\r
     \textit{Threshold: a published formal argument covering the core fragment, with
     scope boundaries and limitations stated.}
 
-    \item \textbf{Executability.} Executability is the primary success criterion for this thesis.
-    Programs written in the language compile and execute on gate-based NISQ hardware; hardware access is provided through the University of Melbourne's membership of the IBM Quantum Network~\cite{UoMIBMQuantumHub}.
+    \item \textbf{Executability.} Programs written in the language compile and execute on gate-based NISQ hardware; hardware access is provided through the University of Melbourne's membership of the IBM Quantum Network~\cite{UoMIBMQuantumHub}.
     \textit{Threshold: at minimum, demonstrated execution on a simulator; execution on NISQ hardware is the target goal.}
 
     \item \textbf{Expressiveness.} Representative quantum algorithms can be written in the language without resorting to escape hatches.
@@ -166,6 +166,7 @@ Claims concerning hardware execution are bounded by the devices available during
 \section{Reproducibility}\label{sec:methodology:reproducibility}
 All artefacts produced by this thesis are maintained in a public version-controlled repository: source code, language specification, formal proofs and compilation framework.
 Build instructions and compilation pipeline documentation are included to allow independent reproduction of the compilation claims in Chapter~\ref{chapt:pub_compilation}.
+Engineering evidence for compilability; a test suite of representative programs whose output is verified against a reference implementation is documented in Chapter~\ref{chapt:pub_compilation}, together with the acceptance criteria that define what constitutes a passing run.
 The specific repository location and artefact licensing are reported in Chapter~\ref{chapt:pub_compilation}; at the time of submission, the repository is publicly accessible.
 
 The formal proofs in Chapter~\ref{chapt:pub_formal_theory} are presented in a self-contained form; proof verification does not depend on access to the compilation toolchain.

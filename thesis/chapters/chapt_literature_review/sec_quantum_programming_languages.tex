@@ -155,13 +155,13 @@ Portability is achieved through a shared vocabulary of quantum operations: hardw
 
 \begin{figure}[htbp]
     \centering
-    \begin{minipage}[t]{0.46\textwidth}
+    \begin{minipage}[t]{0.48\textwidth}
         \centering
         \textbf{x86 Assembly (Classical)}
         \begin{lstlisting}[basicstyle=\ttfamily\tiny,
             frame=single,
             label={lst:lit_rev:qpl:assembly_comparison_x86}]
-; Flip all bits in a register (bitwise NOT)
+; Flip all bits in a register
 ; eax holds the value to invert
 
 section .text
@@ -211,7 +211,7 @@ At no point does the language offer a layer at which this workflow can be expres
 
 \begin{figure}[htbp]
     \centering
-    \begin{minipage}[t]{0.6\textwidth}
+    \begin{minipage}[t]{0.65\textwidth}
         \centering
         \textbf{OpenQASM 3.0}
         \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
@@ -389,7 +389,7 @@ Hardware portability across backends and access to a mature ecosystem of algorit
 It treats quantum circuits as differentiable functions, \textit{QNodes}, that can be composed with classical computation and differentiated automatically, targeting hybrid quantum-classical machine learning workflows directly.
 Its strongest abstraction claim is specific to this workflow class: the variational and optimisation loop is largely managed by the framework, reducing manual programmer burden for that pattern while leaving the general quantum programming model unchanged~\cite{bergholm2018pennylane}.
 \textbf{Qrisp} represents the furthest step towards higher abstraction in this family~\cite{seidel2024qrisp}.
-Qrisp introduces a typed quantum variable hierarchy, \texttt{QuantumVariable}, \texttt{QuantumFloat}, \texttt{QuantumArray} and \texttt{QuantumDictionary}, alongside dynamic qubit allocation, compiler-managed arithmetic between quantum types and an \texttt{auto_uncompute} decorator.
+Qrisp introduces a typed quantum variable hierarchy, \texttt{QuantumVariable}, \texttt{QuantumFloat}, \texttt{QuantumArray} and \texttt{QuantumDictionary}, alongside dynamic qubit allocation, compiler-managed arithmetic between quantum types and an \texttt{auto\_uncompute} decorator.
 The decorator automates clean-up of temporary quantum states within a function's scope.
 Its design targets top-down algorithm expression, positioning quantum type management as a compiler obligation rather than a programmer task~\cite{seidel2024qrisp}.
 In doing so, Qrisp shares design features with standalone high-level languages; the significance of that proximity is examined in the analysis that follows and in Section~\ref{subsubsec:lit_rev:qpl:highlevel}.
@@ -408,17 +408,17 @@ Outside it, the general quantum programming model is unchanged; a programmer not
 Qrisp takes the furthest step within the family toward removing mandatory circuit description from the programmer's workflow.
 Its typed quantum variable hierarchy abstracts register allocation, compiler-managed arithmetic and type-level operations, removing the need to specify individual gate sequences for operations such as addition or comparison~\cite{seidel2024qrisp}.
 The compiler manages qubit allocation dynamically; the programmer does not sequence or assign registers~\cite{seidel2024qrisp}.
-The \texttt{auto_uncompute} decorator addresses the clean-up of temporary quantum state after a function completes, a class of obligation that high-level quantum languages have sought to automate~\cite{bichsel2020silq, seidel2024qrisp}.
+The \texttt{auto\_uncompute} decorator addresses the clean-up of temporary quantum state after a function completes, a class of obligation that high-level quantum languages have sought to automate~\cite{bichsel2020silq, seidel2024qrisp}.
 The mechanism can be compared to garbage collection in managed languages because both address resource clean-up without explicit action at every call site; the comparison, however, overstates the similarity.
 Garbage collection operates transparently and requires the programmer to have no awareness of memory management as a concern.
-\texttt{auto_uncompute} is an explicit annotation that must be applied by a programmer who already understands that uncomputation is an obligation.
+\texttt{auto\_uncompute} is an explicit annotation that must be applied by a programmer who already understands that uncomputation is an obligation.
 Automatic uncomputation here is closer to structured resource management patterns such as RAII in C++ or \texttt{defer} in Go, reducing the burden of fulfilling an obligation without removing the programmer's awareness of it~\cite{seidel2024qrisp}.
 
 The limits of Qrisp's abstractions are visible at the points where the type hierarchy cannot generalise further.
 Creating superposition within a \texttt{QuantumFloat} requires the programmer to apply a Hadamard gate to a specific qubit index within the composite type.
 The framework provides no higher-level construct for initialising a typed variable into superposition, as shown in Figure~\ref{fig:lit_rev:qpl:superposition_comparison}~\cite{seidel2024qrisp}.
 Instantiating any \texttt{QuantumVariable} requires specifying a qubit count~\cite{seidel2024qrisp}.
-Specifying precision for a numerical type is a familiar practice in classical languages: \texttt{int32_t} and \texttt{float64} both encode a storage decision.
+Specifying precision for a numerical type is a familiar practice in classical languages: \texttt{int32\_t} and \texttt{float64} both encode a storage decision.
 In Qrisp, the qubit count carries additional constraints arising from the structure of quantum state: the number of qubits determines representational capacity within the computation, and the programmer must reason about those constraints to write correct programs~\cite{seidel2024qrisp}.
 Implementing controlled variants of user-defined operations requires explicit annotation of function definitions and an understanding of the circuit-level distinction between controlled and uncontrolled execution~\cite{seidel2024qrisp}.
 Comparative complexity analysis found that Qrisp's array abstractions reduce code verbosity through broadcast operations across registers.
@@ -467,7 +467,7 @@ qc.measure_all()
 
     \vspace{1em}
 
-    \begin{minipage}[t]{0.46\textwidth}
+    \begin{minipage}[t]{0.48\textwidth}
         \centering
         \textbf{PennyLane (Embedded Framework)}
         \begin{lstlisting}[basicstyle=\ttfamily\tiny,
@@ -476,7 +476,7 @@ qc.measure_all()
             label={lst:lit_rev:qpl:superposition_pennylane}]
 import pennylane as qml
 
-dev = qml.device("default.qubit", wires=4)
+dev = qml.device("default.qubit",wires=4)
 
 @qml.qnode(dev)
 def circuit():
@@ -555,27 +555,6 @@ Figures~\ref{fig:lit_rev:qpl:grover_comparison} and~\ref{fig:lit_rev:qpl:qft_com
 \begin{figure}[htbp]
     \centering
     \begin{minipage}[t]{0.48\textwidth}
-        \textbf{Silq}~\cite{bichsel2020silq,bezganovic2024silq}
-        \begin{lstlisting}[basicstyle=\tiny\ttfamily,
-            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit_rev:qpl:grover_comparison:silq}]
-def grover[n:!N](f: const uint[n] !=> lifted B,
-marks: !N): !N {
-  nIterations :=floor(pi* sqrt(2^n / marks)/ 4);
-  cand := 0:uint[n];
-  for k in [0..n) {
-    cand[k] := H(cand[k]);
-  }
-  for k in [0..nIterations) {
-    if f(cand) { phase(pi); }
-    cand :=
-      groverDiffusion(cand);
-  }
-  return measure(cand) as !N;
-}
-        \end{lstlisting}
-    \end{minipage}
-    \hfill
-    \begin{minipage}[t]{0.48\textwidth}
         \textbf{Quff}~\cite{wright2024quff}
         \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,
             frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit_rev:qpl:grover_comparison:quff}]
@@ -594,13 +573,36 @@ H: (var q = 0u{n}) {
   return measure(q)
 }
         \end{lstlisting}
-        \vspace{1em}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.48\textwidth}
         \textbf{Qutes}~\cite{faro2025qutes}
         \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,
             frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit_rev:qpl:grover_comparison:qutes}]
 qustring b = "1110111";
 if ("01" in b) {
   print "Match!";
+}
+        \end{lstlisting}
+    \end{minipage}
+    \vspace{1em}
+    \begin{minipage}[t]{0.8\textwidth}
+        \textbf{Silq}~\cite{bichsel2020silq,bezganovic2024silq}
+        \begin{lstlisting}[basicstyle=\tiny\ttfamily,
+            frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit_rev:qpl:grover_comparison:silq}]
+def grover[n:!N](f: const uint[n] !=> lifted B,
+marks: !N): !N {
+  nIterations :=floor(pi* sqrt(2^n / marks)/ 4);
+  cand := 0:uint[n];
+  for k in [0..n) {
+    cand[k] := H(cand[k]);
+  }
+  for k in [0..nIterations) {
+    if f(cand) { phase(pi); }
+    cand :=
+      groverDiffusion(cand);
+  }
+  return measure(cand) as !N;
 }
         \end{lstlisting}
     \end{minipage}
