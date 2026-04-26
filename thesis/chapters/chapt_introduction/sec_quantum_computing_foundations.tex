@@ -1,6 +1,119 @@
-\section{Quantum computing foundations}
-\label{sec:quantum_computing_foundations}
-- Quantum gates
-- Link to quantum fundamentals/postulates/mechanics
-- Discuss high level mathematical basis for quantum computing
-- Provide it in context of quantum abstraction and programming/classical parallels
+\section{Quantum computing foundations}\label{sec:introduction:quantum_computing_foundations}
+The sections that follow use vocabulary drawn from quantum computing: qubits, gates, circuits, measurement, entanglement and uncomputation.
+This section introduces that vocabulary at the level of detail needed to understand why it constitutes a programming burden.
+Readers with a background in quantum computing may proceed directly to Section~\ref{sec:introduction:motivation}.
+
+\subsection{Qubits and quantum state}\label{subsec:introduction:quantum_computing_foundations:qubits_and_state}
+The fundamental unit of quantum information is the \textit{qubit}, the quantum analogue of the classical bit.
+Unlike a classical bit, which is definitively either 0 or 1, a qubit can exist in \textit{superposition}: a weighted combination of both outcomes simultaneously, where each outcome has an associated probability.
+The state of a qubit is written in \textit{Dirac (ket) notation}:
+\begin{equation}
+    \ket{\psi} = \alpha\ket{0} + \beta\ket{1}
+    \label{eq:introduction:quantum_computing_foundations:qubit_state}
+\end{equation}
+where $\ket{0}$ and $\ket{1}$ are the two definite \textit{basis states}, the quantum equivalents of $0$ and $1$ and $\alpha, \beta \in \mathbb{C}$ are complex \textit{amplitudes}.
+
+The amplitudes encode the probability of each outcome: when the qubit is measured, $\ket{0}$ is observed with probability $|\alpha|^2$ and $\ket{1}$ with probability$|\beta|^2$.
+The constraint $|\alpha|^2 + |\beta|^2 = 1$ is therefore the requirement that probabilities sum to one~\cite{nielsen2000quantum}.
+The mathematical structure that captures this is a \textit{Hilbert space}: a vector space over the complex numbers equipped with an inner product that defines a notion of length and angle between states.
+For a single qubit this space is two-dimensional over the complex numbers; the Bloch sphere as shown in Figure~\ref{fig:introduction:quantum_computing_foundations:bloch_sphere} visualises this as a point on a unit sphere.
+Exploiting normalisation and global phase equivalence.
+For $n$ qubits it is $2^n$-dimensional, allowing a register of $n$ qubits to be in superposition over$2^n$ distinct outcomes simultaneously.
+
+\begin{figure}[h!]
+    \centering
+    % [FIGURE A] Bloch sphere: \ket{0} at north pole, \ket{1} at south pole,
+    % general superposition \ket{\psi} as a point on the surface.
+    \includegraphics[width=0.5\linewidth]{../figures/fig-introduction-qcf-bloch_sphere}
+    \caption{Bloch sphere representation of a single-qubit state. The poles correspond to $\ket{0}$ and $\ket{1}$; a general superposition state $\ket{\psi}$ is a point on the surface.}
+    \label{fig:introduction:quantum_computing_foundations:bloch_sphere}
+\end{figure}
+
+Two or more qubits can be \textit{entangled}: in an entangled state the joint state of the qubits cannot be expressed as a product of the individual qubit states.
+Entangled qubits have correlated measurement outcomes regardless of spatial separation, and many quantum algorithms exploit entanglement as a computational resource~\cite{nielsen2000quantum}.
+
+Understanding ket notation and quantum state is a prerequisite for writing correct programs in existing quantum programming systems.
+The quantum state model is not hidden behind the programming interface but must be actively reasoned about to use it correctly~\cite{ferreira2024qplusage}.
+
+\subsection{Unitarity, gates and the no-cloning theorem}\label{subsec:introduction:quantum_computing_foundations:unitarity_gates_nocloning}
+Quantum operations are performed by \textit{quantum gates}: linear maps on the Hilbert space represented as unitary matrices.
+A matrix $U$ is unitary if $U^\dagger U = I$, where $U^\dagger$ is the conjugate transpose of $U$.
+Unitarity ensures that every gate preserves the norm of the state vector and therefore the requirement that probabilities sum to one~\cite{nielsen2000quantum}.
+Three gates appear frequently in quantum programs, illustrated in Figure~\ref{fig:introduction:quantum_computing_foundations:gates}.
+The Pauli-$X$ gate performs a bit flip: $\ket{0} \leftrightarrow \ket{1}$.
+The Hadamard gate $H$ places a qubit in equal superposition: $H\ket{0} = \frac{1}{\sqrt{2}}\left(\ket{0} + \ket{1}\right)$.
+The controlled-NOT gate (CNOT) entangles two qubits by flipping the target qubit conditioned on the state of the control.
+
+\begin{figure}[h!]
+    \centering
+    % [FIGURE B] Circuit diagram: X gate, H gate, two-qubit CNOT gate,
+    % each shown as a labelled box on horizontal qubit wires. Include a second row indicating state changes in ket notation
+    \includegraphics[width=0.75\linewidth]{../figures/fig-introduction-qcf-gates}
+    \caption{Standard circuit representations of three common quantum gates. Circuit notation is formalised in Subsection~\ref{subsec:introduction:quantum_computing_foundations:circuit_model}.}
+    \label{fig:introduction:quantum_computing_foundations:gates}
+\end{figure}
+
+A direct consequence of unitarity is that quantum gates are \textit{injective}: distinct input states produce distinct output states and no information is destroyed.
+A further consequence, known as the \textit{no-cloning theorem}, is that no unitary operation exists that copies an arbitrary unknown quantum state~\cite{nielsen2000quantum}.
+Programmers cannot freely duplicate a qubit, nor silently discard one; the reasons are grounded in entanglement as discussed in Subsection~\ref{subsec:introduction:quantum_computing_foundations:phases_interference_measurement} and developed further in Subsection~\ref{subsec:introduction:quantum_computing_foundations:reversal_uncomputation}.
+
+\subsection{The circuit model}\label{subsec:introduction:quantum_computing_foundations:circuit_model}
+The \textit{circuit model} is the dominant computational model for gate-based quantum programs~\cite{nielsen2000quantum}.
+In this model, qubits are represented as horizontal wires and time flows from left to right; gates are applied in sequence as labelled boxes on those wires.
+A circuit is fully specified by its \textit{width}, the number of qubits, and its \textit{depth}, the number of sequential gate layers.
+Figure~\ref{fig:introduction:quantum_computing_foundations:circuit_example} shows a representative circuit.
+
+\begin{figure}[h!]
+    \centering
+    % [FIGURE C] A small quantum circuit: 3 qubit wires, H gate on wire 1,
+    % CNOT between wires 1 and 2, X gate on wire 3, measurement symbols at the end.
+    % Annotate depth (number of gate layers) and width (number of wires).
+    \includegraphics[width=0.75\linewidth]{../figures/fig-introduction-qcf-circuit_example}
+    \caption{A representative quantum circuit with three qubits. Width is the number of qubit wires; depth is the number of sequential gate layers. Measurement occurs at the end of the circuit.}
+    \label{fig:introduction:quantum_computing_foundations:circuit_example}
+\end{figure}
+
+Circuit depth is a direct determinant of program correctness on physical hardware.
+As noted in Section~\ref{sec:introduction:overview}, quantum hardware is characterised by coherence timescales $T_1$ and $T_2$, which bound the period over which a qubit's state remains reliable.
+Circuits whose depth exceeds the available coherence window accumulate errors that corrupt the final measurement distribution.
+Minimising depth is therefore not an optimisation concern but a correctness requirement, and it is a requirement the programmer must actively manage in every existing quantum programming system.
+
+\subsection{Phases, interference and measurement}\label{subsec:introduction:quantum_computing_foundations:phases_interference_measurement}
+The complex amplitudes introduced in Subsection~\ref{subsec:introduction:quantum_computing_foundations:qubits_and_state} carry a \textit{phase}: the complex angle that determines how amplitudes combine when gates are applied.
+Global phase, a factor applied uniformly to the entire state, has no observable consequence.
+\textit{Relative phase}, the phase difference between basis state amplitudes, does: when two paths through a computation lead to the same basis state, their amplitudes add.
+If the phases align, the amplitudes reinforce and the probability of that outcome increases; if they oppose, the amplitudes cancel and the probability decreases.
+This mechanism, known as \textit{interference}, is the primary means by which quantum algorithms amplify correct outputs and suppress incorrect ones~\cite{nielsen2000quantum}.
+Figure~\ref{fig:introduction:quantum_computing_foundations:interference} illustrates constructive and destructive interference between two paths.
+
+\begin{figure}[h!]
+    \centering
+    % [FIGURE D] Two-path interference diagram: constructive (amplitudes in phase,
+    % large combined probability) and destructive (amplitudes opposed, probability
+    % near zero).
+    \includegraphics[width=0.75\linewidth]{../figures/fig-introduction-qcf-interference}
+    \caption{Constructive and destructive interference between two computational paths. Aligned phases reinforce the outcome probability; opposed phases suppress it.}
+    \label{fig:introduction:quantum_computing_foundations:interference}
+\end{figure}
+
+\textit{Measurement} collapses the quantum state to a single basis state with probability given by the squared amplitude of that state~\cite{nielsen2000quantum}.
+The collapse is irreversible: the superposition and phase information are destroyed.
+Quantum programs therefore produce probability distributions over outcomes rather than deterministic results, and multiple executions are required to gather statistics.
+Entanglement makes this constraint sharper: measuring one qubit of an entangled pair collapses the joint state and determines the state of its partner.
+An intermediate qubit that remains entangled with the rest of the system at the point of measurement will corrupt the output distribution, which is why silent discard is forbidden as established in Subsection~\ref{subsec:introduction:quantum_computing_foundations:unitarity_gates_nocloning}.
+
+\subsection{Reversal, inversion and uncomputation}\label{subsec:introduction:quantum_computing_foundations:reversal_uncomputation}
+Because quantum gates are unitary, every gate has an inverse.
+The adjoint $U^\dagger$ reverses the action of $U$, returning the qubit register to its prior state.
+\textit{Gate inversion} is the direct application of this property; applying $U^\dagger$ immediately after $U$ restores the state as if neither operation occurred.
+
+\textit{Uncomputation} applies inversion to a specific programming problem.
+When an ancilla qubit, a temporary qubit introduced to hold an intermediate result,has become entangled with the main register, it cannot be safely discarded or re-used without first being returned to a known state.
+Discarding an entangled ancilla traces it out of the joint state, reducing the remaining system to a mixed state and corrupting the output distribution, as established in Subsection~\ref{subsec:introduction:quantum_computing_foundations:phases_interference_measurement}.
+Re-using it without uncomputation propagates the entanglement forward into later computation.
+Uncomputation resolves both problems by running the gate sequence that produced the ancilla's current state in reverse, disentangling it and returning it to $\ket{0}$, at which point it can be safely released or re-used~\cite{nielsen2000quantum}.
+
+The cost is circuit depth: every gate applied to produce an intermediate result must be applied again in reverse to remove it.
+As noted in Subsection~\ref{subsec:introduction:quantum_computing_foundations:circuit_model}, circuit depth is bounded by hardware coherence timescales.
+Uncomputation is therefore not an abstract correctness obligation; it is a concrete contributor to the depth budget available for useful computation.
+Where uncomputation is not automated by the compiler, the programmer is responsible for identifying which ancilla qubits require it and constructing the inverse gate sequence manually~\cite{bichsel2020silq}.

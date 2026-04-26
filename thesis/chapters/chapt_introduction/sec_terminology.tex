@@ -1,0 +1,46 @@
+\section{Key Terminology}\label{sec:introduction:terminology}
+The following terms are used with specific meaning throughout this thesis.
+Standard quantum computing vocabulary is defined in Section~\ref{sec:introduction:quantum_computing_foundations}; standard programming language theory terms are defined at point of first use in the relevant chapters.
+
+\subsection{Introduced terms}\label{subsec:introduction:terminology:introduced_terms}
+
+\begin{itemize}
+    \item \textbf{Quantum-implicit.} A class of quantum programming language whose primary surface model is expressed in ordinary mathematical and computational abstractions.
+    A quantum-implicit language allows programmers to describe and implement quantum algorithms without explicitly annotating or reasoning about qubits, gates, circuits or other quantum-mechanical constructs.
+    The compiler is responsible for inferring and synthesising the necessary quantum realisation.
+
+    \item \textbf{Quantum bias.} The degree to which a language's surface model requires the programmer to understand quantum-mechanical vocabulary to write correct programs.
+    A language with high quantum bias exposes circuit-level concepts as mandatory programmer-facing constructs.
+    A language with zero quantum bias is quantum-implicit.
+    The concept is formally operationalised in Chapter~\ref{ch:pub_qpl_review}.
+\end{itemize}
+
+\subsection{Borrowed terms}\label{subsec:introduction:terminology:borrowed_terms}
+
+\begin{itemize}
+    \item \textbf{Surface model.} The vocabulary, abstractions and mental model a programming language presents to the programmer, as distinct from the language's compilation target, implementation or runtime.
+    In this thesis, the surface model is the primary object of analysis: what the surface model requires of the programmer, not what the language generates at the hardware level.
+
+    \item \textbf{Bleed-through.} The leakage of execution-layer or hardware-layer concerns into the programming-layer surface model~\cite{DiMatteo2024AbstractionHierarchy}.
+    A language exhibits bleed-through when the programmer must reason about circuit depth, qubit allocation, gate set constraints or decoherence timescales to write correct programs.
+    Bleed-through is the mechanism that produces quantum bias.
+
+    \item \textbf{Quantum substrate.} The underlying physical quantum-mechanical model: qubits, unitary gate operations, measurement and the decoherence constraints of real hardware.
+    A quantum-implicit language is agnostic of the quantum substrate; its surface model does not expose substrate concepts, even though the compiled output must address them.
+
+    \item \textbf{Gate-based quantum hardware.} Quantum hardware that executes programs as sequences of discrete unitary gate operations on qubit registers.
+    This is the predominant hardware model addressed by quantum programming languages and the compilation target for all four incorporated publications.
+    It is distinct from quantum annealing hardware and continuous-variable quantum systems.
+\end{itemize}
+
+\subsection{Abbreviations}\label{subsec:introduction:terminology:abbreviations}
+
+\begin{itemize}
+    \item \textbf{NISQ (Noisy Intermediate-Scale Quantum).} The current generation of quantum hardware, characterised by qubit counts in the range of tens to hundreds,without full fault-tolerant error correction.
+    All empirical results in this thesis are evaluated against NISQ-class hardware.
+
+    \item \textbf{DSR (Design Science Research).} The research methodology adopted in this thesis.
+    Full treatment is in Chapter~\ref{ch:methodology}.
+
+    \item \textbf{QPL (Quantum Programming Language).} Used as shorthand for any quantum programming language, framework or embedded domain-specific language that provides a programmer-facing interface for expressing quantum computations.
+\end{itemize}

@@ -1,0 +1,98 @@
+\section{Thesis claim and research questions}\label{sec:introduction:research_questions}
+We do not need to understand how electromagnetism propagates through a transistor to program a classical computer.
+As Núñez-Corrales et al.~observe of mature classical programming systems:
+
+\begin{quote}
+    \textit{When reasoning about the effects of a program, a programmer works at the level of formal statements (mathematics), translates statements into programs (instructions) and ideally uses knowledge of the limitations of finite representations to validate program correctness (proofs).
+    Programmers no longer need to worry about the fate of individual bits or the sequence of gates the machine executes~\cite{nunez_corrales2025betterabstractmachines}.}
+\end{quote}
+
+There is no corresponding principle in quantum programming.
+Programmers must currently understand how quantum mechanics operates at the gate and circuit level to write correct programs.
+This thesis introduces and investigates a class of language that extends the classical principle to the quantum domain.
+A \textit{quantum-implicit} programming language is one whose primary surface model is expressed in ordinary mathematical and computational abstractions.
+It allows programmers to describe and implement quantum algorithms without explicitly annotating or reasoning about qubits, gates, circuits or other quantum-mechanical constructs.
+The compiler is responsible for inferring and synthesising the necessary quantum realisation.
+
+\subsection{Claim}\label{subsec:introduction:research_questions:claim}
+In a quantum-implicit language, programming looks substantively
+different~\cite{nunez_corrales2025betterabstractmachines}:
+\begin{itemize}
+    \item Programs are expressed at a level of algorithmic intent rather than circuit structure;
+    \item Classical and quantum data types interoperate without the programmer managing qubit modality or gate sets;
+    \item The number of execution shots required to produce a statistically reliable distribution is determined by the compiler or runtime, not the programmer; and
+    \item Complexity advantages over classical computation are assessable systematically,without hardware-specific reasoning.
+\end{itemize}
+
+Table~\ref{tab:introduction:research_questions:criteria_violations} illustrates why this tier is currently unoccupied.
+Three of the most advanced existing high-level languages are assessed against four criteria governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}; each records at least one violation.
+
+\begin{table}[ht]
+    \centering
+    \caption{Representative criteria violations across three advanced high-level quantum programming languages. Each language records at least one violation of the four criteria most directly governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}.
+    The full criteria set is presented in Chapter~\ref{ch:literature_review}.}
+    \label{tab:introduction:research_questions:criteria_violations}
+    \small
+    \begin{tabular}{p{3.2cm} p{3.5cm} p{3.5cm} p{3.5cm}}
+        \toprule
+        \textbf{Criterion} & \textbf{Silq} & \textbf{Quff} & \textbf{Qutes} \\\midrule
+        \textbf{Symbolic denotational syntax.}
+        No circuit elements required to reason about program effects on state.
+        & \texttt{qfree}, \texttt{const}, \texttt{lifted} and \texttt{mfree} annotations encode circuit-execution semantics as mandatory surface syntax. Both require circuit-model knowledge to apply correctly.
+        & Runtime function inversion (\texttt{invertF}) is a circuit-level surface concept. Phase notation and explicit qubit operations remain at the programming surface.
+        & \texttt{ref} advances toward quantum-agnostic pass-by-reference. Explicit gate instructions (\texttt{hadamard}, \texttt{mcp}, \texttt{swap}) are still required for algorithms outside the built-in set. \\ \addlinespace
+        \textbf{Representation-independent data types.}
+        No reference to circuit elements in data types.
+        & \texttt{uint[n]} hard-codes qubit count \texttt{n} into every numeric type. Every declaration couples data representation to a physical resource quantity.
+        & Explicit bit-width specification is required for all quantum types. The programmer must declare and manage qubit count for each variable.
+        & Quantum register types carry explicit size or qubit-level structure for operations outside the built-in set. \\ \addlinespace
+        \textbf{Classical-quantum regularity.}
+        Classical and quantum instructions coexist at the same level.
+        & The \texttt{!} annotation mandates a programmer-visible stratification between classical and quantum values, with different rules for control flow and function application.
+        & Distinct quantum and classical type families are required. Programmers must reason about which operations are valid in each context.
+        & Classical and quantum contexts remain syntactically distinguished. The classical/quantum boundary is programmer-managed rather than compiler-inferred. \\ \addlinespace
+        \textbf{Intrinsic ensemble semantics.}
+        Shot count elided; distribution types well-defined at the language level.
+        & Explicit \texttt{measure} is required to obtain classical output. Shot management is external to the language.
+        & Measurement must be explicitly inserted by the programmer. Shot count for statistical reliability is managed outside the language.
+        & Scope-bounded uncomputation handles one class of quantum-to-classical transition. General measurement and shot management remain explicit. \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Violations are consistent across the three most advanced high-level languages in the reviewed literature, confirming that the gap is a property of the existing design space rather than a shortcoming of any single system.
+The full criteria set and a systematic assessment across all reviewed languages is presented in Chapter~\ref{ch:literature_review}.
+
+\subsection{Research questions}\label{subsec:introduction:research_questions:questions}
+The central research question (CRQ) this thesis addresses is:
+
+\begin{quote}
+    \textit{\textbf{CRQ: }Can a quantum-implicit programming language, whose surface model is agnostic of the underlying physical quantum substrate, be formally designed, proven correct and compiled to execute on gate-based quantum hardware?}
+\end{quote}
+
+This thesis answers that question affirmatively across four incorporated publications.
+
+A quantum-implicit programming language can be formally specified, proven type-safe and compiled to execute on gate-based quantum hardware with proven semantic preservation.
+The quantum-implicit tier is not merely aspirational; it is formally achievable.
+
+The CRQ is decomposed into three subsidiary research questions (SRQs), each addressed by one or more thesis chapters:
+
+\begin{quote}
+    \textit{\textbf{SRQ1: }Can a quantum-implicit language be formally specified through computational abstractions requiring no knowledge of quantum mechanical principles or the circuit execution model, while remaining expressive enough to encode quantum algorithms?}
+\end{quote}
+
+SRQ1 is addressed in Chapter~\ref{ch:pub_language_design}, which presents the syntax,operational semantics and type system of the quantum-implicit language.
+
+\begin{quote}
+    \textit{\textbf{SRQ2: }Can the core source language be proven type-safe: specifically, can \emph{progress} (well-typed programs never reach a stuck state) and \emph{preservation} (evaluation preserves the type of well-typed expressions) be formally established for the language's type system?}
+\end{quote}
+
+SRQ2 is addressed in Chapter~\ref{ch:pub_formal_theory}, which presents the progress and preservation proofs for the core language.
+
+\begin{quote}
+    \textit{\textbf{SRQ3: }Can semantic preservation be formally established for the compilation pipeline: specifically, does the compiler's translation from source language to quantum IR faithfully preserve the meaning of source programs?}
+\end{quote}
+
+SRQ3 is addressed in Chapters~\ref{ch:pub_formal_theory} and~\ref{ch:pub_compilation}: the former establishes the formal semantic preservation proof; the latter demonstrates it end-to-end for concrete programs compiled to and executed on NISQ hardware.
+
+The CRQ is answered collectively in Chapters~\ref{ch:results_evaluation} and~\ref{ch:study_implications}, which synthesise the contributions of all four publications.

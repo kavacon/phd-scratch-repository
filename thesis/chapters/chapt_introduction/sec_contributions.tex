@@ -1,0 +1,29 @@
+\section{Contributions}\label{sec:introduction:contributions}
+This thesis makes the first end-to-end formal demonstration that a quantum-implicit programming language is achievable.
+The language is formally specified, proven type-safe and compiled to execute on gate-based quantum hardware.
+The four incorporated publications constitute an integrated body of work; no single publication delivers this claim in isolation.
+
+This thesis introduces two conceptual contributions.
+The first is the \textit{quantum-implicit programming tier}: a formal characterisation of a class of quantum programming languages whose surface model is agnostic of the underlying physical quantum substrate.
+It establishes a new position on the quantum programming language abstraction spectrum, above existing high-level languages.
+This position is defined by the absence of mandatory quantum-mechanical vocabulary from the programmer-facing surface and is operationalised across all four incorporated publications.
+The second is \textit{quantum bias}: a named, formally operationalised measure of the degree to which a language's surface model requires the programmer to understand quantum-mechanical vocabulary to write correct programs.
+Quantum bias is introduced and operationalised in Chapter~\ref{ch:pub_qpl_review}.
+
+Four incorporated publications deliver the artefact contributions:
+\begin{itemize}
+    \item \textbf{Chapter~\ref{ch:pub_qpl_review} (quantum programming language systematic review):} the first systematic review of quantum programming languages using a novel abstraction-spectrum taxonomy and evaluation rubric.
+    It establishes the state of the field, formally introduces and operationalises quantum bias and provides the evidential basis for the quantum-implicit tier as an unoccupied position in the design space.
+
+    \item \textbf{Chapter~\ref{ch:pub_language_design} (language specification):} a formal specification of a quantum-implicit programming language, including its syntax, operational semantics and type system.
+    It demonstrates that a quantum-implicit programming model can be precisely defined and that representative quantum algorithms can be expressed without quantum-mechanical vocabulary.
+
+    \item \textbf{Chapter~\ref{ch:pub_formal_theory} (type system and formal theory):}formal proofs of type safety for the core language (progress and preservation) and semantic preservation for the compilation pipeline.
+    It establishes the internal correctness guarantees of the artefact.
+
+    \item \textbf{Chapter~\ref{ch:pub_compilation} (compiler):} a compiler from the quantum-implicit language to gate-based quantum hardware.
+    It demonstrates end-to-end executability: programs written in the language can be compiled and run on current NISQ hardware.
+\end{itemize}
+
+This thesis establishes that the quantum-implicit tier is formally inhabitable and that at least one correct, compilable instantiation exists.
+It does not claim that the specific language designed here is the only viable design, or that it is optimal.

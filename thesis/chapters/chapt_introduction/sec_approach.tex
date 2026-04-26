@@ -1,0 +1,19 @@
+\section{Approach and method overview}\label{sec:introduction:approach}
+
+This thesis adopts Design Science Research (DSR)~\cite{Hevner2004DesignScienceIS,Peffers2007DSRM} as its governing methodology.
+DSR is appropriate when the research contribution is a novel artefact evaluated against a practical problem: the researcher is the designer and builder, not an observer or experimenter.
+Full justification of this choice, the DSR process mapping, and the evaluation criteria and thresholds are presented in Chapter~\ref{ch:methodology}.
+
+Three primary artefacts constitute the research contribution:
+\begin{enumerate}
+    \item \textit{Language specification:} defines the vocabulary, structure and meaning of a quantum-implicit programming language: what programs look like, what they mean and how they relate to each other.
+    \item \textit{Formal theory:} establishes that the language is internally consistent.
+    Well-formed programs never get stuck; evaluation preserves program types and the compiler's translation faithfully preserves program meaning.
+    \item \textit{Compiler:} demonstrates that the language is not merely theoretical by translating programs to gate-based quantum hardware for execution.
+\end{enumerate}
+
+Together, the specification, theory and compiler constitute a complete end-to-end demonstration that a quantum-implicit programming language is formally achievable.
+
+DSR frames the research design; it does not replace formal proof methodology.
+Progress and preservation proofs and semantic preservation via simulation, drawn from programming language theory, are used to evaluate the correctness of the artefact.
+These are described in Chapter~\ref{ch:methodology} and developed in Chapters~\ref{ch:pub_formal_theory} and~\ref{ch:pub_compilation}.

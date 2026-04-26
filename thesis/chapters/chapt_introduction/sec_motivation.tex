@@ -1,0 +1,28 @@
+\section{Motivation}\label{sec:introduction:motivation}
+Existing work on quantum programming language design recognises a three-layer model separating the programming layer, the execution layer and the hardware layer~\cite{DiMatteo2024AbstractionHierarchy, nunez_corrales2025betterabstractmachines}.
+In mature classical systems, these layers are separated by stable abstraction boundaries.
+A programmer querying a relational database need not reason about B-trees or buffer pools to write correct queries.
+Likewise, the programming layer of a quantum system should not require knowledge of the execution and hardware layers below it.
+That separation has not been achieved in quantum programming.
+Concepts from the execution and hardware layers consistently bleed through into the programming surface.
+Programmers must select gate sequences, manage qubit allocation, reason about circuit depth and schedule uncomputation~\cite{DiMatteo2024AbstractionHierarchy}.
+The full treatment of the quantum programming language abstraction landscape is presented in Chapter~\ref{ch:literature_review}.
+
+Researchers and practitioners have observed that quantum programming systems consistently impose a vocabulary of quantum-mechanical concepts on the programmer, even when the problem domain has no intrinsic quantum structure~\cite{Gay2006QPLSurvey, DiMatteo2024AbstractionHierarchy, ferreira2024qplusage}.
+Programmers must declare qubits, compose gate sequences, reason about circuit structure and manage entanglement.
+These obligations hold regardless of whether the algorithm being implemented requires quantum-mechanical reasoning at the level of abstraction where the programmer is working.
+This thesis formalises that burden as \textit{quantum bias}: the degree to which a language's surface model requires the programmer to understand quantum-mechanical vocabulary to write correct programs.
+Quantum bias is driven by bleed-through, the leakage of execution-layer and hardware-layer concerns into the programming surface~\cite{DiMatteo2024AbstractionHierarchy}.
+A language with zero quantum bias is \textit{quantum-implicit}, a concept introduced and defined in Section~\ref{sec:introduction:research_questions}.
+Chapter~\ref{ch:literature_review} presents a comparative assessment of the existing quantum programming language landscape through which the concept is applied.
+
+The most recent high-level quantum programming languages have made targeted progress in reducing the vocabulary burden.
+\textbf{Silq}~\cite{bichsel2020silq} automates a class of uncomputation through its type system, relieving the programmer of manually constructing adjoint gate sequences in supported cases.
+\textbf{Quff}~\cite{wright2024quff} introduces runtime function inversion, removing the need to write the inverse of a function explicitly.
+\textbf{Qutes}~\cite{faro2025qutes, reversiblelifetime2026} introduces scope-bounded uncomputation semantics and a \texttt{ref} keyword that approximates quantum-agnostic pass-by-reference.
+Each represents genuine semantic progress at a specific, principled point.
+Each also retains quantum-mechanical obligations in the general case: Silq requires\texttt{qfree}, \texttt{const} and \texttt{lifted} annotations; Quff requires explicit bit-width specification and phase notation; Qutes requires explicit gate instructions for algorithms outside its built-in set.
+
+\textbf{Qiskit}~\cite{aleksandrowicz2019qiskit}, the most widely deployed quantum programming system, makes no such attempt.
+83\% of its active programmers are experienced classical engineers for whom quantum vocabulary is the primary reported barrier to effective use~\cite{ferreira2024qplusage}.
+No existing quantum programming system achieves a surface model agnostic of the underlying quantum substrate.

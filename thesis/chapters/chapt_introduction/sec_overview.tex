@@ -1,0 +1,19 @@
+\section{Overview}\label{sec:introduction:overview}
+Quantum computing hardware has matured to the point where hybrid quantum-classical programs can be compiled and executed on real devices.
+Gate-based quantum processors now support circuits of enough depth and qubit count to execute non-trivial quantum algorithms on current hardware.
+Yet the programming models through which researchers and engineers interact with this hardware have not kept pace.
+Every existing quantum programming system, from low-level circuit assemblers to the most recent high-level languages, requires the programmer to reason explicitly in quantum-mechanical terms.
+Qubits must be declared and tracked, quantum gates must be selected and sequenced and intermediate quantum states must be managed.
+The physical constraints of the underlying hardware must inform programming decisions at every level of the program.
+No existing system provides a surface model that is genuinely \textit{agnostic} of the underlying quantum substrate~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
+The abstraction boundary that separates quantum-mechanical implementation concerns from programmer-facing vocabulary has not been crossed.
+
+This is not a usability concern only.
+Decoherence, the physical process by which quantum states lose coherence due to environmental interaction, imposes hard temporal limits on circuit execution.
+Quantum hardware is characterised by coherence timescales $T_1$ and $T_2$, which bound the period over which a qubit's state remains reliable.
+Circuits whose depth exceeds the hardware's coherence window produce results that are statistically indistinguishable from noise.
+Unnecessarily deep circuits, produced by compilers that lack the semantic information to optimise at a higher level of abstraction, are therefore more likely to produce physically incorrect results on current hardware.
+The programming model is a direct determinant of circuit quality: a language that forces explicit circuit construction cannot, in general, supply the compiler with the information needed to produce shorter, more coherent circuits automatically.
+Just as a classical programmer need not understand the memory hierarchy to write correct programs, a quantum programmer should not require knowledge of the underlying quantum substrate; no existing language has delivered this separation.
+
+The work presented in this thesis demonstrates that this separation is formally achievable.
