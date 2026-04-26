@@ -18,12 +18,10 @@ The constraint $|\alpha|^2 + |\beta|^2 = 1$ is therefore the requirement that pr
 The mathematical structure that captures this is a \textit{Hilbert space}: a vector space over the complex numbers equipped with an inner product that defines a notion of length and angle between states.
 For a single qubit this space is two-dimensional over the complex numbers; the Bloch sphere as shown in Figure~\ref{fig:introduction:quantum_computing_foundations:bloch_sphere} visualises this as a point on a unit sphere.
 Exploiting normalisation and global phase equivalence.
-For $n$ qubits it is $2^n$-dimensional, allowing a register of $n$ qubits to be in superposition over$2^n$ distinct outcomes simultaneously.
+For $n$ qubits it is $2^n$-dimensional, allowing a register of $n$ qubits to be in superposition over $2^n$ distinct outcomes simultaneously.
 
 \begin{figure}[h!]
     \centering
-    % [FIGURE A] Bloch sphere: \ket{0} at north pole, \ket{1} at south pole,
-    % general superposition \ket{\psi} as a point on the surface.
     \includegraphics[width=0.5\linewidth]{../figures/fig-introduction-qcf-bloch_sphere}
     \caption{Bloch sphere representation of a single-qubit state. The poles correspond to $\ket{0}$ and $\ket{1}$; a general superposition state $\ket{\psi}$ is a point on the surface.}
     \label{fig:introduction:quantum_computing_foundations:bloch_sphere}
@@ -46,10 +44,10 @@ The controlled-NOT gate (CNOT) entangles two qubits by flipping the target qubit
 
 \begin{figure}[h!]
     \centering
-    % [FIGURE B] Circuit diagram: X gate, H gate, two-qubit CNOT gate,
-    % each shown as a labelled box on horizontal qubit wires. Include a second row indicating state changes in ket notation
     \includegraphics[width=0.75\linewidth]{../figures/fig-introduction-qcf-gates}
-    \caption{Standard circuit representations of three common quantum gates. Circuit notation is formalised in Subsection~\ref{subsec:introduction:quantum_computing_foundations:circuit_model}.}
+    \caption{Standard circuit representations of three common quantum gates.
+    Circuit notation is formalised in Subsection~\ref{subsec:introduction:quantum_computing_foundations:circuit_model}.
+    On the right-hand side the changing system state is shown.}
     \label{fig:introduction:quantum_computing_foundations:gates}
 \end{figure}
 
@@ -65,9 +63,6 @@ Figure~\ref{fig:introduction:quantum_computing_foundations:circuit_example} show
 
 \begin{figure}[h!]
     \centering
-    % [FIGURE C] A small quantum circuit: 3 qubit wires, H gate on wire 1,
-    % CNOT between wires 1 and 2, X gate on wire 3, measurement symbols at the end.
-    % Annotate depth (number of gate layers) and width (number of wires).
     \includegraphics[width=0.75\linewidth]{../figures/fig-introduction-qcf-circuit_example}
     \caption{A representative quantum circuit with three qubits. Width is the number of qubit wires; depth is the number of sequential gate layers. Measurement occurs at the end of the circuit.}
     \label{fig:introduction:quantum_computing_foundations:circuit_example}
@@ -88,11 +83,10 @@ Figure~\ref{fig:introduction:quantum_computing_foundations:interference} illustr
 
 \begin{figure}[h!]
     \centering
-    % [FIGURE D] Two-path interference diagram: constructive (amplitudes in phase,
-    % large combined probability) and destructive (amplitudes opposed, probability
-    % near zero).
     \includegraphics[width=0.75\linewidth]{../figures/fig-introduction-qcf-interference}
-    \caption{Constructive and destructive interference between two computational paths. Aligned phases reinforce the outcome probability; opposed phases suppress it.}
+    \caption{Interference via phase manipulation. $H$ creates equal superposition;
+        $Z$ inverts the phase of $\ket{1}$ without changing measurement probabilities; the second $H$ converts the phase difference into amplitude difference.
+        $\ket{0}$ is eliminated by destructive interference; $\ket{1}$ is reinforced by constructive interference.}
     \label{fig:introduction:quantum_computing_foundations:interference}
 \end{figure}
 
@@ -108,7 +102,7 @@ The adjoint $U^\dagger$ reverses the action of $U$, returning the qubit register
 \textit{Gate inversion} is the direct application of this property; applying $U^\dagger$ immediately after $U$ restores the state as if neither operation occurred.
 
 \textit{Uncomputation} applies inversion to a specific programming problem.
-When an ancilla qubit, a temporary qubit introduced to hold an intermediate result,has become entangled with the main register, it cannot be safely discarded or re-used without first being returned to a known state.
+When an ancilla qubit, a temporary qubit introduced to hold an intermediate result, has become entangled with the main register, it cannot be safely discarded or re-used without first being returned to a known state.
 Discarding an entangled ancilla traces it out of the joint state, reducing the remaining system to a mixed state and corrupting the output distribution, as established in Subsection~\ref{subsec:introduction:quantum_computing_foundations:phases_interference_measurement}.
 Re-using it without uncomputation propagates the entanglement forward into later computation.
 Uncomputation resolves both problems by running the gate sequence that produced the ancilla's current state in reverse, disentangling it and returning it to $\ket{0}$, at which point it can be safely released or re-used~\cite{nielsen2000quantum}.
