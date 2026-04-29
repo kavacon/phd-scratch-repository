@@ -1,0 +1,76 @@
+\section{Introduction}\label{sec:introduction}
+Quantum software development has produced a growing body of programming languages, frameworks and execution models, each seeking to reduce programmer friction and improve expressivity within the quantum compilation stack~\cite{DiMatteo2024AbstractionHierarchy}.
+At the core of these developments lies a shared goal: raising the level of abstraction available to quantum programmers toward the standard established by classical computing.
+
+The literature has provided a concrete characterisation of what that requires~\cite{DiMatteo2024AbstractionHierarchy}.
+Productive quantum programming systems require a clear separation across three layers: a \textit{programming} layer, where a source language allows programmers to express algorithmic intent without reference to hardware; an \textit{execution} layer, where the realisation of that intent on hardware is optimised and decided; and a \textit{hardware} layer, where execution instructions become concrete for a specific device~\cite{DiMatteo2024AbstractionHierarchy}.
+When these boundaries are explicit, the degree to which any programming system achieves them becomes assessable against a defined standard~\cite{DiMatteo2024AbstractionHierarchy}.
+
+The current state of quantum programming does not realise this separation.
+\textit{Bleed-through}, the surfacing of execution- and hardware-layer concerns at the programming layer is pervasive~\cite{DiMatteo2024AbstractionHierarchy}.
+The circuit model of quantum computation remains the primary descriptive substrate for most languages and frameworks, requiring programmers to specify gate sequences, qubit allocations and basis details that belong below the programming layer.
+This constraint limits both the expressivity of quantum programs and the reach of the programmer community able to write them.
+Improving productivity and enabling algorithmic discovery in quantum computing depends on establishing better abstract machine descriptions and more strongly enforced layer boundaries~\cite{nunez_corrales2025betterabstractmachines}.
+This review assesses both: the degree to which current quantum programming systems achieve that layer separation and whether their foundational abstractions meet the requirements of productive quantum programming established in the literature~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
+
+\subsection{Abstraction and productivity}\label{subsec:introduction:abstraction_productivity}
+The productivity benefits of raising abstraction levels are empirically documented in classical computing.
+A controlled study from 2000 of programmers working in scripting languages (Perl, Python, Rexx and Tcl) against imperative languages (C, C++ and Java) found that scripting language users completed comparable tasks in roughly half the time and produced solutions half the length~\cite{Prechelt2000EmpiricalComparison}.
+A 2025 study of natural language interfaces over relational databases found that moving novice users from SQL to a higher-level natural language interface raised task accuracy from 50\% to 75\% and reduced completion time by 33\%~\cite{IpeirotisZheng2025NLIDBUsers}.
+In both cases the mechanism is the same: a higher abstraction level reduces the cognitive vocabulary a programmer must hold in mind, lowering the barrier between intent and executable solution.
+The same trajectory has been argued to apply in quantum computing~\cite{cobb2022higherlevelabstractions}: the field will not realise productivity gains comparable to classical computing until its programming systems achieve a comparable abstraction level.
+
+\subsection{Quantum bias and developer friction}\label{subsec:introduction:quantum_bias}
+Programming languages are user interfaces~\cite{Myers2016PLUsabilitySIG}; their design choices determine what cognitive burden they impose on programmers.
+In quantum computing, that burden is shaped by a property this review terms \textit{quantum bias}.
+Quantum bias describes the degree to which quantum mechanical concerns, including gates, qubits and measurement, are required to understand and productively use a language.
+High quantum bias persists even when a programmer's intent could be expressed without reference to those concerns using ordinary mathematical or computational abstractions.
+The consequence is the bleed-through introduced above: programmers must resort to gate-level escape hatches, analogous to bitwise operations in classical high-level languages, to express intent that a well-formed abstraction should handle implicitly.
+
+Quantum bias is a documented barrier to adoption.
+A 2025 empirical survey of quantum programmers found that the prevalence of quantum-specific vocabulary and concepts was a primary challenge, with 31\% of respondents identifying the absence of higher-level abstraction as a key missing feature of the field~\cite{ferreira2024qplusage}.
+An empirical study of quantum computing discussions on Stack Overflow corroborates this, finding persistent developer friction around hybrid quantum--classical toolchains and the difficulty of composing programs across systems~\cite{stackoverflowqc2026}.
+
+That friction manifests in four recurring patterns, each addressed by the evaluation rubric in Section~\ref{sec:evaluation_rubric}.
+Type systems become non-intuitive when their constructs rely on quantum physical concepts that lack classical analogues; describing quantum-biased types at the programming layer erodes domain separation and compounds cognitive load.
+Quantum-biased constructs surface in nominally higher-level interfaces, requiring vocabulary that belongs below the programming layer.
+Interoperability across abstraction tiers is poor, with composition across systems requiring significant manual re-encoding.
+Finally, even nominally high-level languages impose an excess of low-level burden: routine qubit allocation, basis selection and ancilla management that a productive abstraction should subsume~\cite{ferreira2024qplusage, stackoverflowqc2026}.
+
+\subsection{Research questions}\label{subsec:introduction:research_questions}
+Systematic literature reviews require research questions to be stated explicitly in the introduction, ensuring that the scope of the review is clearly defined and that selection and analysis decisions are grounded in those aims rather than introduced post~hoc~\cite{KitchenhamCharters2007SLR}.
+This review is structured around two research questions:
+
+\begin{description}
+    \item[RQ1] What is the current state of abstraction in quantum programming systems, and to what extent do existing systems meet the abstraction requirements identified in prior work on productive quantum programming?
+    \item[RQ2] Given the abstraction gap identified in RQ1, is the development of a new quantum programming language targeting higher abstraction justified, or can existing systems be adapted to close the gap?
+\end{description}
+
+RQ1 is answered empirically in Section~\ref{sec:language_assessments}, through the systematic assessment of eleven quantum programming systems against the evaluation rubric defined in Section~\ref{sec:evaluation_rubric}.
+RQ2 is answered qualitatively in Section~\ref{sec:conclusion}, drawing on the RQ1 findings and practitioner evidence~\cite{ferreira2024qplusage}.
+
+\subsection{Contributions}\label{subsec:introduction:contributions}
+
+This review assesses eleven quantum programming languages and frameworks against a structured rubric, characterising their current abstraction level and identifying where the gap to productive quantum programming lies.
+Five contributions follow from that assessment:
+
+\begin{enumerate}
+    \item A five-tier taxonomy of quantum programming systems, from assembly-level through to a novel quantum-implicit tier absent from prior classifications.
+    \item An evaluation rubric operationalising abstraction level, type system transparency, composability, expressiveness and quantum bias.
+    Including a task suite used to ground assessments in concrete programming scenarios.
+    \item An operationalisation of \textit{quantum bias} as a countable, evidence-backed metric applicable to any current or future quantum programming system.
+    \item Systematic scored assessments of eleven quantum programming systems against the rubric, producing comparable profiles and a cross-system analysis of abstraction strengths and deficits.
+    \item Design implications for future quantum language development, derived from the assessment findings and directed at closing the identified abstraction gap.
+\end{enumerate}
+
+The assessments and their implications together constitute the answer to RQ2, evaluating whether the gap is addressable within existing systems or requires a new language-level intervention.
+
+\subsection{Paper organisation}\label{subsec:introduction:organisation}
+Section~\ref{sec:background} examines prior quantum programming taxonomies, usability frameworks and systematic literature review (SLR) methodology, positioning this review relative to existing work.
+Section~\ref{sec:taxonomy} defines the five-tier taxonomy and introduces the quantum-implicit tier.
+Section~\ref{sec:evaluation_rubric} presents the evaluation rubric and task suite.
+Section~\ref{sec:methodology} describes the systematic review protocol, including search strategy, screening criteria and validity considerations.
+Section~\ref{sec:language_descriptions} provides factual descriptions of the eleven assessed systems.
+Section~\ref{sec:language_assessments} applies the rubric to each system, presenting scored profiles and comparative analysis.
+Section~\ref{sec:discussion} answers RQ1 and RQ2 and draws design implications.
+Section~\ref{sec:conclusion} summarises the central finding, states limitations and scopes future work.
