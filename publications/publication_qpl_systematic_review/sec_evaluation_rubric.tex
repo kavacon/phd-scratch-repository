@@ -12,11 +12,11 @@ The five scoring axes (A--E) are defined below.
 Each of them addresses a different element of the programmer experience and system design.
 
 \begin{description}
-    \item[A: Required mental model and vocabulary] How quantum-aware a programmer must be to use the system in typical workflows.
-    \item[B: Primary artefact] What the programmer primarily authors or manipulates.
-    \item[C: Safety discipline and semantic guarantees] What type-theoretic or effects-based discipline the language enforces, including linearity, affinity, uncomputation and validity constraints~\cite{pierce2002tapl-doc9,bichsel2020silq}.
-    \item[D: Compilation responsibility] Who introduces quantum structure, who manages resources and whether inference is present.
-    \item[E: Execution and hardware adjacency] How close the surface model is to basis gates, timing, controller instructions and device-specific constraints.
+    \item[Required mental model and vocabulary (A)] How quantum-aware a programmer must be to use the system in typical workflows.
+    \item[Primary artefact (B)] What the programmer primarily authors or manipulates.
+    \item[Safety discipline and semantic guarantees (C)] What type-theoretic or effects-based discipline the language enforces, including linearity, affinity, uncomputation and validity constraints~\cite{pierce2002tapl-doc9,bichsel2020silq}.
+    \item[Compilation responsibility (D)] Who introduces quantum structure, who manages resources and whether inference is present.
+    \item[Execution and hardware adjacency (E)] How close the surface model is to basis gates, timing, controller instructions and device-specific constraints.
 \end{description}
 
 The degree to which a programmer must drop into execution- or hardware-layer concepts during typical tasks directly lowers scores on axes A, D and E~\cite{DiMatteo2024AbstractionHierarchy}.
@@ -91,11 +91,11 @@ The PLIERS process formalises this by requiring that tasks be defined before eva
 Following this approach, the five tasks below are defined prior to any scoring; axis scores are assigned only with respect to the ability to complete them without recourse to lower abstraction layers.
 
 \begin{description}
-    \item[T\textsubscript{1}: Create a superposition-like object] Express a distribution-like value or state over outcomes.
-    \item[T\textsubscript{2}: Transform it] Apply a transformation or computation to that object; composition should be natural.
-    \item[T\textsubscript{3}: Apply computational structure] Exercise conditionals, iteration and parameterisation at the language's own abstraction level, without reference to quantum mechanics.
-    \item[T\textsubscript{4}: Observe and summarise results] Sample or observe to obtain classical data and compute a summary statistic.
-    \item[T\textsubscript{5}: Iterate or optimise] Run repeated executions, a parameter sweep or an optimisation loop, without rewriting into circuit form.
+    \item[T\textsubscript{1} Create a superposition-like object] Express a distribution-like value or state over outcomes.
+    \item[T\textsubscript{2} Transform it] Apply a transformation or computation to that object; composition should be natural.
+    \item[T\textsubscript{3} Apply computational structure] Exercise conditionals, iteration and parameterisation at the language's own abstraction level, without reference to quantum mechanics.
+    \item[T\textsubscript{4} Observe and summarise results] Sample or observe to obtain classical data and compute a summary statistic.
+    \item[T\textsubscript{5} Iterate or optimise] Run repeated executions, a parameter sweep or an optimisation loop, without rewriting into circuit form.
 \end{description}
 
 \subsection{Quantum bias score}\label{subsec:evaluation_rubric:quantum_bias}

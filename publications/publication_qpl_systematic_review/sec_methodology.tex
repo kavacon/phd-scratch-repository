@@ -1,0 +1,120 @@
+\section{Review methodology}\label{sec:methodology}
+This section documents the procedures by which the review was conducted, following the evidence-based software engineering guidelines~\cite{KitchenhamCharters2007SLR}.
+A pre-registered protocol is available at~\cite{kavadias2026qplSurveyProtocol}.
+The section covers search protocol, screening and selection, study quality assessment, data extraction and synthesis and sensitivity analysis with threats to validity.
+Results are reported in Section~\ref{sec:language_assessments}.
+
+\subsection{Search protocol}\label{subsec:methodology:search_protocol}
+Searches were conducted on 2026-04-27 across four bibliographic databases: ACM Digital Library, IEEE Xplore, arXiv and Google Scholar.
+Official project and specification sites were consulted on a per-system basis throughout the assessment period.
+A literature cutoff of 2026-04-08 was applied; evidence published after this date was not used for scoring.
+
+Three verbatim search strings were applied consistently across all databases.
+The primary string (S1) used broad seed terms targeting quantum programming languages and intermediate representations: \texttt{"quantum programming language" OR "quantum intermediate representation" OR OpenQASM OR "quantum MLIR" OR Silq OR Qiskit OR PennyLane}.
+A second string (S2) targeted language-specific terms not reliably surfaced by domain vocabulary: \texttt{Silq quantum OR Quff quantum OR Qutes quantum OR Quipper quantum OR "Microsoft Q\#" OR "Q-MLIR"}.
+A third string (S3) focused on abstraction-level framing: \texttt{"quantum programming" AND "abstraction" AND "language"}.
+Full verbatim strings, per-database result counts and search URLs are published in Appendix~A of~\cite{kavadias2026qplSurveySupplementary}.
+
+Pre-deduplication totals were 923 records from arXiv, 1,328 from ACM Digital Library, 728 from IEEE Xplore and 29,202 from Google Scholar, giving a combined total of 32,181 records.
+The estimated unique record count after deduplication is 895--1,500; the Google Scholar corpus overlaps substantially with the other three databases.
+A supplementary AI-assisted discovery process ran across the study period using a scheduled agent that scanned active project context and surfaced candidate papers on a fortnightly cadence.
+This method does not produce reproducible verbatim queries and does not constitute a primary PRISMA search~\cite{page2021prisma}.
+All candidates surfaced by this process were subsequently screened against the pre-specified criteria before inclusion.
+
+\subsection{Screening and selection}\label{subsec:methodology:screening}
+The review covers a pre-specified, bounded system set.
+Candidate systems were assessed against four inclusion criteria.
+A system is included if it meets at least two of the following:
+\begin{description}
+    \item[C\textsubscript{1}] A formal specification or peer-reviewed primary paper exists.
+    \item[C\textsubscript{2}] Active releases or specification updates within 24 months prior to the cutoff.
+    \item[C\textsubscript{3}] Multivendor or multi-device backend support beyond a single lab or vendor.
+    \item[C\textsubscript{4}] Public documentation is sufficient to complete tasks defined in Section~\ref{subsec:evaluation_rubric:task_suite} without access to private knowledge.
+\end{description}
+Systems were excluded if their primary materials were marketing-only, if the project had been inactive for more than 36 months or if documentation was not enough to assess representative workflows.
+The version rule stipulates that the latest stable major release or specification available by 2026-04-08 is the evaluation target; earlier versions are used only as labelled historical contrast.
+
+Screening was conducted by a single reviewer.
+This review covers a pre-defined system set rather than a large open literature corpus; full-text exclusion rationale is recorded for each system in Appendix~B of~\cite{kavadias2026qplSurveySupplementary}.
+Two additional reviewers participate in independent scoring and calibration reconciliation.
+Dual screening of the full inclusion corpus was not feasible given the review scope and is acknowledged as a limitation per PRISMA 2020 item~16b~\cite{page2021prisma}.
+
+Ten systems were included in the primary review: OpenQASM~3.0, QIR, Q-MLIR, Qiskit, PennyLane, Q\#, Silq, Qmod, Quff and Qutes.
+Quipper was excluded as a primary system, failing C\textsubscript{2} and C\textsubscript{3}; it is retained as a labelled historical contrast reference in Section~\ref{sec:system_descriptions}.
+
+\subsection{Study quality assessment}\label{subsec:methodology:quality}
+Evidence quality was assessed for each system prior to data extraction using a source-tier hierarchy adapted from the evidence-based software engineering guidelines~\cite{KitchenhamCharters2007SLR}.
+Source tier~1 covers peer-reviewed journal or conference publications.
+Source tier~2 covers preprints from established research groups with a peer-reviewed publication programme.
+Source tier~3 covers official specifications, standards-body publications and maintained documentation.
+No system in this review depends on source tier~4 grey literature as its primary source.
+
+IR-tier systems, specifically QIR and Q-MLIR, use source tier~3 specification documentation as their primary and most authoritative source by design.
+The field does not produce peer-reviewed primary papers for every IR or low-level framework; the absence of a standalone academic publication for QIR reflects the nature of the artefact rather than a gap in evidence retrieval.
+
+Source-tier assignments, evidence base summaries and leave-one-out flags are given in Table~\ref{tab:quality_assessment}.
+A \textit{High} confidence rating denotes a source tier~1 primary citation with two or more independent corroborating sources.
+A \textit{Medium} confidence rating denotes a source tier~2 primary citation or a system with a single corroborating source.
+
+\begin{table*}[htbp*]
+    \centering
+    \caption{Source quality assessment per system.
+    LOO = leave-one-out sensitivity flag; see Subsection~\ref{subsec:methodology:sensitivity}.}
+    \label{tab:quality_assessment}
+    \begin{tabular}{p{1.5cm} p{5.5cm} c c c}
+        \toprule
+        \textbf{System} & \textbf{Primary citation(s)} & \textbf{Source tier} & \textbf{Confidence} & \textbf{LOO} \\
+        \midrule
+        OpenQASM   & \cite{cross2022openqasm3}                          & 1              & High   & ---        \\
+        QIR        & \cite{qir_alliance_qir_spec_repo}                  & 3\dag          & Medium & ---        \\
+        Q-MLIR     & \cite{McCaskey2021MLIRDialectQASM}                 & 1              & High   & ---        \\
+        Qiskit     & \cite{aleksandrowicz2019qiskit}                    & 1              & High   & ---        \\
+        PennyLane  & \cite{bergholm2018pennylane}                       & 1              & High   & ---        \\
+        Q\#        & \cite{MicrosoftQSharpOverview}                     & 1, 3           & High   & ---        \\
+        Silq       & \cite{bichsel2020silq}                             & 1              & High   & ---        \\
+        Qmod       & \cite{vax2025qmodexpressivehighlevelquantum}       & 2              & Medium & ---        \\
+        Quff       & \cite{wright2024quff}                              & 1              & Medium & \checkmark \\
+        Qutes      & \cite{faro2025qutes,reversiblelifetime2026}        & 1              & High   & \checkmark \\
+        \bottomrule
+    \end{tabular}
+    \smallskip
+
+    \footnotesize\dag~Source tier~3 is the expected primary source for IR-tier artefacts; see text.
+\end{table*}
+
+\subsection{Data extraction and synthesis}\label{subsec:methodology:extraction}
+For each system, the following data were extracted.
+System identity, version, primary citation and documentation type were recorded alongside taxonomy category and typical workflow description.
+Task completion evidence was captured for T\textsubscript{1}--T\textsubscript{5}, with axis scores A--E supported by one to three evidence quotes per axis citing the specific paper section or documentation anchor.
+Quantum bias items with justification, confidence tier, scoring reviewer and date completed the extraction record.
+Where evidence was absent or ambiguous, the more conservative score was assigned; scores inferred from examples marked as optional or advanced were not used.
+The extraction dataset is published as Appendix~C and per-axis evidence quotes as Appendix~D of~\cite{kavadias2026qplSurveySupplementary}.
+
+Calibration was conducted by two reviewers independently scoring three to five systems before proceeding to full independent scoring.
+Disagreements greater than one level were discussed and resolved with a documented rationale; any amendments made post-calibration were applied prospectively.
+
+Synthesis follows the structured narrative approach without meta-analysis~\cite{KitchenhamCharters2007SLR}.
+Systems are grouped by the taxonomy tiers defined in Section~\ref{sec:taxonomy}.
+Per-system outputs follow the aggregation rules defined in Section~\ref{sec:evaluation_rubric}: headline score, spectrum score (arithmetic mean of A--E with minimum--maximum range) and quantum bias count.
+
+\subsection{Sensitivity analysis and threats to validity}\label{subsec:methodology:sensitivity}
+A pre-specified leave-one-out sensitivity analysis was conducted on systems where a single document is the sole or pivotal source for one or more axis scores~\cite{kavadias2026qplSurveyProtocol}.
+Two cases were identified.
+
+\textit{Quff}: all axis scores depend on a single peer-reviewed source~\cite{wright2024quff}.
+No additional published specification or paper existed at the review cutoff.
+Removal of this source would leave no evidence base.
+Scores are retained given the peer-reviewed venue; the single-source dependency is noted as a limitation.
+
+\textit{Qutes axis~C and axis~D scores of~3}: both scores depend critically on one preprint~\cite{reversiblelifetime2026} for the reversible lifetime semantics mechanism.
+The HPDC~2025 paper alone~\cite{faro2025qutes} would not sustain either score; removal would reduce both to score~2, shifting the headline from high-level to embedded framework.
+The broader Qutes research programme has two peer-reviewed venue publications; the preprint status of this specific mechanism is noted as a limitation rather than a basis for score reduction.
+
+The principal threats to validity are as follows.
+\begin{itemize}
+    \item \textit{Scoring subjectivity}: is mitigated by dual independent scoring with calibration, required evidence quotes and predefined decision rules for ambiguous cases.
+    \item \textit{Rubric dependence on T\textsubscript{1}--T\textsubscript{5}}: the task suite was pre-specified in the protocol~\cite{kavadias2026qplSurveyProtocol}; any post-calibration amendments are documented and applied prospectively only.
+    \item \textit{Maturity differences across ecosystems}: source-tier labelling and per-claim confidence ratings mitigate misattribution.
+    \item \textit{Version churn}: the versioning rule, latest stable major release by 2026-04-08, is applied consistently.
+    \item \textit{Publication bias}: grey literature, including official specifications, standards-body publications and maintainer documentation, is included by design to avoid systematic under-representation of IR-tier and industry-produced frameworks~\cite{KitchenhamCharters2007SLR,page2021prisma}.
+\end{itemize}

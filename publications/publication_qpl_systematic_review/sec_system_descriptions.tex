@@ -1,10 +1,10 @@
-\section{Language descriptions}\label{sec:pub_qpl_review:language_descriptions}
+\section{System descriptions}\label{sec:system_descriptions}
 The eleven systems surveyed were selected according to criteria C\textsubscript{1}--C\textsubscript{4} defined in Section~\ref{sec:pub_qpl_review:taxonomy} and the inclusion/exclusion protocol described in Section~\ref{sec:pub_qpl_review:review_methodology}.
 Systems are described in implied abstraction tier order: Assembly, Intermediate Representation, Embedded Circuit Framework and High-Level Language, mirroring the taxonomy structure from Section~\ref{sec:pub_qpl_review:taxonomy}.
 No tier assignments, rubric scores or evaluative language appear in this section; all evaluation is deferred to Section~\ref{sec:pub_qpl_review:language_assessments}.
-Quipper is described in Subsection~\ref{subsec:pub_qpl_review:language_descriptions:quipper} but does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{3}; it is retained as a comparison case for the non-Python embedded DSL tradition and excluded from primary assessment in Section~\ref{sec:pub_qpl_review:language_assessments}.
+Quipper is described in Subsection~\ref{subsec:system_descriptions:quipper} but does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{3}; it is retained as a comparison case for the non-Python embedded DSL tradition and excluded from primary assessment in Section~\ref{sec:pub_qpl_review:language_assessments}.
 
-\subsection{OpenQASM 3.0}\label{subsec:pub_qpl_review:language_descriptions:openqasm}
+\subsection{OpenQASM 3.0}\label{subsec:system_descriptions:openqasm}
 \textit{OpenQASM 3.0} is a quantum assembly language designed as a circuit-level interchange format and execution description language for hybrid quantum--classical programs~\cite{cross2022openqasm3}.
 Programmers specify qubit registers, gate applications and measurements.
 Classical control constructs, including typed variables, \texttt{if}/\texttt{while}/\texttt{for} flow and real-time feed-forward, model hardware controller workflows.
@@ -12,7 +12,7 @@ An optional pulse-level calibration mechanism via the \texttt{defcal} keyword ex
 OpenQASM 3.0 serves both as a compilation target for higher-level languages and as a direct authoring medium for hardware-adjacent tasks.
 Hardware-specific gate sets and timing constraints are resolved downstream by vendor toolchains~\cite{cross2022openqasm3}.
 
-\subsection{QIR}\label{subsec:pub_qpl_review:language_descriptions:qir}
+\subsection{QIR}\label{subsec:system_descriptions:qir}
 \textit{QIR} (Quantum Intermediate Representation) is an LLVM-based intermediate representation designed as a compiler and tooling target for quantum programs~\cite{qir_alliance_qir_spec_repo,microsoft_qir_overview}.
 Rather than being authored directly by programmers, QIR acts as a bridge between higher-level quantum languages and backend-specific code generation, enabling optimisation, analysis and multi-frontend interoperability within a broader compilation stack.
 Quantum operations are represented as LLVM intrinsic calls following QIR conventions.
@@ -20,7 +20,7 @@ Qubits and measurement results are opaque abstract resource types whose internal
 All interactions must go through a defined set of quantum operations, enforcing the no-cloning constraint at the IR layer.
 The QIR Alliance maintains the specification and coordinates adoption across implementations from Microsoft, Oak Ridge National Laboratory and others~\cite{qir_alliance_qir_spec_repo}.
 
-\subsection{Q-MLIR}\label{subsec:pub_qpl_review:language_descriptions:qmlir}
+\subsection{Q-MLIR}\label{subsec:system_descriptions:qmlir}
 \textit{Q-MLIR} refers to MLIR-based intermediate representations for quantum programs, in which quantum computation is captured in MLIR dialects and progressively lowered through compiler pipelines~\cite{McCaskey2021MLIRDialectQASM}.
 The approach exploits MLIR's multi-level IR design, preserving higher-level structure for analysis and optimisation before refinement toward LLVM or target-specific representations.
 The dialect provides a core operation set covering register allocation and deallocation, qubit addressing within registers, gate instruction application and function composition.
@@ -28,21 +28,21 @@ Static single assignment form makes dataflow explicit to the compiler.
 Lowering to LLVM-compatible output is achieved by rewriting dialect operations through MLIR's built-in pass manager infrastructure.
 The remaining lowering path is inherited via MLIR's built-in LLVM dialect, making Q-MLIR directly compatible with QIR-compliant targets~\cite{McCaskey2021MLIRDialectQASM}.
 
-\subsection{Qiskit}\label{subsec:pub_qpl_review:language_descriptions:qiskit}
+\subsection{Qiskit}\label{subsec:system_descriptions:qiskit}
 \textit{Qiskit} is an open-source Python-based SDK for quantum computing developed by IBM Quantum~\cite{aleksandrowicz2019qiskit}.
 Programmers construct quantum circuits through Python library APIs, then transpile, optimise and execute on simulators or hardware backends.
 The SDK spans multiple layers: high-level algorithm libraries, a circuit construction layer, compilation and transpilation passes and backend execution interfaces.
 The primary authoring artefact is a circuit object model embedded in the host language, with optional import and export to lower-level formats including OpenQASM.
 Qiskit is the most widely adopted quantum programming framework by ecosystem breadth and project count~\cite{murillo2022sequantumprogramming,corralesgarro2025productivityexpressiveness}, providing the central reference point for the embedded circuit framework tier in this review.
 
-\subsection{PennyLane}\label{subsec:pub_qpl_review:language_descriptions:pennylane}
+\subsection{PennyLane}\label{subsec:system_descriptions:pennylane}
 \textit{PennyLane} is a Python framework for hybrid quantum--classical programming with a focus on differentiable computing~\cite{bergholm2018pennylane}.
 The framework models a hybrid computation as a directed acyclic graph of processing nodes.
 Quantum subroutines are encapsulated as QNodes: functions that can be composed with classical machine learning code and differentiated using automatic differentiation.
 A device-agnostic plugin architecture abstracts over simulators and hardware providers, with native integration for PyTorch, TensorFlow and JAX.
 Differentiation is supported via backpropagation on simulators and parameter-shift rules for hardware execution, enabling end-to-end gradient computation through hybrid pipelines~\cite{bergholm2018pennylane}.
 
-\subsection{Quipper}\label{subsec:pub_qpl_review:language_descriptions:quipper}
+\subsection{Quipper}\label{subsec:system_descriptions:quipper}
 \textit{Quipper} is a functional quantum programming language embedded in Haskell, designed to generate and manipulate quantum circuits as first-class values~\cite{green2013quipper}.
 The language uses monadic operational semantics, encapsulating qubit operations within the \texttt{Circ} monad.
 Circuits are constructed by composing gate applications, higher-order combinators and named circuit blocks defined with the \texttt{box} construct.
@@ -50,7 +50,7 @@ Quipper compiles to parameterised object code that generates circuits at runtime
 Dynamic lifting permits measurement results from one circuit to become parameters of a subsequent circuit, supporting multi-stage classical-quantum workflows~\cite{green2013quipper}.
 Quipper does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{3} (Sections~\ref{sec:pub_qpl_review:taxonomy}and~\ref{sec:pub_qpl_review:review_methodology}) and is excluded from primary assessment in Section~\ref{sec:pub_qpl_review:language_assessments}.
 
-\subsection{Q\#}\label{subsec:pub_qpl_review:language_descriptions:qsharp}
+\subsection{Q\#}\label{subsec:system_descriptions:qsharp}
 \textit{Q\#} is a standalone quantum programming language developed by Microsoft as part of the Azure Quantum platform~\cite{MicrosoftQSharpOverview}.
 Qubits are allocated via the \texttt{use} keyword and must be explicitly reset to $\ket{0}$ before release; the language enforces this as a runtime requirement.
 Quantum operations are defined as typed subroutines.
@@ -58,7 +58,7 @@ The compiler automatically generates controlled and adjoint variants via functor
 The type system provides quantum-specific types: \texttt{Result}, \texttt{One} and \texttt{Zero} for measurement outcomes and \texttt{Qubit} as the primary quantum resource type.
 Q\# targets execution via Azure Quantum runtimes and supports integration with classical host programs through .NET and Python tooling~\cite{MicrosoftQSharpOverview}.
 
-\subsection{Silq}\label{subsec:pub_qpl_review:language_descriptions:silq}
+\subsection{Silq}\label{subsec:system_descriptions:silq}
 \textit{Silq} is a high-level, statically typed quantum programming language whose primary contribution is safe automatic uncomputation~\cite{bichsel2020silq}.
 Temporary quantum values are freed by the compiler where the type system can establish they are no longer needed, avoiding the correctness pitfalls of manual ancilla management.
 The type system uses the \texttt{qfree} annotation to mark classically-describable functions eligible for automatic uncomputation, \texttt{const} to distinguish read-only from consumed inputs and \texttt{mfree} to guarantee a function performs no measurement.
@@ -66,25 +66,82 @@ Quantum values without the \texttt{const} annotation follow a linear discipline 
 Values marked \texttt{const} are treated as unrestricted: they may be read any number of times without being consumed, allowing classical parameters to be passed freely without explicit threading.
 The \texttt{reverse} built-in provides circuit inversion, reducing the number of quantum primitives required to express standard algorithms relative to gate-level implementations~\cite{bichsel2020silq}.
 
-\subsection{Qmod}\label{subsec:pub_qpl_review:language_descriptions:qmod}
+\subsection{Qmod}\label{subsec:system_descriptions:qmod}
 \textit{Qmod} is a high-level quantum modelling language developed as part of the Classiq platform, available as both a standalone domain-specific language and a Python-embedded interface~\cite{vax2025qmodexpressivehighlevelquantum}.
 Quantum functions are declared using the \texttt{@qfunc} decorator with typed parameters.
 Variables must be explicitly allocated to the $\ket{0}$ state via \texttt{allocate} before use.
 The type system provides quantum-specific numeric types: \texttt{QNum}, \texttt{QBit}, \texttt{QArray} and \texttt{QStruct}, supporting standard arithmetic operators over superpositions including amplitude and phase encoding strategies to improve circuit compactness.
 Automatic uncomputation is provided through the \texttt{within-apply} construct, where the \texttt{within} block defines reversible operations and \texttt{apply} specifies the target computation~\cite{vax2025qmodexpressivehighlevelquantum}.
 
-\subsection{Quff}\label{subsec:pub_qpl_review:language_descriptions:quff}
+\subsection{Quff}\label{subsec:system_descriptions:quff}
 \textit{Quff} is a high-level dynamically typed quantum programming language implemented on the GraalVM/Truffle runtime~\cite{wright2024quff}.
 The primary contribution is first-class runtime function inversion via the \texttt{invertF} primitive, which reverses arbitrary quantum functions without requiring the programmer to construct the adjoint circuit manually.
 The underlying intermediate representation captures explicit operation dependencies rather than execution order, enabling lazy evaluation of quantum expressions.
 The runtime defers quantum type resolution until measurement or simulation is required and propagates quantum-typing through any expression containing a quantum operand.
 Uncomputation is handled at the runtime level, triggered when quantum variables leave scope rather than managed through compile-time type constraints~\cite{wright2024quff}.
 
-\subsection{Qutes}\label{subsec:pub_qpl_review:language_descriptions:qutes}
+\subsection{Qutes}\label{subsec:system_descriptions:qutes}
 \textit{Qutes} is a standalone quantum programming language with a purpose-built imperative grammar, compiled to Qiskit circuits via an ANTLR-based two-pass transpiler~\cite{faro2025qutes}.
 The language provides an explicit classical-quantum type family: \texttt{qubit}, \texttt{quint} and \texttt{qustring}.
 Implicit measurement is triggered when a quantum variable enters a classical context.
-The most notable abstraction is a Grover-based substring search operator: a quantum string containment test expressed as an \texttt{in} predicate, with the amplitude-amplification procedure entirely hidden from the programmer.
+The most notable abstraction is a Grover-based substring search operator: a quantum string containment test expressed as an \texttt{in} predicate, with the amplitude-amplification procedure entirely hidden from the programmer as shown in Figure~\ref{fig:language_descriptions:qutes_in_operator}.
+
+\begin{figure}[htbp*]
+    \centering
+    \begin{minipage}[t]{0.42\textwidth}
+        \centering
+        \textbf{Qutes}
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
+            frame=single,
+            label={lst:pub_qpl_review:language_descriptions:qutes_in}]
+qustring b = "1110111";
+
+if ("01" in b) {
+    print "Match found.";
+} else {
+    print "No match.";
+}
+        \end{lstlisting}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.42\textwidth}
+        \centering
+        \textbf{Qiskit (Python)}
+        \begin{lstlisting}[basicstyle=\ttfamily\tiny,
+            language=Python,
+            frame=single,
+            label={lst:pub_qpl_review:language_descriptions:qiskit_grover}]
+from qiskit import QuantumCircuit
+from qiskit.circuit.library import GroverOperator
+from qiskit.algorithms import AmplificationProblem, Grover
+
+# Encode search target as a phase oracle
+def oracle(pattern: str) -> QuantumCircuit:
+    n = len(pattern)
+    qc = QuantumCircuit(n)
+    # Flip qubits where pattern bit is '0'
+    for i, bit in enumerate(pattern):
+        if bit == '0':
+            qc.x(i)
+    qc.h(n - 1)
+    qc.mcx(list(range(n - 1)), n - 1)
+    qc.h(n - 1)
+    for i, bit in enumerate(pattern):
+        if bit == '0':
+            qc.x(i)
+    return qc
+
+oracle_circuit = oracle("01")
+problem = AmplificationProblem(oracle_circuit)
+grover = Grover(iterations=1)
+result = grover.amplify(problem)
+print(result.top_measurement)
+        \end{lstlisting}
+    \end{minipage}
+    \caption{Substring search in Qutes (left) and the equivalent Qiskit implementation (right). The Qutes \texttt{in} predicate hides oracle construction, phase encoding and amplitude amplification entirely.}
+    \label{fig:language_descriptions:qutes_in_operator}
+\end{figure}
+
 Uncomputation is provided through scope-bounded liveness-guided reclamation.
 The compiler statically analyses data dependency and entanglement graphs to determine the earliest safe reclamation point for each variable.
 Adjoint operations are inserted at scope boundaries, reducing both circuit depth and ancilla count relative to the standard compute-then-uncompute pattern~\cite{faro2025qutes,reversiblelifetime2026}.
