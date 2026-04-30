@@ -1,0 +1,125 @@
+\section{Evaluation rubric}\label{sec:evaluation_rubric}
+
+The rubric defined in this section operationalises the taxonomy from Section~\ref{sec:taxonomy}.
+Each score (0--4) corresponds directly to a taxonomy tier, from Assembly through to quantum-implicit.
+The hard-fail conditions in Subsection~\ref{subsec:evaluation_rubric:hard_fails} are the operational form of the quantum-implicit litmus test stated in Section~\ref{sec:taxonomy}.
+Section~\ref{sec:language_assessments} applies this rubric to each of the eleven reviewed systems and reports tier assignments.
+
+Each system is scored on five axes (A--E) and placed on a spectrum from \textit{Assembly} through \textit{IR}, \textit{Embedded framework}, \textit{High-level (quantum-explicit)} to \textit{Quantum-implicit}.
+
+\subsection{Scoring axes}\label{subsec:evaluation_rubric:scoring_axes}
+The five scoring axes (A--E) are defined below.
+Each of them addresses a different element of the programmer experience and system design.
+
+\begin{description}
+    \item[A: Required mental model and vocabulary] How quantum-aware a programmer must be to use the system in typical workflows.
+    \item[B: Primary artefact] What the programmer primarily authors or manipulates.
+    \item[C: Safety discipline and semantic guarantees] What type-theoretic or effects-based discipline the language enforces, including linearity, affinity, uncomputation and validity constraints~\cite{pierce2002tapl-doc9,bichsel2020silq}.
+    \item[D: Compilation responsibility] Who introduces quantum structure, who manages resources and whether inference is present.
+    \item[E: Execution and hardware adjacency] How close the surface model is to basis gates, timing, controller instructions and device-specific constraints.
+\end{description}
+
+The degree to which a programmer must drop into execution- or hardware-layer concepts during typical tasks directly lowers scores on axes A, D and E~\cite{DiMatteo2024AbstractionHierarchy}.
+The term \textit{bleed-through} names this mechanism: execution- and hardware-layer concerns surface at the programming layer, making quantum-native vocabulary mandatory even when the programmer's intent could be expressed without it~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
+Bleed-through is assessed with respect to the task suite defined in Subsection~\ref{subsec:evaluation_rubric:task_suite}.
+
+\subsection{Scores}\label{subsec:evaluation_rubric:scores}
+Table~\ref{tab:scoring_levels} defines the five scores.
+Rows correspond to taxonomy tiers; columns to scoring axes.
+
+\begin{table*}[ht*]
+    \caption{Scores 0--4 across axes A--E. Each row corresponds to a taxonomy tier; columns define what that tier requires of a programmer across the five evaluation dimensions.}
+    \label{tab:scoring_levels}
+    \footnotesize
+    \begin{tabular}{c p{1.5cm} p{2.1cm} p{2.1cm} p{2.1cm} p{2.1cm} p{2.1cm}}
+        \toprule
+        \textbf{Score} & \textbf{Tier} & \textbf{A: Mental model} & \textbf{B: Primary artefact} & \textbf{C: Safety} & \textbf{D: Compilation} & \textbf{E: Hardware adjacency} \\ \midrule
+        0
+        & Assembly & Quantum vocabulary unavoidable: qubits, gates, registers and measurement are the basic interface.
+        & Explicit instruction sequence or circuit, with limited classical control.
+        & Few language-level guarantees; safety mainly by convention.
+        & Programmer specifies quantum operations explicitly.
+        & Hardware-adjacent concepts visible: basis gates, measurement targets and controller details. \\
+        \addlinespace
+        1
+        & IR
+        & Quantum-explicit, targeted at compiler and tooling authors.
+        & Explicit IR intrinsics for primitives: allocation, release, gates,measurement and control flow.
+        & Precise enough for validation and verification hooks, including qubit-lifetime checks.
+        & Primarily a lowering target; quantum structure is already explicit.
+        & Designed for multiple backends; hardware mapping begins at this layer. \\
+        \addlinespace
+        2
+        & Embedded framework
+        & Host language (typically Python), but quantum vocabulary remains common in typical use.
+        & Circuit object, tape or graph as the central artefact.
+        & Safety discipline mostly API-driven; guarantees vary by framework.
+        & Framework provides transpilation, passes and automatic differentiation, but programmers still construct circuits explicitly.
+        & Often backend-portable with configurable basis and backend options. \\
+        \addlinespace
+        3
+        & High-level (quantum-explicit)
+        & Programmers reason in quantum concepts, but the interface is structured and algorithmic.
+        & Primary artefact is a program, not merely a circuit file.
+        & Stronger static discipline: linearity, affinity, effects and an explicit uncomputation or disposal story~\cite{bichsel2020silq}.
+        & Compiler provides major assistance, such as safe uncomputation, but the programmer still selects quantum constructs.
+        & Largely hardware-agnostic by default, with optional low-level tuning. \\
+        \addlinespace
+        4
+        & Quantum-implicit
+        & Non-trivial programs can be written and debugged without learning quantum vocabulary.
+        & Primary artefact is a mathematical or computational-level description, not a circuit.
+        & Guarantees framed in non-quantum terms; quantum operations exist only as optional escape hatches.
+        & Compiler infers and synthesises the quantum realisation, then lowers to IR or circuits.
+        & Hardware constraints not user-facing except through opt-in interoperability or tuning. \\
+        \bottomrule
+    \end{tabular}
+\end{table*}
+
+\subsection{Aggregation rules}\label{subsec:evaluation_rubric:aggregation}
+Two aggregated scores are computed from the five axis scores.
+
+The \textit{headline score} is the highest score $S$ such that the system scores $\geq S$ on at least four of the five axes.
+This prevents a single strong feature from masking a fundamentally lower-level workflow: a system with one axis at score~4 and four axes at score~2 receives a headline score of~2.
+
+The \textit{spectrum score} is the arithmetic mean of axes A--E, reported with the observed minimum and maximum.
+This captures internal tension in mixed systems: a language with a high-level surface model but an explicitly circuit-centric compilation workflow scores high on axis~A and low on axis~D, and the spectrum score reflects that asymmetry.
+
+\subsection{Typical task suite}\label{subsec:evaluation_rubric:task_suite}
+Programming language evaluation methods based on representative tasks ground assessments in concrete programmer intent rather than theoretical capabilities~\cite{Myers2016PLUsabilitySIG}.
+The PLIERS process formalises this by requiring that tasks be defined before evaluation begins, representative of real workflows rather than adversarial edge cases and completed using the language's primary surface model rather than optional escape hatches~\cite{Coblenz2021PLIERS}.
+Following this approach, the five tasks below are defined prior to any scoring; axis scores are assigned only with respect to the ability to complete them without recourse to lower abstraction layers.
+
+\begin{description}
+    \item[T\textsubscript{1}: Create a superposition-like object] Express a distribution-like value or state over outcomes.
+    \item[T\textsubscript{2}: Transform it] Apply a transformation or computation to that object; composition should be natural.
+    \item[T\textsubscript{3}: Apply computational structure] Exercise conditionals, iteration and parameterisation at the language's own abstraction level, without reference to quantum mechanics.
+    \item[T\textsubscript{4}: Observe and summarise results] Sample or observe to obtain classical data and compute a summary statistic.
+    \item[T\textsubscript{5}: Iterate or optimise] Run repeated executions, a parameter sweep or an optimisation loop, without rewriting into circuit form.
+\end{description}
+
+\subsection{Quantum bias score}\label{subsec:evaluation_rubric:quantum_bias}
+The quantum bias score is a count of quantum-native concepts a programmer must understand to write correct T\textsubscript{1}--T\textsubscript{5} programs.
+Concepts that exist internally but are fully hidden by the compiler or runtime do not contribute to the count.
+Bleed-through, as defined in Subsection~\ref{subsec:evaluation_rubric:scoring_axes}, serves as a tiebreaker.
+If a concept becomes necessary only because programmers must frequently drop to lower abstraction layers to complete typical tasks, it counts.
+
+Expected counts across tiers:
+\begin{itemize}
+    \item Assembly and IR systems require many concepts.
+    \item Embedded frameworks require several.
+    \item High-level systems require fewer, though quantum vocabulary remains necessary.
+    \item Quantum-implicit systems should require at most the concept of the observation boundary.
+\end{itemize}
+
+\subsection{Hard-fail conditions}\label{subsec:evaluation_rubric:hard_fails}
+The following conditions operationalise the quantum-implicit litmus test from Section~\ref{sec:taxonomy}: a system cannot receive a quantum-implicit score if any one of these is required in typical T\textsubscript{1}--T\textsubscript{5} workflows.
+
+\begin{enumerate}
+    \item \textbf{Circuit as primary artefact.} The programmer must construct or manipulate circuits or gate sequences as the primary artefact.
+    \item \textbf{Qubit identity or lifetime.} The programmer must name, allocate, free or count qubits, or reason about ancilla lifetimes.
+    \item \textbf{Mandatory quantum or classical marking.} The programmer must annotate functions or values as quantum versus classical in the common case.
+    \item \textbf{Mandatory amplitude or phase mechanics.} Correctness requires reasoning directly about amplitudes or phases.
+    \item \textbf{Mandatory entanglement or interference.} The programmer must understand entanglement or interference to avoid typical correctness errors.
+    \item \textbf{Mandatory hardware model.} Typical programming requires hardware adjacency: basis sets, device connectivity, timing or scheduling constraints.
+\end{enumerate}
