@@ -1,0 +1,116 @@
+\section{Taxonomy of quantum programming systems}\label{sec:taxonomy}
+Classification of quantum programming systems lacks a consistent taxonomy that captures the different roles, purposes and abstraction levels of those systems.
+The landmark survey of the field~\cite{Gay2006QPLSurvey} classifies languages by formal properties: design paradigm, semantic model and compilation structure; it does not address abstraction level, ecosystem role or programmer productivity as classification dimensions, and predates the embedded framework and SDK ecosystem entirely.
+Recent examination of progress in quantum system design finds that key requirements for greater programmer productivity remain unmet~\cite{corralesgarro2025productivityexpressiveness,nunez_corrales2025betterabstractmachines}; abstraction levels have not advanced despite the development of new self-described high-level quantum programming languages~\cite{furntratt2024higherabstractionlevels}.
+A move towards higher abstraction and better abstract machine models can only be accurately assessed with a well-defined, falsifiable mechanism for categorising quantum systems.
+This survey defines such a taxonomy, comprising five system types each occupying a distinct position in the quantum ecosystem by compilation role, usage model or abstraction level.
+The taxonomy operationalises the abstraction hierarchy of prior work~\cite{DiMatteo2024AbstractionHierarchy} into evaluable, self-contained criteria, introducing the quantum-implicit tier as a definitional contribution that formalises the abstraction level prior classifications have not named.
+Eleven quantum systems are assessed against this taxonomy; selection criteria are discussed in Section~\ref{sec:methodology}.
+
+\subsection{Language type definitions}\label{subsec:taxonomy:definitions}
+The taxonomy defines five system types.
+Each tier is defined by what the programmer must understand and author, not by what the system is capable of producing.
+The spectrum is organised around two axes of progressive abstraction: the degree to which quantum mechanical concerns must be visible at the programming surface, and the degree to which quantum realisation is a compiler responsibility rather than a programmer responsibility.
+These axes follow directly from the abstraction hierarchy established in prior work~\cite{DiMatteo2024AbstractionHierarchy} and operationalised in the bleed-through concept introduced in Section~\ref{sec:introduction}.
+
+\begin{description}
+
+    \item[Assembly]
+    Assembly-tier systems provide an explicit, operational listing of quantum instructions: gates, measurements and classical control, intended for direct interchange and execution.
+    Basis gates, qubit registers and device-specific control details are visible at the programming surface; portability follows from instruction semantics rather than language-level types or modules.
+    The primary artefact is a circuit plus classical control.
+    Assembly systems provide the canonical lower bound of the abstraction spectrum and the interchange substrate to which all higher tiers ultimately compile~\cite{cross2022openqasm3}.
+
+    \item[Intermediate representation (IR)]
+    IR-tier systems are compiler-facing, not user-authored.
+    They provide a lowering target and interchange format inside toolchains, an optimisation and analysis substrate and a validation surface with formal semantics~\cite{qir_alliance_qir_spec_repo,McCaskey2021MLIRDialectQASM}.
+    An explicit qubit lifetime model and a clear separation of concerns between quantum and classical layers are defining properties.
+    Unlike classical IRs, which occupy a fixed position between source language and machine code, quantum IRs may operate at multiple levels of the compilation stack; a multi-level IR framework such as MLIR can represent quantum programs both before gate decomposition and after, depending on the dialect and compilation stage~\cite{McCaskey2021MLIRDialectQASM}.
+    The tier is therefore defined by audience and intent rather than by stack position: IR systems target compiler and tooling authors, not programmers.
+
+    \item[Embedded framework]
+    Embedded framework-tier systems are libraries or SDKs hosted inside a general-purpose host language, typically Python.
+    Programmers construct circuit objects or quantum nodes via API calls; the circuit object model is the central programmer-facing artefact~\cite{aleksandrowicz2019qiskit,bergholm2018pennylane}.
+    Abstraction is library-driven rather than language-defined: the host language provides control flow, data structures and tooling, while the framework provides quantum capabilities and backend portability via transpilation and IR export.
+    The key boundary from the high-level tier is that embedded frameworks expose the circuit as the primary artefact; high-level systems treat circuit construction as an implementation detail managed by the compiler.
+
+    \item[High-level]
+    High-level systems are quantum-explicit but structured.
+    The surface language includes qubits, gates and measurements as first-class notions but provides algorithmic abstraction through functions, modules and type systems~\cite{bichsel2020silq,MicrosoftQSharpOverview,vax2025qmodexpressivehighlevelquantum}.
+    A static safety discipline governs quantum resource use: linearity, affinity or ownership constraints enforce correctness properties, and an explicit uncomputation or disposal story ensures quantum resources are soundly managed.
+    The primary artefact is a quantum program, not merely a circuit file.
+    The distinction from the quantum-implicit tier is that high-level programmers must still understand and use quantum vocabulary to write correct programs; quantum-implicit programmers do not.
+
+    \item[Quantum-implicit]
+    Quantum-implicit systems express their primary surface model in ordinary mathematical and computational abstractions~\cite{nunez_corrales2025betterabstractmachines}.
+    Programmers describe and implement algorithms without needing to know or explicitly annotate qubits, gates or other quantum-mechanical analogues.
+    The compiler is responsible for inferring and synthesising the necessary quantum realisation and lowering it into an explicit quantum IR or circuit representation.
+    The system provides optional escape hatches for direct use of explicit quantum operations when fine-grained control, performance or hardware-specific tuning is needed.
+    The quantum bias of such a system, as defined in Section~\ref{sec:introduction}, is at most the concept of the observation boundary.
+
+\end{description}
+
+\subsubsection{The quantum-implicit tier}\label{subsubsec:taxonomy:quantum_implicit}
+Of the five tiers defined in Section~\ref{subsec:taxonomy:definitions}, four have been widely named and discussed in the existing literature, the quantum-implicit tier has not.
+The tier marks the boundary at which the programming surface ceases to require quantum vocabulary.
+High-level systems still require the programmer to reason about qubits, gates and measurement, even where a type system manages safety.
+Quantum-implicit systems expose only mathematical and computational abstractions: functions, transformations, distributions.
+
+Concretely, a quantum-implicit system would allow a programmer to express an unstructured search using a predicate over a domain.
+The compiler synthesises the oracle and amplitude amplification schedule~\cite{nunez_corrales2025betterabstractmachines}.
+The same principle applies to a discrete Fourier transform.
+The programmer writes the transform; the compiler generates the corresponding quantum Fourier transform circuit.
+No Hadamard gate or controlled phase rotation appears at the programming surface.
+Recent empirical work finds that even systems described as high-level require programmers to hold the circuit model in mind during program construction~\cite{corralesgarro2025productivityexpressiveness}.
+That cognitive burden is eliminated in systems at the quantum-implicit tier.
+Prior work establishes that such a tier is the logical upper bound of a quantum programming abstraction hierarchy~\cite{DiMatteo2024AbstractionHierarchy}.
+
+\begin{mdframed}[frametitle={Litmus test}]
+    A language is quantum-implicit if a programmer with no prior instruction in quantum mechanics can learn it from its own documentation.
+    That programmer must be able to implement representative programs without needing to understand qubits, gates, amplitudes or entanglement.
+\end{mdframed}
+
+Prior classifications of quantum programming systems do not address programmer productivity or usability as classification dimensions~\cite{Gay2006QPLSurvey}.
+Recent work finds that the absence of abstract enough programming models is a barrier to productivity~\cite{nunez_corrales2025betterabstractmachines,corralesgarro2025productivityexpressiveness}, yet no prior classification provides a mechanism for identifying when that requirement is met.
+The quantum-implicit tier operationalises this requirement as a formal, falsifiable category.
+
+\subsection{Systems under review}\label{subsec:taxonomy:systems}
+Systems were selected according to the inclusion criteria defined in Section~\ref{sec:methodology}; the full per-system verification is published in Appendix~B of~\cite{kavadias2026qplSurveySupplementary}.
+Table~\ref{tab:taxonomy:systems} identifies the ten systems in the primary review and one comparison system.
+Tier assignments are not reported here; they are findings produced by applying the evaluation rubric defined in Section~\ref{sec:evaluation_rubric} and are reported in Section~\ref{sec:language_assessments}.
+
+\begin{table}[htbp*]
+    \centering
+    \caption{Systems under review. Tier assignments are reported in Section~\ref{sec:language_assessments}, not here.}
+    \label{tab:taxonomy:systems}
+    \small
+    \begin{tabular}{ll}
+        \toprule
+        \textbf{System} & \textbf{Artefact type} \\
+        \midrule
+        OpenQASM~3.0~\cite{cross2022openqasm3} & Circuit description language \\
+        \addlinespace
+        QIR~\cite{qir_alliance_qir_spec_repo} & Compiler IR \\
+        \addlinespace
+        Q-MLIR~\cite{McCaskey2021MLIRDialectQASM} & Compiler IR \\
+        \addlinespace
+        Qiskit~\cite{aleksandrowicz2019qiskit} & Embedded circuit framework \\
+        \addlinespace
+        PennyLane~\cite{bergholm2018pennylane} & Embedded circuit framework \\
+        \addlinespace
+        Q\#~\cite{MicrosoftQSharpOverview} & Standalone QPL \\
+        \addlinespace
+        Silq~\cite{bichsel2020silq} & Standalone QPL \\
+        \addlinespace
+        Qmod~\cite{vax2025qmodexpressivehighlevelquantum} & Standalone QPL \\
+        \addlinespace
+        Quff~\cite{wright2024quff} & Standalone QPL \\
+        \addlinespace
+        Qutes~\cite{faro2025qutes,reversiblelifetime2026} & Standalone QPL \\
+        \addlinespace
+        Quipper~\cite{green2013quipper} & Embedded circuit framework\dag \\
+        \bottomrule
+    \end{tabular}
+    \footnotesize\dag~This system is unassessed and provided for comparison only.
+    See Section~\ref{subsec:methodology:quality}
+\end{table}
