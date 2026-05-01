@@ -71,7 +71,7 @@ Figure~\ref{fig:introduction:quantum_computing_foundations:circuit_example} show
 Circuit depth is a direct determinant of program correctness on physical hardware.
 As noted in Section~\ref{sec:introduction:overview}, quantum hardware is characterised by coherence timescales $T_1$ and $T_2$, which bound the period over which a qubit's state remains reliable.
 Circuits whose depth exceeds the available coherence window accumulate errors that corrupt the final measurement distribution.
-Minimising depth is therefore not an optimisation concern but a correctness requirement, and it is a requirement the programmer must actively manage in every existing quantum programming system.
+Minimising depth is therefore not an optimisation concern but a correctness requirement, optimising depth is often managed by quantum compilers; however, it is still an active programmer concern in all quantum systems.
 
 \subsection{Phases, interference and measurement}\label{subsec:introduction:quantum_computing_foundations:phases_interference_measurement}
 The complex amplitudes introduced in Subsection~\ref{subsec:introduction:quantum_computing_foundations:qubits_and_state} carry a \textit{phase}: the complex angle that determines how amplitudes combine when gates are applied.
