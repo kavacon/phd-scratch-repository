@@ -1,0 +1,159 @@
+\section{System assessments}\label{sec:system_assessments}
+No system in the review set satisfies the litmus test in Section~\ref{subsubsec:taxonomy:quantum_implicit}; the quantum-implicit tier is unoccupied.
+This section documents the scored profiles from which that finding derives.
+The rubric defined in Table~\ref{tab:evaluation_rubric:scoring_levels}is applied to the ten primary systems selected in Sections~\ref{sec:taxonomy} and~\ref{sec:methodology}.
+Each system receives axis scores A--E, a spectrum score (arithmetic mean with observed range), a headline tier level and a quantum bias count.
+Per-system scorecards are in Section~\ref{subsec:system_assessments:system_scorecards}.
+Comparative analysis is in Section~\ref{subsec:system_assessments:comparative}.
+Quipper is excluded from the formal assessment;
+Subsection~\ref{subsec:system_assessments:quipper_aside} includes it as a labelled reference point.
+Findings are reported here; interpretation of RQ1 and RQ2 is in Section~\ref{sec:discussion}.
+
+\subsection{System scorecards}\label{subsec:system_assessments:system_scorecards}
+The following section records the scoring for each of the ten assessed systems.
+Each system receives a brief introduction followed by its tabulated scores, an explanation of each score and a discussion of its quantum bias.
+
+\subsubsection{OpenQASM 3.0}\label{subsubsec:system_assessments:system_scorecards:openqasm}
+OpenQASM 3.0 is a quantum assembly language and intermediate representation designed to express gate-level programs for communication with quantum hardware~\cite{cross2022openqasm3}.
+
+\begin{center}
+    \small
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Axis}                       & \textbf{Score} \\
+        \midrule
+        A:\;Mental model / vocabulary       & 0              \\
+        B:\;Primary artefact                & 0              \\
+        C:\;Safety discipline \& guarantees & 0              \\
+        D:\;Compilation responsibility      & 1              \\
+        E:\;Execution / hardware adjacency  & 0              \\
+        \midrule
+        Spectrum (mean, range)              & 0.2\;(0--1)    \\
+        Headline tier                       & 0~(Assembly)   \\
+        Quantum bias count                  & 6              \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+\begin{description}
+    \item[A\,(0):] The programmer writes explicit gate applications to named qubit registers; qubits, gates, measurement and classical control are the basic programming interface~\cite{cross2022openqasm3}.
+    Score~1 requires vocabulary targeting compiler and tooling authors.
+    OpenQASM~3.0's vocabulary consists of named gates and qubit registers regardless of whether the representation is human-authored or compiler-generated.
+
+    \item[B\,(0):] The primary artefact is an explicit gate sequence with classical control flow; version~3.0 extends this with timing constructs and pulse-level definitions at the same authoring level~\cite{cross2022openqasm3}.
+    Score~1 requires explicit IR intrinsics targeting compilers; OpenQASM~3.0's artefact is a gate-level instruction sequence, not an IR intrinsic format.
+
+    \item[C\,(0):] No static type or affine discipline is enforced; correctness is maintained by programming convention rather than language-level guarantees~\cite{cross2022openqasm3}.
+    Score~1 requires precision sufficient for validation and qubit-lifetime checks; OpenQASM~3.0 does not enforce such checks statically.
+
+    \item[D\,(1):] OpenQASM~3.0 serves primarily as a lowering target in practice; embedded frameworks compile to it as an output format and the spec positions it as an intermediate representation for communicating with quantum hardware~\cite{cross2022openqasm3}.
+    Score~2 requires transpilation passes and compilation assistance available to programmers; OpenQASM~3.0 provides no such layer and the gate-level quantum structure within the representation is explicit whether authored directly or compiler-generated.
+
+    \item[E\,(0):] Version~3.0 exposes hardware-adjacent constructs including explicit timing (duration, delay), calibration grammar and pulse-level definitions in the authoring surface~\cite{cross2022openqasm3}.
+    Score~1 requires multi-backend design with hardware mapping beginning at the compilation layer; OpenQASM~3.0 targets hardware communication directly and extends downward toward pulse-level control.
+\end{description}
+
+\paragraph{Scoring analysis}
+OpenQASM 3.0 receives a headline score of~0; four of five axes score~0 and the single axis-D score of~1 does not meet the four-axis threshold for headline~1 under Table~\ref{tab:scoring_levels}.
+The spectrum score of~0.2 (range~0--1) reflects this deviation: the compilation responsibility axis acknowledges OpenQASM's primary use as a lowering target for embedded frameworks.
+The gate-level vocabulary of the representation places axes A, B, C and E at score~0.
+All six hard-fail conditions are triggered.
+The authoring surface directly exposes gate sequences as the primary artefact, named qubit allocation, mandatory quantum/classical declarations, interference-dependent gate selection, hardware timing constraints and pulse-level definitions.
+Score~1 on the remaining axes would require a representation whose vocabulary and artefact format target compiler authors rather than gate-level programming.
+OpenQASM~3.0's named-gate vocabulary does not meet this criterion regardless of authoring context.
+
+\subsubsection{QIR}\label{subsubsec:system_assessments:system_scorecards:qir}
+QIR is an LLVM-based quantum intermediate representation designed as a language- and hardware-agnostic interchange format between quantum front-end compilers and target platforms~\cite{qir_alliance_qir_spec_repo}.
+
+\begin{center}
+    \small
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Axis}                       & \textbf{Score} \\
+        \midrule
+        A:\;Mental model / vocabulary       & 1              \\
+        B:\;Primary artefact                & 1              \\
+        C:\;Safety discipline \& guarantees & 1              \\
+        D:\;Compilation responsibility      & 1              \\
+        E:\;Execution / hardware adjacency  & 1              \\
+        \midrule
+        Spectrum (mean, range)              & 1.0\;(1--1)    \\
+        Headline tier                       & 1~(IR)         \\
+        Quantum bias count                  & 6              \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+\begin{description}
+    \item[A\,(1):] Quantum operations are expressed as LLVM intrinsic calls with opaque quantum types (\texttt{\%Qubit}, \texttt{\%Result}), targeting compiler and tooling authors rather than application programmers~\cite{qir_alliance_qir_spec_repo}.
+    Score~2 requires the host-language vocabulary of an embedded framework; QIR operates at the compilation layer where quantum concepts are explicit by design.
+
+    \item[B\,(1):] The primary artefact is explicit IR intrinsics for quantum primitives, including allocation, release, gate application and measurement, embedded in LLVM instruction format~\cite{qir_alliance_qir_spec_repo}.
+    Score~2 requires a circuit object or tape as the central artefact; QIR operates below the circuit abstraction at the IR instruction level.
+
+    \item[C\,(1):] The opaque type system prevents direct classical manipulation of quantum values and enables qubit-lifetime checks at the IR level~\cite{qir_alliance_qir_spec_repo}.
+    Score~2 requires API-driven safety discipline available to programmers; QIR's guarantees target the IR tier and are not exposed as a programmer-facing framework.
+
+    \item[D\,(1):] QIR is a lowering target; quantum structure is already explicit in the representations received from front-end compilers~\cite{qir_alliance_qir_spec_repo}.
+    Score~2 requires transpilation passes and compilation assistance available to programmers; QIR's role is as a compilation stage without programmer-facing inference.
+
+    \item[E\,(1):] QIR is designed for multiple backends, with hardware mapping beginning at this layer~\cite{qir_alliance_qir_spec_repo}.
+    Score~2 requires backend-portable frameworks with configurable basis options for programmers; QIR addresses hardware mapping as a downstream compilation concern.
+\end{description}
+
+\paragraph{Scoring analysis}
+QIR receives a headline score of~1; all five axes score~1, reflecting uniform IR-tier positioning under Table~\ref{tab:evaluation_rubric:scoring_levels}.
+The spectrum score of~1.0 (range~1--1) indicates no cross-axis variation,consistent with a uniform language-agnostic IR design.
+Four hard-fail conditions are triggered (conditions~1, 2, 3 and~6): the IR intrinsic sequence is the primary artefact, qubit allocation is explicit via runtime APIs.
+Opaque types enforce mandatory quantum/classical marking and hardware mapping begins at this layer.
+The quantum bias count of~6 reflects the full set of concepts required for compiler tooling authors working at the IR level.
+Score~2 would require an embedded framework surface available to application programmers; QIR is a compilation target layer.
+
+\subsubsection{Q-MLIR}\label{subsubsec:system_assessments:system_scorecards:qmlir}
+Q-MLIR extends MLIR with a quantum dialect to enable progressive lowering from quantum assembly representations to LLVM IR and hardware targets~\cite{McCaskey2021MLIRDialectQASM}.
+
+\begin{center}
+    \small
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Axis}                       & \textbf{Score} \\
+        \midrule
+        A:\;Mental model / vocabulary       & 1              \\
+        B:\;Primary artefact                & 1              \\
+        C:\;Safety discipline \& guarantees & 1              \\
+        D:\;Compilation responsibility      & 1              \\
+        E:\;Execution / hardware adjacency  & 1              \\
+        \midrule
+        Spectrum (mean, range)              & 1.0\;(1--1)    \\
+        Headline tier                       & 1~(IR)         \\
+        Quantum bias count                  & 7              \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+\begin{description}
+    \item[A\,(1):] Q-MLIR programs are expressed as quantum dialect operations within MLIR.
+    The vocabulary targets compiler and tooling authors, with all quantum-mechanical concepts exposed at the dialect level~\cite{McCaskey2021MLIRDialectQASM}.
+    Score~2 requires the host-language vocabulary of an embedded framework; Q-MLIR is a compiler infrastructure layer, not an application programming surface.
+
+    \item[B\,(1):] The primary artefact is explicit quantum dialect operations, including qubit allocation, gate application and measurement, expressed in MLIR's SSA value-based instruction format~\cite{McCaskey2021MLIRDialectQASM}.
+    Score~2 requires a circuit object or tape as the central artefact; Q-MLIR represents quantum computation at the instruction level below the circuit abstraction.
+
+    \item[C\,(1):] SSA/value semantics for quantum dataflow enforce a no-cloning-aligned discipline by preventing qubit values from being duplicated within the IR~\cite{McCaskey2021MLIRDialectQASM}.
+    Score~2 requires API-driven safety discipline available to programmers; Q-MLIR's discipline is a compiler-level guarantee rather than a programmer-facing framework.
+
+    \item[D\,(1):] Q-MLIR is a progressive lowering target; quantum structure is fully explicit in the operations passed from front-end representations~\cite{McCaskey2021MLIRDialectQASM}.
+    Score~2 requires transpilation passes and compilation assistance available to programmers; Q-MLIR operates as a compilation infrastructure stage without programmer-facing inference.
+
+    \item[E\,(1):] Multiple backend targets are supported through progressive dialect lowering; hardware mapping is a property of the lowering pipeline rather than the surface representation~\cite{McCaskey2021MLIRDialectQASM}.
+    Score~2 requires backend-portable frameworks with configurable options for programmers; Q-MLIR treats hardware mapping as a compiler concern.
+
+\end{description}
+
+\paragraph{Scoring analysis}
+Q-MLIR receives a headline score of~1; all five axes score~1, reflecting uniform IR-tier positioning under Table~\ref{tab:evaluation_rubric:scoring_levels}.
+The spectrum score of~1.0 (range~1--1) indicates no cross-axis variation.
+Five hard-fail conditions are triggered (conditions~1, 2, 3, 5 and~6): dialect operations are the primary artefact, qubit allocation is explicit at the dialect level.
+Quantum/classical marking is mandatory, entanglement is a required concept for correct dialect use and hardware mapping begins at the lowering layer.
+The quantum bias count of~7 is one higher than QIR, with entanglement as a resource required at the dialect level.
+Score~2 would require an embedded framework surface available to application programmers; Q-MLIR is a compilation infrastructure layer.
