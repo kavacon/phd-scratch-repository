@@ -61,25 +61,28 @@ A \textit{Medium} confidence rating denotes a source tier~2 primary citation or 
     \caption{Source quality assessment per system.
     LOO = leave-one-out sensitivity flag; see Subsection~\ref{subsec:methodology:sensitivity}.}
     \label{tab:quality_assessment}
-    \begin{tabular}{p{1.5cm} p{5.5cm} c c c}
-        \toprule
-        \textbf{System} & \textbf{Primary citation(s)} & \textbf{Source tier} & \textbf{Confidence} & \textbf{LOO} \\
-        \midrule
-        OpenQASM   & \cite{cross2022openqasm3}                          & 1              & High   & ---        \\
-        QIR        & \cite{qir_alliance_qir_spec_repo}                  & 3\dag          & Medium & ---        \\
-        Q-MLIR     & \cite{McCaskey2021MLIRDialectQASM}                 & 1              & High   & ---        \\
-        Qiskit     & \cite{aleksandrowicz2019qiskit}                    & 1              & High   & ---        \\
-        PennyLane  & \cite{bergholm2018pennylane}                       & 1              & High   & ---        \\
-        Q\#        & \cite{MicrosoftQSharpOverview}                     & 1, 3           & High   & ---        \\
-        Silq       & \cite{bichsel2020silq}                             & 1              & High   & ---        \\
-        Qmod       & \cite{vax2025qmodexpressivehighlevelquantum}       & 2              & Medium & ---        \\
-        Quff       & \cite{wright2024quff}                              & 1              & Medium & \checkmark \\
-        Qutes      & \cite{faro2025qutes,reversiblelifetime2026}        & 1              & High   & \checkmark \\
-        \bottomrule
-    \end{tabular}
-    \smallskip
-
-    \footnotesize\dag~Source tier~3 is the expected primary source for IR-tier artefacts; see text.
+    \begin{threeparttable}
+        \begin{tabular}{p{1.5cm} p{5.5cm} c c c}
+            \toprule
+            \textbf{System} & \textbf{Primary citation(s)}                 & \textbf{Source tier} & \textbf{Confidence} & \textbf{LOO} \\
+            \midrule
+            OpenQASM        & \cite{cross2022openqasm3}                    & 1                    & High                & ---          \\
+            QIR             & \cite{qir_alliance_qir_spec_repo}            & 3\tnote{\dag}        & Medium              & ---          \\
+            Q-MLIR          & \cite{McCaskey2021MLIRDialectQASM}           & 1                    & High                & ---          \\
+            Qiskit          & \cite{aleksandrowicz2019qiskit}              & 1                    & High                & ---          \\
+            PennyLane       & \cite{bergholm2018pennylane}                 & 1                    & High                & ---          \\
+            Q\#             & \cite{MicrosoftQSharpOverview}               & 1, 3                 & High                & ---          \\
+            Silq            & \cite{bichsel2020silq}                       & 1                    & High                & ---          \\
+            Qmod            & \cite{vax2025qmodexpressivehighlevelquantum} & 2                    & Medium              & ---          \\
+            Quff            & \cite{wright2024quff}                        & 1                    & Medium              & \checkmark   \\
+            Qutes           & \cite{faro2025qutes,reversiblelifetime2026}  & 1                    & High                & \checkmark   \\
+            \bottomrule
+        \end{tabular}
+        \begin{tablenotes}
+            \footnotesize
+            \item[\dag] Source tier~3 is the expected primary source for IR-tier artefacts; see text.
+        \end{tablenotes}
+    \end{threeparttable}
 \end{table*}
 
 \subsection{Data extraction and synthesis}\label{subsec:methodology:extraction}
