@@ -1,0 +1,127 @@
+\section{Background and Related Work}\label{sec:background}
+
+Quantum programming has been surveyed, taxonomised and evaluated from multiple disciplinary angles; the field has not produced a unified instrument for measuring where any given system sits relative to the abstraction properties it consistently identifies as missing.
+This section surveys that body of work across four dimensions:
+\begin{itemize}
+    \item Prior taxonomic classifications of quantum programming systems.
+    \item Documented abstraction requirements and gaps in quantum programming.
+    \item Programming language usability frameworks that ground the evaluation methodology in Section~\ref{sec:methodology}.
+    \item The systematic review methodology that underpins Section~\ref{sec:methodology} and Section~\ref{sec:language_assessments}.
+\end{itemize}
+
+This section does not score individual systems, introduce the evaluation rubric or define the novel contributions described in the sections that follow.
+The surveyed work converges on the same absent tier in quantum programming.
+No prior work provides a reproducible means of locating current systems relative to it or tracking progress towards it; this paper addresses that gap directly.
+
+\subsection{Prior Surveys and Taxonomies}\label{subsec:background:prior_surveys}
+An early survey of quantum programming languages classified the then-emerging body of language work by design orientation: imperative languages, functional languages and formal semantic approaches~\cite{Gay2006QPLSurvey}.
+The survey framed language-level abstraction as a scientific concern independent of hardware readiness.
+Two structural absences were identified, distinguishing quantum programming from its classical counterpart: support for complex data structures and expressive quantum control constructs~\cite{Gay2006QPLSurvey}.
+The survey's scope was limited to pre-2010 systems and provided no empirical usability dimension; quantum libraries hosted within classical languages were excluded on the grounds that they lacked sufficient language-level formalisation~\cite{Gay2006QPLSurvey}.
+Classifying by design paradigm establishes a useful historical vocabulary but does not address where a system sits in the abstraction hierarchy or how much quantum mechanical knowledge it requires of its programmers.
+The structural gaps the survey identified in 2006 remain visible in comparative evaluations conducted two decades later.
+
+Subsequent comparative work has broadened the scope of evaluation without resolving those structural gaps.
+A 2024 survey of current quantum programming SDKs and frameworks evaluated abstraction level across a representative set of systems and found no consistent abstraction progression across the landscape~\cite{furntratt2024higherabstractionlevels}.
+Systems at nominally higher levels do not reliably provide greater cognitive separation from the quantum substrate than those positioned below them~\cite{furntratt2024higherabstractionlevels}.
+More systems have been developed, but the conceptual vocabulary programmers are required to hold has not narrowed.
+A complementary evaluation applied lines of code, cyclomatic complexity and Halstead complexity to standard quantum algorithms across standalone languages and quantum libraries hosted within classical languages~\cite{corralesgarro2025productivityexpressiveness}.
+Higher-level claims did not consistently translate to measurable reductions in complexity~\cite{corralesgarro2025productivityexpressiveness}.
+Standalone languages did not systematically outperform their hosted counterparts~\cite{corralesgarro2025productivityexpressiveness}.
+The relationship between stated abstraction level and programmer burden was not monotone~\cite{corralesgarro2025productivityexpressiveness}.
+Neither survey measures the degree to which quantum mechanical vocabulary is required of programmers as a distinct, scoreable property.
+Both capture structural complexity or fragmentation, not vocabulary burden.
+
+A review of quantum intermediate representations assessed \textbf{QIR}, \textbf{Q-MLIR} and related systems against a defined set of qualitative criteria including hardware agnosticism, optimisation capability, tooling accessibility and ease of use~\cite{irreview2024}.
+The two most capable systems rated highly on technical criteria but consistently low on tooling accessibility, demonstrating that structured multi-criteria assessment of a quantum programming tier is both possible and informative~\cite{irreview2024}.
+The review's scope is the intermediate representation tier; it does not extend to assembly-level systems, standalone languages or quantum libraries hosted within classical languages.
+
+Prior work has therefore applied criteria-based assessment within specific tiers of the quantum programming stack but not across it.
+The abstraction-level surveys~\cite{furntratt2024higherabstractionlevels,corralesgarro2025productivityexpressiveness} document stalled progress but measure complexity rather than the vocabulary burden the field identifies as the primary barrier to programmer productivity.
+The IR review~\cite{irreview2024} demonstrates that structured assessment is tractable but covers one tier only.
+No prior work applies a single consistent evaluation instrument across the full tier spectrum, from assembly and intermediate representation to languages that require no quantum mechanical vocabulary of their programmers.
+
+\subsection{Abstraction Requirements and Documented Gaps}\label{subsec:background:abstraction}
+Multiple independent lines of analysis have converged on the same characterisation of what quantum programming systems are missing.
+The programming, execution and hardware abstraction hierarchy proposed for quantum computing identifies what productive layer separation would require: at the programming layer, a programmer should be able to express algorithmic intent without reference to the execution or hardware layers below~\cite{DiMatteo2024AbstractionHierarchy}.
+That standard is not met.
+Concerns from the execution and hardware layers consistently surface at the programming layer, requiring programmers to specify gate sequences, qubit allocations and circuit details that belong below it~\cite{DiMatteo2024AbstractionHierarchy}.
+The significance of the finding lies in where the hierarchy sets the bar: it targets physicists and domain experts as its primary audience.
+The abstraction requirements of programmers with no quantum-mechanical background are not addressed, which means the field has not yet defined what productive layer separation would require for its primary user population~\cite{DiMatteo2024AbstractionHierarchy,ferreira2024qplusage}.
+
+Companion work on quantum abstract machines (QAM) identifies the substrate-level reason why the programming layer cannot currently enforce those boundaries~\cite{nunez_corrales2025betterabstractmachines}.
+To support productive quantum programming without quantum-mechanical prerequisites, an abstract machine must satisfy specific conditions.
+Fifteen such criteria are proposed and no existing candidate satisfies the three governing the programming layer: symbolic denotational syntax, representation-independent data types and a stable instruction set architecture~\cite{nunez_corrales2025betterabstractmachines}.
+The root cause is not an engineering shortfall but a definitional one: current systems fail to separate instruction symbols from circuit primitives, requiring programmers to reason about operations in quantum-mechanical terms because the abstract machine itself is defined in those terms~\cite{nunez_corrales2025betterabstractmachines}.
+The absent tier is named as application programming, at which programs are described at the level of pseudocode without dependence on qubit modality or gate set choice~\cite{nunez_corrales2025betterabstractmachines}.
+
+Formal analysis of quantum data structure and control flow requirements establishes that the gap is structural rather than contingent~\cite{yuan2025foundationalabstractions}.
+The core problem is that the classical abstraction contracts underpinning higher-level language design do not transfer to the quantum setting.
+Classical programming makes three assumptions about data: that it can be freely copied, that inspecting it has no side effects and that temporary results need not be explicitly reversed.
+Each assumption fails in the quantum context.
+No-cloning prevents duplication of quantum state, breaking free copying.
+Measurement collapses the state on observation, making every inspection a destructive operation that cannot be abstracted away.
+Uncomputation introduces a mandatory reversal obligation with no classical equivalent.
+A separate structural barrier governs control flow: classical conditionals cannot in general be realised in superposition without violating unitarity, a provable impossibility independent of language design choices or engineering effort~\cite{yuan2025foundationalabstractions}.
+The combined implication is that reaching the absent tier requires a new class of abstraction, not refinement of existing ones.
+
+The software engineering literature frames this requirement historically: circuit-level quantum programming requires constructing bespoke circuits for each problem class, analogous to 1940s and 1950s computation in which physical rewiring was required for each new task~\cite{cobb2022higherlevelabstractions}.
+The classical abstraction journey required removing hardware prerequisites at each tier; the quantum equivalent requires removing quantum-mechanical prerequisites and no current language has completed that transition~\cite{cobb2022higherlevelabstractions}.
+
+Practitioner evidence confirms that the gap described by the formal and historical analyses corresponds to a real barrier experienced by the field's primary user population.
+A survey of 251 active quantum programmers found that 83\% hold five or more years of professional classical programming experience, yet the dominant reported challenge was not a gap in programming competence but in quantum-mechanical vocabulary~\cite{ferreira2024qplusage}.
+Thirty-one per cent identified the absence of higher-level abstraction as a key missing feature~\cite{ferreira2024qplusage}.
+Quantitative measurements of code complexity independently support this finding: the relationship between stated abstraction level and programmer burden is not reliable across language families and higher-level claims do not consistently translate to reduced cognitive load~\cite{corralesgarro2025productivityexpressiveness}.
+The field's users are not reaching the absent tier through the systems currently available to them.
+
+The four lines of evidence establish the same conclusion from different directions.
+The abstraction hierarchy and QAM criteria identify what the absent tier would require and locate the root cause of its absence in the definitional coupling between instruction symbols and circuit primitives~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
+The formal analysis of language foundations establishes that this coupling cannot be resolved by extending existing systems: the classical contracts on which higher abstractions depend are physically unrealisable in the quantum setting~\cite{yuan2025foundationalabstractions}.
+Practitioner surveys confirm that the gap is not a theoretical concern but a documented barrier for the field's primary users~\cite{ferreira2024qplusage}.
+Empirical complexity measurements confirm that self-described high-level systems do not approach the absent tier in practice~\cite{corralesgarro2025productivityexpressiveness}.
+The convergence across these sources establishes that the absent tier is real, that its absence has measurable consequences and that no existing work provides a means of locating current systems relative to it.
+
+\subsection{Programming Language Usability Frameworks}\label{subsec:background:usability}
+Programming language evaluation draws on two complementary traditions.
+Formal type theory establishes that type systems and higher-order abstractions enable the what-versus-how separation: programmers express \textit{what} a computation should accomplish; the implementation of \textit{how} is a compiler obligation~\cite{pierce2002tapl-doc9}.
+A parallel tradition establishes that formal criteria alone are insufficient~\cite{Myers2016PLUsabilitySIG}.
+Programming languages are designed for human use.
+A type-theoretically sound language that imposes a vocabulary programmers cannot productively use does not serve its purpose~\cite{Myers2016PLUsabilitySIG}.
+
+Translating formal design criteria into measurable evaluation dimensions requires a human-factors methodology.
+A proposal for principles of usable language design identifies concrete dimensions: onboarding time, programmer productivity and the frequency of errors a language's constructs introduce~\cite{Coblenz2017UsablePLDesign}.
+The PLIERS process operationalises these into a practical framework, integrating formative and summative human-computer interaction methods into language assessment~\cite{Coblenz2021PLIERS}.
+Its central principle is that evaluation dimensions should derive from the stated design goals of the language and the burden those goals impose on the intended user population~\cite{Coblenz2021PLIERS}.
+
+Both criteria apply to quantum programming systems, but neither has been applied to them systematically.
+The formal criterion has not been used to assess whether quantum systems achieve the what-versus-how separation across the full tier spectrum.
+The usability criterion has not been used to measure vocabulary burden consistently and reproducibly across system families.
+The combined gap is the absence of an evaluation instrument grounded in both traditions and applied to a systematic sample of quantum programming systems.
+
+\subsection{Systematic Review Methodology}\label{subsec:background:slr}
+A systematic literature review (SLR) differs from an ad hoc survey in three respects~\cite{KitchenhamCharters2007SLR}.
+The research protocol must be pre-specified before data collection begins.
+Inclusion and exclusion criteria must be formally documented and applied consistently across all sources.
+The search and screening strategy must be reproducible by an independent reviewer~\cite{KitchenhamCharters2007SLR}.
+The distinction is methodological rather than terminological.
+An SLR produces evidence against a defined question under conditions that permit replication and audit; an ad hoc survey reflects a researcher's curated judgement.
+Software engineering SLR practice adapts the method from evidence-based medicine, replacing randomised controlled trials with narrative synthesis against pre-specified criteria~\cite{KitchenhamCharters2007SLR}.
+
+The prior surveys reviewed in Section~\ref{subsec:background:prior_surveys} do not follow a systematic review protocol as defined by these guidelines.
+None pre-registered a protocol prior to data collection.
+While some document criteria for the systems they evaluate, none applies the full planning-conducting-reporting process with pre-specified quality assessment and reproducibility requirements~\cite{KitchenhamCharters2007SLR}.
+Their findings cannot be systematically extended or their scope independently verified.
+An SLR is the appropriate instrument for producing a result that can be audited, replicated and built upon.
+
+This review follows PRISMA 2020 reporting conventions~\cite{page2021prisma}.
+The full protocol, search strategy and screening criteria are described in Section~\ref{sec:methodology}.
+
+The four bodies of evidence surveyed in this section converge on a consistent characterisation of the field's position.
+The taxonomic record documents that existing systems have not advanced the abstraction levels they claim.
+The formal analysis establishes that the gap is structural.
+Practitioner evidence confirms that quantum bias is the primary barrier for the field's primary users.
+The evaluation methodology literature defines what a rigorous, reproducible assessment of systems against that barrier would require.
+
+No prior work combines these observations into a unified instrument for measuring where current systems sit relative to the quantum-implicit tier.
+The field agrees that the tier does not yet exist and that current systems do not approach it.
+What is absent is a means of measuring how far each system falls short and for what structural reasons, applied consistently and reproducibly across the full tier spectrum.
