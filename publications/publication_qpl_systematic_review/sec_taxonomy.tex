@@ -29,7 +29,7 @@ These axes follow directly from the abstraction hierarchy established in prior w
     The tier is therefore defined by audience and intent rather than by stack position: IR systems target compiler and tooling authors, not programmers.
 
     \item[Framework]
-    Framework-tier systems are libraries or SDKs hosted inside a general-purpose host language, typically Python.
+    Framework-tier systems are libraries or SDKs that may be hosted inside a general-purpose language like Python.
     Programmers construct circuit objects or quantum nodes via API calls; the circuit object model is the central programmer-facing artefact~\cite{aleksandrowicz2019qiskit,bergholm2018pennylane}.
     Abstraction is library-driven rather than language-defined: the host language provides control flow, data structures and tooling, while the framework provides quantum capabilities and backend portability via transpilation and IR export.
     The key boundary from the high-level tier is that frameworks expose the circuit as the primary artefact; high-level systems treat circuit construction as an implementation detail managed by the compiler.

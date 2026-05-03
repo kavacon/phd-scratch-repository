@@ -32,6 +32,17 @@
 
 \maketitle
 
+\begin{abstract}
+    Productive quantum programming requires programmers to reason explicitly about qubits, gates, measurement outcomes and uncomputation obligations, even when using the highest-level systems currently available.
+    Prior taxonomy work has characterised the quantum programming landscape but has not established whether any existing system meets the requirements for a tier at which programmers write non-trivial programs without quantum-mechanical prerequisites.
+    This paper reports a systematic literature review of eleven quantum programming systems assessed against a five-axis evaluation rubric spanning assembly, intermediate representation, framework, high-level and quantum-implicit tiers.
+    The rubric operationalises quantum bias (the count of quantum-mechanical concepts required for typical tasks) alongside axis-level scores for mental model, primary artefact, safety, data model and hardware independence.
+    No assessed system occupies the quantum-implicit tier; the four lower tiers are populated and each performs its designed function.
+    A vocabulary ceiling on the mental-model axis appears across all high-level systems.
+    The highest-scoring system retains a quantum bias count of three, consisting of the quantum mechanical constraints the literature identifies as irreducible at the circuit model boundary.
+    The gap is structural; developing a new quantum programming language targeting this tier is justified.
+\end{abstract}
+
 \input{content}
 
 \printbibliography

@@ -1,4 +1,4 @@
-\section{Background and Related Work}\label{sec:background}
+\section{Background and related work}\label{sec:background}
 
 Quantum programming has been surveyed, taxonomised and evaluated from multiple disciplinary angles; the field has not produced a unified instrument for measuring where any given system sits relative to the abstraction properties it consistently identifies as missing.
 This section surveys that body of work across four dimensions:
@@ -13,7 +13,7 @@ This section does not score individual systems, introduce the evaluation rubric 
 The surveyed work converges on the same absent tier in quantum programming.
 No prior work provides a reproducible means of locating current systems relative to it or tracking progress towards it; this paper addresses that gap directly.
 
-\subsection{Prior Surveys and Taxonomies}\label{subsec:background:prior_surveys}
+\subsection{Prior surveys and taxonomies}\label{subsec:background:prior_surveys}
 An early survey of quantum programming languages classified the then-emerging body of language work by design orientation: imperative languages, functional languages and formal semantic approaches~\cite{Gay2006QPLSurvey}.
 The survey framed language-level abstraction as a scientific concern independent of hardware readiness.
 Two structural absences were identified, distinguishing quantum programming from its classical counterpart: support for complex data structures and expressive quantum control constructs~\cite{Gay2006QPLSurvey}.
@@ -41,7 +41,7 @@ The abstraction-level surveys~\cite{furntratt2024higherabstractionlevels,corrale
 The IR review~\cite{irreview2024} demonstrates that structured assessment is tractable but covers one tier only.
 No prior work applies a single consistent evaluation instrument across the full tier spectrum, from assembly and intermediate representation to languages that require no quantum mechanical vocabulary of their programmers.
 
-\subsection{Abstraction Requirements and Documented Gaps}\label{subsec:background:abstraction}
+\subsection{Abstraction requirements and documented gaps}\label{subsec:background:abstraction}
 Multiple independent lines of analysis have converged on the same characterisation of what quantum programming systems are missing.
 The programming, execution and hardware abstraction hierarchy proposed for quantum computing identifies what productive layer separation would require: at the programming layer, a programmer should be able to express algorithmic intent without reference to the execution or hardware layers below~\cite{DiMatteo2024AbstractionHierarchy}.
 That standard is not met.
@@ -81,7 +81,7 @@ Practitioner surveys confirm that the gap is not a theoretical concern but a doc
 Empirical complexity measurements confirm that self-described high-level systems do not approach the absent tier in practice~\cite{corralesgarro2025productivityexpressiveness}.
 The convergence across these sources establishes that the absent tier is real, that its absence has measurable consequences and that no existing work provides a means of locating current systems relative to it.
 
-\subsection{Programming Language Usability Frameworks}\label{subsec:background:usability}
+\subsection{Programming language usability frameworks}\label{subsec:background:usability}
 Programming language evaluation draws on two complementary traditions.
 Formal type theory establishes that type systems and higher-order abstractions enable the what-versus-how separation: programmers express \textit{what} a computation should accomplish; the implementation of \textit{how} is a compiler obligation~\cite{pierce2002tapl-doc9}.
 A parallel tradition establishes that formal criteria alone are insufficient~\cite{Myers2016PLUsabilitySIG}.
@@ -98,7 +98,7 @@ The formal criterion has not been used to assess whether quantum systems achieve
 The usability criterion has not been used to measure vocabulary burden consistently and reproducibly across system families.
 The combined gap is the absence of an evaluation instrument grounded in both traditions and applied to a systematic sample of quantum programming systems.
 
-\subsection{Systematic Review Methodology}\label{subsec:background:slr}
+\subsection{Systematic review methodology}\label{subsec:background:slr}
 A systematic literature review (SLR) differs from an ad hoc survey in three respects~\cite{KitchenhamCharters2007SLR}.
 The research protocol must be pre-specified before data collection begins.
 Inclusion and exclusion criteria must be formally documented and applied consistently across all sources.

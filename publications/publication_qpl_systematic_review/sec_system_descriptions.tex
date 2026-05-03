@@ -1,8 +1,8 @@
 \section{System descriptions}\label{sec:system_descriptions}
-The eleven systems surveyed were selected according to criteria C\textsubscript{1}--C\textsubscript{4} defined in Section~\ref{sec:pub_qpl_review:taxonomy} and the inclusion/exclusion protocol described in Section~\ref{sec:pub_qpl_review:review_methodology}.
-Systems are described in implied abstraction tier order: Assembly, Intermediate Representation, Embedded Circuit Framework and High-Level Language, mirroring the taxonomy structure from Section~\ref{sec:pub_qpl_review:taxonomy}.
-No tier assignments, rubric scores or evaluative language appear in this section; all evaluation is deferred to Section~\ref{sec:pub_qpl_review:system_assessments}.
-Quipper is described in Subsection~\ref{subsec:system_descriptions:quipper} but does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{3}; it is retained as a comparison case for the non-Python embedded DSL tradition and excluded from primary assessment in Section~\ref{sec:pub_qpl_review:system_assessments}.
+The eleven systems surveyed were selected according to criteria C\textsubscript{1}--C\textsubscript{4} defined in Section~\ref{sec:taxonomy} and the inclusion/exclusion protocol described in Section~\ref{sec:methodology}.
+Systems are described in implied abstraction tier order: Assembly, Intermediate Representation, Framework and High-Level Language, mirroring the taxonomy structure from Section~\ref{sec:taxonomy}.
+No tier assignments, rubric scores or evaluative language appear in this section; all evaluation is deferred to Section~\ref{sec:system_assessments}.
+Quipper is described in Subsection~\ref{subsec:system_descriptions:quipper} but does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{3}; it is retained as a comparison case for the non-Python embedded DSL tradition and excluded from primary assessment in Section~\ref{sec:system_assessments}.
 
 \subsection{OpenQASM 3.0}\label{subsec:system_descriptions:openqasm}
 \textit{OpenQASM 3.0} is a quantum assembly language designed as a circuit-level interchange format and execution description language for hybrid quantum--classical programs~\cite{cross2022openqasm3}.
@@ -48,7 +48,7 @@ The language uses monadic operational semantics, encapsulating qubit operations 
 Circuits are constructed by composing gate applications, higher-order combinators and named circuit blocks defined with the \texttt{box} construct.
 Quipper compiles to parameterised object code that generates circuits at runtime rather than emitting static circuit descriptions, enabling circuits of practically large scale to be expressed concisely.
 Dynamic lifting permits measurement results from one circuit to become parameters of a subsequent circuit, supporting multi-stage classical-quantum workflows~\cite{green2013quipper}.
-Quipper does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{3} (Sections~\ref{sec:pub_qpl_review:taxonomy}and~\ref{sec:pub_qpl_review:review_methodology}) and is excluded from primary assessment in Section~\ref{sec:pub_qpl_review:system_assessments}.
+Quipper does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{3} (Sections~\ref{sec:taxonomy}and~\ref{sec:methodology}) and is excluded from primary assessment in Section~\ref{sec:system_assessments}.
 
 \subsection{Q\#}\label{subsec:system_descriptions:qsharp}
 \textit{Q\#} is a standalone quantum programming language developed by Microsoft as part of the Azure Quantum platform~\cite{MicrosoftQSharpOverview}.

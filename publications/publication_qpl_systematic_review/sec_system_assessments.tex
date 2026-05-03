@@ -161,17 +161,17 @@ Qiskit is a Python-based quantum programming framework providing an in-memory ci
     \small
     \begin{tabular}{@{}lc@{}}
         \toprule
-        \textbf{Axis}                       & \textbf{Score}   \\
+        \textbf{Axis}                       & \textbf{Score} \\
         \midrule
-        A:\;Mental model / vocabulary       & 2                \\
-        B:\;Primary artefact                & 2                \\
-        C:\;Safety discipline \& guarantees & 2                \\
-        D:\;Compilation responsibility      & 2                \\
-        E:\;Execution / hardware adjacency  & 2                \\
+        A:\;Mental model / vocabulary       & 2              \\
+        B:\;Primary artefact                & 2              \\
+        C:\;Safety discipline \& guarantees & 2              \\
+        D:\;Compilation responsibility      & 2              \\
+        E:\;Execution / hardware adjacency  & 2              \\
         \midrule
-        Spectrum (mean, range)              & 2.0\;(2--2)      \\
-        Headline tier                       & 2~(Framework) \\
-        Quantum bias count                  & 5                \\
+        Spectrum (mean, range)              & 2.0\;(2--2)    \\
+        Headline tier                       & 2~(Framework)  \\
+        Quantum bias count                  & 5              \\
         \bottomrule
     \end{tabular}
 \end{center}
@@ -195,7 +195,7 @@ Qiskit is a Python-based quantum programming framework providing an in-memory ci
 \end{description}
 
 \paragraph{Scoring analysis}
-Qiskit receives a headline score of~2; all five axes score~2, reflecting uniform embedded-framework positioning under Table~\ref{tab:evaluation_rubric:scoring_levels}.
+Qiskit receives a headline score of~2; all five axes score~2, reflecting uniform framework positioning under Table~\ref{tab:evaluation_rubric:scoring_levels}.
 The spectrum score of~2.0 (range~2--2) indicates no cross-axis variation.
 Three hard-fail conditions are triggered: the \texttt{QuantumCircuit} is the primary artefact (condition~1), qubits are named and explicitly allocated (condition~2) and quantum/classical register declarations are mandatory (condition~3).
 The quantum bias count of~5 reflects that phase kickback and basis change are required for correct gate selection in typical T\textsubscript{1}--T\textsubscript{5}workflows.
@@ -208,17 +208,17 @@ PennyLane is a Python-based quantum machine learning framework providing differe
     \small
     \begin{tabular}{@{}lc@{}}
         \toprule
-        \textbf{Axis}                       & \textbf{Score}   \\
+        \textbf{Axis}                       & \textbf{Score} \\
         \midrule
-        A:\;Mental model / vocabulary       & 2                \\
-        B:\;Primary artefact                & 2                \\
-        C:\;Safety discipline \& guarantees & 2                \\
-        D:\;Compilation responsibility      & 2                \\
-        E:\;Execution / hardware adjacency  & 2                \\
+        A:\;Mental model / vocabulary       & 2              \\
+        B:\;Primary artefact                & 2              \\
+        C:\;Safety discipline \& guarantees & 2              \\
+        D:\;Compilation responsibility      & 2              \\
+        E:\;Execution / hardware adjacency  & 2              \\
         \midrule
-        Spectrum (mean, range)              & 2.0\;(2--2)      \\
-        Headline tier                       & 2~(Framework) \\
-        Quantum bias count                  & 7                \\
+        Spectrum (mean, range)              & 2.0\;(2--2)    \\
+        Headline tier                       & 2~(Framework)  \\
+        Quantum bias count                  & 7              \\
         \bottomrule
     \end{tabular}
 \end{center}
@@ -241,10 +241,10 @@ PennyLane is a Python-based quantum machine learning framework providing differe
 \end{description}
 
 \paragraph{Scoring analysis}
-PennyLane receives a headline score of~2; all five axes score~2, reflecting uniform embedded-framework positioning under Table~\ref{tab:evaluation_rubric:scoring_levels}.
+PennyLane receives a headline score of~2; all five axes score~2, reflecting uniform framework positioning under Table~\ref{tab:evaluation_rubric:scoring_levels}.
 The spectrum score of~2.0 (range~2--2) indicates no cross-axis variation.
 Three hard-fail conditions are triggered: the QNode is the primary circuit artefact (condition~1),wires and qubits are explicitly indexed (condition~2) and quantum/classical function boundaries are mandatory (condition~3).
-The quantum bias count of~7 is the highest among the embedded-framework systems.
+The quantum bias count of~7 is the highest among the framework systems.
 Three additional concepts are present relative to Qiskit; entanglement, interference and phase kickback reflect the vocabulary requirements of variational optimisation workflows.
 Score~3 would require the primary artefact to be a program rather than a circuit; PennyLane's QNode model places all five axes at score~2.
 
@@ -255,17 +255,17 @@ Q\# is a domain-specific quantum programming language designed for expressing qu
     \small
     \begin{tabular}{@{}lc@{}}
         \toprule
-        \textbf{Axis}                       & \textbf{Score}   \\
+        \textbf{Axis}                       & \textbf{Score} \\
         \midrule
-        A:\;Mental model / vocabulary       & 2                \\
-        B:\;Primary artefact                & 3                \\
-        C:\;Safety discipline \& guarantees & 2                \\
-        D:\;Compilation responsibility      & 2                \\
-        E:\;Execution / hardware adjacency  & 3                \\
+        A:\;Mental model / vocabulary       & 2              \\
+        B:\;Primary artefact                & 3              \\
+        C:\;Safety discipline \& guarantees & 2              \\
+        D:\;Compilation responsibility      & 2              \\
+        E:\;Execution / hardware adjacency  & 3              \\
         \midrule
-        Spectrum (mean, range)              & 2.4\;(2--3)      \\
-        Headline tier                       & 2~(Framework) \\
-        Quantum bias count                  & 6                \\
+        Spectrum (mean, range)              & 2.4\;(2--3)    \\
+        Headline tier                       & 2~(Framework)  \\
+        Quantum bias count                  & 6              \\
         \bottomrule
     \end{tabular}
 \end{center}
@@ -350,17 +350,17 @@ Qmod is a high-level quantum domain-specific language embedded in Python, design
     \small
     \begin{tabular}{@{}lc@{}}
         \toprule
-        \textbf{Axis}                       & \textbf{Score}   \\
+        \textbf{Axis}                       & \textbf{Score} \\
         \midrule
-        A:\;Mental model / vocabulary       & 2                \\
-        B:\;Primary artefact                & 3                \\
-        C:\;Safety discipline \& guarantees & 2                \\
-        D:\;Compilation responsibility      & 3                \\
-        E:\;Execution / hardware adjacency  & 2                \\
+        A:\;Mental model / vocabulary       & 2              \\
+        B:\;Primary artefact                & 3              \\
+        C:\;Safety discipline \& guarantees & 2              \\
+        D:\;Compilation responsibility      & 3              \\
+        E:\;Execution / hardware adjacency  & 2              \\
         \midrule
-        Spectrum (mean, range)              & 2.4\;(2--3)      \\
-        Headline tier                       & 2~(Framework) \\
-        Quantum bias count                  & 5                \\
+        Spectrum (mean, range)              & 2.4\;(2--3)    \\
+        Headline tier                       & 2~(Framework)  \\
+        Quantum bias count                  & 5              \\
         \bottomrule
     \end{tabular}
 \end{center}
@@ -494,22 +494,22 @@ Scores are reported for reference.
     \small
     \begin{tabular}{@{}lc@{}}
         \toprule
-        \textbf{Axis}                       & \textbf{Score}   \\
+        \textbf{Axis}                       & \textbf{Score} \\
         \midrule
-        A:\;Mental model / vocabulary       & 2                \\
-        B:\;Primary artefact                & 2                \\
-        C:\;Safety discipline \& guarantees & 2                \\
-        D:\;Compilation responsibility      & 2                \\
-        E:\;Execution / hardware adjacency  & 3                \\
+        A:\;Mental model / vocabulary       & 2              \\
+        B:\;Primary artefact                & 2              \\
+        C:\;Safety discipline \& guarantees & 2              \\
+        D:\;Compilation responsibility      & 2              \\
+        E:\;Execution / hardware adjacency  & 3              \\
         \midrule
-        Spectrum (mean, range)              & 2.2\;(2--3)      \\
-        Headline tier                       & 2~(Framework) \\
-        Quantum bias count                  & 4                \\
+        Spectrum (mean, range)              & 2.2\;(2--3)    \\
+        Headline tier                       & 2~(Framework)  \\
+        Quantum bias count                  & 4              \\
         \bottomrule
     \end{tabular}
 \end{center}
 
-Axes A--D place Quipper at the embedded-framework level, comparable to Qiskit and PennyLane, despite Quipper's Haskell embedding and functional paradigm.
+Axes A--D place Quipper at the framework level, comparable to Qiskit and PennyLane, despite Quipper's Haskell embedding and functional paradigm.
 Axis~E reaches score~3, reflecting that Quipper's functional embedding provides greater hardware abstraction by default than the Python-frameworks.
 The comparable positioning across axes A--D, regardless of host language and programming paradigm, indicates that the abstraction model governs tier assignment rather than the surface language.
 
@@ -533,10 +533,10 @@ Table~\ref{tab:system_assessments:system_summary} presents axis scores, spectrum
         QIR             & IR            & 1          & 1          & 1          & 1          & 1          & 1.0~(1--1)        & 6           \\
         Q-MLIR          & IR            & 1          & 1          & 1          & 1          & 1          & 1.0~(1--1)        & 7           \\
         \midrule
-        Qiskit          & Embedded      & 2          & 2          & 2          & 2          & 2          & 2.0~(2--2)        & 5           \\
-        PennyLane       & Embedded      & 2          & 2          & 2          & 2          & 2          & 2.0~(2--2)        & 7           \\
-        Q\#             & Embedded      & 2          & 3          & 2          & 2          & 3          & 2.4~(2--3)        & 6           \\
-        Qmod            & Embedded      & 2          & 3          & 2          & 3          & 2          & 2.4~(2--3)        & 5           \\
+        Qiskit          & Framework      & 2          & 2          & 2          & 2          & 2          & 2.0~(2--2)        & 5           \\
+        PennyLane       & Framework      & 2          & 2          & 2          & 2          & 2          & 2.0~(2--2)        & 7           \\
+        Q\#             & Framework      & 2          & 3          & 2          & 2          & 3          & 2.4~(2--3)        & 6           \\
+        Qmod            & Framework      & 2          & 3          & 2          & 3          & 2          & 2.4~(2--3)        & 5           \\
         \midrule
         Silq            & High-level    & 2          & 3          & 3          & 3          & 3          & 2.8~(2--3)        & 4           \\
         Quff            & High-level    & 3          & 3          & 3          & 3          & 3          & 3.0~(3--3)        & 3           \\
@@ -547,30 +547,30 @@ Table~\ref{tab:system_assessments:system_summary} presents axis scores, spectrum
 
 \subsection{Comparative analysis}\label{subsec:system_assessments:comparative}
 Tier groupings throughout this subsection refer to the headline score assigned by the gating rule in Table~\ref{tab:evaluation_rubric:scoring_levels}.
-Four systems receive a headline score of~2 and are grouped at the Embedded tier: Qiskit, PennyLane, Q\# and Qmod.
+Four systems receive a headline score of~2 and are grouped at the framework tier: Qiskit, PennyLane, Q\# and Qmod.
 
 \subsubsection{Axis pattern analysis}\label{subsubsec:system_assessments:axis_patterns}
 Axis scores increase with headline tier level on all five dimensions, but the degree of within-tier consistency varies by axis.
 
 Axis~A (mental model and vocabulary) shows the tightest constraint across the review set.
 Assembly systems score~0 and IR systems score~1.
-All four Embedded systems score~2; two of three High-level systems also score~2, with only Quff reaching score~3.
+All four Frameworks score~2; two of three High-level systems also score~2, with only Quff reaching score~3.
 No system reaches score~4 on axis~A, making it the most constrained axis in the assessment.
 Axis~A is the binding constraint on quantum-implicit tier membership in this review; it reflects the litmus test’s prerequisite-free learnability requirement rather than a limitation of any single implementation.
 
-Axis~B (primary artefact) shows the most within-tier differentiation in the Embedded group: Qiskit and PennyLane score~2 while Q\# and Qmod score~3 through program-structured authoring surfaces.
+Axis~B (primary artefact) shows the most within-tier differentiation in the Framework group: Qiskit and PennyLane score~2 while Q\# and Qmod score~3 through program-structured authoring surfaces.
 All High-level systems score~3 on axis~B.
 Score~4, defined as a mathematical or computational-level primary artefact without quantum vocabulary, is not reached by any system.
 
 Axis~C (safety discipline and guarantees) follows the most consistent tier-progression pattern in the review set.
-All Assembly systems score~0, both IR systems score~1, all four Embedded systems score~2 and all three High-level systems score~3.
+All Assembly systems score~0, both IR systems score~1, all four Frameworks score~2 and all three High-level systems score~3.
 No within-tier outliers appear on axis~C, making it the axis most closely aligned with the tier hierarchy.
 
 Axis~D (compilation responsibility) follows a similar progression with one deviation.
 OpenQASM~3.0 scores~1 on axis~D, above its headline Assembly tier, reflecting its use as a lowering target for frameworks.
-All High-level systems score~3; Qmod also scores~3 in the Embedded group through its synthesis engine.
+All High-level systems score~3; Qmod also scores~3 in the Framework group through its synthesis engine.
 
-Axis~E (execution and hardware adjacency) distinguishes Q\# from other Embedded systems.
+Axis~E (execution and hardware adjacency) distinguishes Q\# from other Frameworks.
 Q\# reaches score~3 alongside the three High-level systems while Qiskit, PennyLane and Qmod score~2.
 This shows that hardware agnosticism is not exclusively a feature of the High-level tier.
 
@@ -588,8 +588,8 @@ Q-MLIR's count of~7 reflects the full IR-level concept set, including entangleme
 PennyLane's count of~7 reflects the variational optimisation context.
 Phase kickback, basis change, interference and entanglement are all required for correct gradient-based optimisation workflows, beyond what basic circuit construction demands.
 
-Quantum bias count does not decrease monotonically from Assembly to Embedded.
-OpenQASM (Assembly, quantum bias count~=~6), QIR (IR, quantum bias count~=~6) and Q\# (Embedded, quantum bias count~=~6) share the same count despite spanning three tiers.
+Quantum bias count does not decrease monotonically from Assembly to Framework.
+OpenQASM (Assembly, quantum bias count~=~6), QIR (IR, quantum bias count~=~6) and Q\# (Framework, quantum bias count~=~6) share the same count despite spanning three tiers.
 The items differ: OpenQASM includes interference amplitude; Q\# includes reversibility and uncomputation required for correct use of the Adjoint functor; QIR includes hardware constraints and reversibility at the IR level.
 
 Axis~B scores correlate with quantum bias reduction: systems whose primary artefact is a structured program consistently show lower quantum bias counts.
@@ -597,38 +597,33 @@ Q\# and Qmod retain counts of~6 and~5 respectively despite scoring~3 on axis~B, 
 
 \subsubsection{Spectrum distribution}\label{subsubsec:system_assessments:spectrum_distribution}
 Figure~\ref{fig:system_assessments:tier_distribution} shows the count of primary systems at each headline tier level.
-The review set spans four of the five taxonomy tiers: one system at Assembly, two at IR, four at Embedded and three at High-level.
-The Embedded tier contains the largest group.
+The review set spans four of the five taxonomy tiers: one system at Assembly, two at IR, four at Framework and three at High-level.
+The Framework tier contains the largest group.
 The quantum-implicit tier is unoccupied.
 
 The distribution is skewed toward the lower tiers; seven of ten systems score at headline level~2 or below.
 The three High-level systems represent the uppermost populated tier.
 No system crosses the tier boundary established by the litmus test in Section~\ref{subsubsec:taxonomy:quantum_implicit}.
 
-\begin{figure}[h]
+\begin{figure*}[ht*]
     \centering
-% Placeholder: horizontal bar chart
-% x-axis: count of systems (0--5)
-% y-axis: tier levels (Assembly, IR, Embedded, High-level, Quantum-implicit)
-% Quantum-implicit bar = 0; bars labelled with counts
+    \includegraphics[width=0.8\linewidth]{../../figures/fig-system_assessments-tier_distribution}
     \caption{Distribution of primary systems across headline tier levels.}
     \label{fig:system_assessments:tier_distribution}
-\end{figure}
+\end{figure*}
 
 \subsubsection{Cross-axis score heatmap}\label{subsubsec:system_assessments:heatmap}
 Figure~\ref{fig:system_assessments:score_heatmap} presents the complete scoring matrix as a heatmap, with systems in rows ordered by tier and axes A--E in columns.
-The heatmap reveals three visual zones: a low-value cluster for Assembly and IR systems (scores 0--1), a mid-range band for Embedded systems (predominantly score~2 with isolated score~3 cells) and a high-value band for High-level systems (predominantly score~3).
+The heatmap reveals three visual zones: a low-value cluster for Assembly and IR systems (scores 0--1), a mid-range band for Frameworks (predominantly score~2 with isolated score~3 cells) and a high-value band for High-level systems (predominantly score~3).
 Axis~A appears consistently lighter than axes B--E in the High-level band, reflecting the single-axis constraint identified in Section~\ref{subsubsec:system_assessments:axis_patterns}.
 No cell reaches score~4.
 
-\begin{figure}[h]
+\begin{figure*}[ht*]
     \centering
-% Placeholder: 10x5 heatmap
-% Rows: systems in §8.1 order; columns: axes A--E
-% Colour scale: 0--4 (white to dark blue); cells labelled with scores
+    \includegraphics[width=0.8\linewidth]{../../figures/fig-system_assessments-score_heatmap}
     \caption{Cross-axis score heatmap for all ten primary systems.}
     \label{fig:system_assessments:score_heatmap}
-\end{figure}
+\end{figure*}
 
 \subsubsection{Quantum-implicit gap finding}\label{subsubsec:system_assessments:qi_gap}
 No system in the review set scores~4 on any rubric axis.

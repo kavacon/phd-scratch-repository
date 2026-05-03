@@ -4,9 +4,11 @@ No system in the review set occupies the quantum-implicit tier; the highest-scor
 Quantum bias counts remain non-trivial even at the highest tier, indicating persistent substrate-level vocabulary requirements throughout the current landscape.
 This section answers RQ1 and RQ2 in turn, names the quantum-implicit gap as a novel empirical contribution and draws design implications grounded in the assessment findings.
 
-\subsection{RQ1: The quantum-implicit tier is unoccupied}\label{subsec:discussion:rq1}
-No current quantum programming system meets the abstraction requirements the literature identifies for the quantum-implicit tier.
-Existing systems satisfy the requirements of the tiers they occupy, but the quantum-implicit tier, at which programmers write non-trivial programs without quantum-mechanical prerequisites, remains unoccupied~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
+\subsection{RQ1: Current abstraction levels and the quantum-implicit gap}\label{subsec:discussion:rq1}
+The current quantum programming landscape is structured across four populated tiers: Assembly, IR, Framework and High-level.
+Assessment against the abstraction requirements prior work identifies for productive quantum programming reveals a graduated picture.
+Lower-tier systems meet the requirements of their respective tiers and high-level systems partially meet usability requirements.
+No system meets the requirements for the quantum-implicit tier; the tier at which programmers write non-trivial programs without quantum-mechanical prerequisites remains unoccupied~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
 
 The tier hierarchy is populated and each tier performs its designed function.
 Assembly and IR systems meet the hardware-fidelity and compilation requirements documented in Section~\ref{sec:system_assessments}.
@@ -38,6 +40,9 @@ This does not carry the programmer-usability dimension the same term has in clas
 The Q\# and Qmod headline scores make this concrete.
 Both systems are function-structured and provide substantial compiler assistance; neither achieves the consistent programmer-facing abstraction the rubric requires for headline~3.
 
+Q\# is a compiled, statically typed language with its own operation semantics rather than an API layer over circuit primitives hosted in a classical language.
+Its identical headline score to Framework-tier systems demonstrates that the abstraction ceiling is in the underlying data model, not the surface representation.
+
 The near-perfect alignment between assessed and declared tiers might appear to indicate definitions calibrated to the assessed systems.
 Three findings are inconsistent with this interpretation.
 Q\# and Qmod score at headline~2, below their declared type; a rubric calibrated to confirmed declared types would not produce this downgrade.
@@ -59,6 +64,13 @@ A language built on these constraints can abstract their management but cannot a
 The scoring data confirms this mechanism at the programming surface.
 Q\# and Qmod reach score~3 on axis~B, indicating that program-structured authoring is achievable within the current paradigm.
 Both systems remain at score~2 on axis~A because the program's type system inherits the vocabulary of the circuit model it is built on; a function form does not change the underlying data representation.
+
+Q\# makes this concrete.
+Unlike Framework-tier systems, Q\# is not an API layer over circuit primitives hosted in a classical language; it is a compiled language with its own type system, operation semantics and static analysis guarantees.
+Its surface architecture is more distant from the typical Framework approach than any other system at headline~2.
+The identical headline score demonstrates that the source of the abstraction ceiling is not the surface representation but the underlying compilation target.
+Whether a programmer writes quantum operations as Python function calls or as statically typed callables in a compiled language, the circuit model remains the data representation the program describes.
+Changing the surface representation does not change what the programmer must hold in mind.
 
 Axis~C provides a structural parallel.
 Axis~C follows a perfect tier-progression across the review set, from score~0 at Assembly to score~3 at High-level.
