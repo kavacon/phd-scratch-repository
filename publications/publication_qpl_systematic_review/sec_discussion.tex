@@ -1,0 +1,129 @@
+\section{Discussion}\label{sec:discussion}
+Ten quantum programming systems were assessed across five abstraction tiers using the rubric defined in Section~\ref{sec:evaluation_rubric}.
+No system in the review set occupies the quantum-implicit tier; the highest-scoring system reaches headline tier~3 uniformly across all five axes.
+Quantum bias counts remain non-trivial even at the highest tier, indicating persistent substrate-level vocabulary requirements throughout the current landscape.
+This section answers RQ1 and RQ2 in turn, names the quantum-implicit gap as a novel empirical contribution and draws design implications grounded in the assessment findings.
+
+\subsection{RQ1: The quantum-implicit tier is unoccupied}\label{subsec:discussion:rq1}
+No current quantum programming system meets the abstraction requirements the literature identifies for the quantum-implicit tier.
+Existing systems satisfy the requirements of the tiers they occupy, but the quantum-implicit tier, at which programmers write non-trivial programs without quantum-mechanical prerequisites, remains unoccupied~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
+
+The tier hierarchy is populated and each tier performs its designed function.
+Assembly and IR systems meet the hardware-fidelity and compilation requirements documented in Section~\ref{sec:system_assessments}.
+Embedded frameworks lower the circuit-construction barrier through API abstraction and transpilation infrastructure.
+The measured vocabulary burden remains substantial because the primary artefact is still a circuit; this reflects the tier's function, not a design failure~\cite{corralesgarro2025productivityexpressiveness,furntratt2024higherabstractionlevels}.
+High-level systems partially meet the usability requirements established in Section~\ref{sec:background}~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
+The most capable assessed systems provide program-level primary artefacts, compiler-managed resource handling and hardware agnosticism; quantum vocabulary remains required at the programming boundary.
+The quantum-implicit tier, which the literature identifies as the minimum for broad developer accessibility, is unoccupied.
+
+Every high-level system except Quff scores~2 on axis~A (mental model and vocabulary) despite reaching score~3 on axes B--E; Quff reaches score~3 uniformly but score~4 on no axis.
+The ceiling on axis~A appears across all assessed systems, including those with the most sophisticated safety disciplines and compilation models.
+The vocabulary requirement at the programming boundary reflects a paradigm property of current quantum programming, not a feature gap.
+Circuit-level programming requires bespoke quantum operations for each task in a manner the literature has likened to computation before abstraction layers became available~\cite{cobb2022higherlevelabstractions}.
+
+The spectrum score surfaces within-tier differentiation that the headline score alone does not capture.
+Q\# and Qmod score above their Embedded-tier peers on individual axes; both record a spectrum score of~2.4 against Qiskit and PennyLane at~2.0.
+Within-tier differentiation of this kind is analogous to classical programming.
+C, Java and Rust are each classified within the same tier, yet they occupy measurably distinct positions within it.
+The quantum-implicit tier need not be perfectly implicit to provide a step change in accessibility.
+A language that hides quantum vocabulary by default while retaining expert access is a sufficient target; Java manages memory by default while preserving low-level access as an explicit choice.
+
+The near-perfect tier alignment also reveals a terminological issue.
+The term \textit{high-level} in quantum computing has come to denote function-structured programming: any system in which programs are organised as named callables.
+This does not carry the programmer-usability dimension the same term has in classical computing, where \textit{high-level} implies vocabulary-distance from the hardware substrate.
+The Q\# and Qmod headline scores make this concrete.
+Both systems are function-structured and provide substantial compiler assistance; neither achieves the consistent programmer-facing abstraction the rubric requires for headline~3.
+
+The near-perfect alignment between assessed and declared tiers might appear to indicate definitions calibrated to the assessed systems.
+Three findings are inconsistent with this interpretation.
+Q\# and Qmod score at headline~2, below their declared type; a rubric calibrated to confirmed declared types would not produce this downgrade.
+Quantum bias counts do not decrease monotonically with declared tier: PennyLane, an Embedded-tier system, has a higher quantum bias count than either IR system or the Assembly system.
+A Haskell-embedded functional language scores at the same tier as Python-embedded imperative frameworks on abstraction axes, confirming the instrument measures abstraction properties rather than host language or paradigm.
+The pre-registration of the review protocol prior to any scoring provides procedural protection against confirmation bias~\cite{kavadias2026qplSurveyProtocol}.
+The three findings above provide corroborating empirical evidence.
+
+\subsection{RQ2: A new quantum programming language is justified}\label{subsec:discussion:rq2}
+The evidence supports the need for a new quantum programming language designed at a higher abstraction level.
+The argument is paradigm-level, not feature-level.
+No existing system fails because it lacks a specific feature that another system has proved possible; existing systems share a descriptive substrate that constrains how far abstraction can reach.
+
+The structural analysis in Section~\ref{sec:background} establishes that the classical data structure contracts underlying higher-level language design do not transfer to the quantum setting~\cite{yuan2025foundationalabstractions}.
+Classical programming assumes that data can be copied freely, that inspecting it has no side effects and that temporary results need not be reversed.
+Each assumption fails for quantum data: no-cloning prohibits duplication, measurement collapses state on inspection and uncomputation introduces a mandatory reversal obligation without a classical equivalent.
+A language built on these constraints can abstract their management but cannot abstract away the constraints themselves without a different foundational data model.
+
+The scoring data confirms this mechanism at the programming surface.
+Q\# and Qmod reach score~3 on axis~B, indicating that program-structured authoring is achievable within the current paradigm.
+Both systems remain at score~2 on axis~A because the program's type system inherits the vocabulary of the circuit model it is built on; a function form does not change the underlying data representation.
+
+Axis~C provides a structural parallel.
+Axis~C follows a perfect tier-progression across the review set, from score~0 at Assembly to score~3 at High-level.
+Each tier transition was enabled by a type-theoretic advance.
+API-level discipline enabled the move from Assembly to Embedded; linear and affine type systems enabled the move to High-level~\cite{bichsel2020silq}.
+Score~4 requires safety guarantees framed in non-quantum terms, with quantum operations accessible only as escape hatches.
+A type system that starts from quantum state and enforces constraints over it cannot reach this criterion by extension~\cite{yuan2025foundationalabstractions}.
+
+The quantum bias count distribution supports the same conclusion from a different direction.
+PennyLane, an Embedded-tier system, has a higher quantum bias count than either IR system or the Assembly system.
+Quantum bias is use-case-driven, not tier-driven; variational optimisation requires interference, phase kickback and entanglement reasoning that basic circuit construction does not~\cite{corralesgarro2025productivityexpressiveness}.
+A quantum-implicit language must provide a use-case model in which these concepts do not arise as programmer responsibilities, not merely hide them behind an API.
+
+The quantum bias count at the highest-scoring tier provides the empirical anchor.
+Quff has a quantum bias count of~3: qubits as a distinct resource, measurement collapse and no-cloning and linearity.
+These are the three foundational quantum mechanical constraints the structural analysis in Section~\ref{sec:background} identifies as irreducible at the circuit model boundary~\cite{yuan2025foundationalabstractions}.
+No programmer using any current system avoids all three; the three concepts are intrinsic to the circuit model, not incidental to it.
+A language that removes all three from the programmer's required vocabulary is not an extension of any current system; it requires a new foundational model of quantum data and computation~\cite{nunez_corrales2025betterabstractmachines}.
+
+\subsection{The quantum-implicit gap as a novel contribution}\label{subsec:discussion:contribution}
+The quantum-implicit tier is the central novel contribution of this review's taxonomy.
+Prior comparative surveys classified quantum programming systems by design orientation, paradigm or abstraction level, but none defined the quantum-implicit tier as a named category with explicit entry criteria~\cite{Gay2006QPLSurvey,furntratt2024higherabstractionlevels}.
+This review provides the first structured definition of the tier.
+The tier is definable in criterion terms, its requirements are derivable from the literature~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines,yuan2025foundationalabstractions} and no current system occupies it.
+
+Prior taxonomy established a useful vocabulary for the field.
+The earliest systematic survey classified quantum programming languages by design paradigm: imperative, functional and formal semantic approaches~\cite{Gay2006QPLSurvey}.
+This provided a framework for describing what systems exist but did not define tier membership by programmer experience or vocabulary requirement.
+Subsequent comparative work identified fragmentation and stalled abstraction progress but did not define the quantum-implicit tier as a named, measurable category~\cite{furntratt2024higherabstractionlevels,corralesgarro2025productivityexpressiveness}.
+What this review adds is a criterion-based definition.
+The definition is grounded in the abstraction requirements identified in Section~\ref{sec:background} and operationalised as a five-axis rubric with explicit score-4 entry conditions.
+
+The measurement instrument provides a secondary contribution beyond tier classification.
+The spectrum score captures within-tier quality in a way that prior taxonomy work did not.
+Systems at the same headline tier occupy measurably different positions: Q\# and Qmod record spectrum scores of~2.4 while Qiskit and PennyLane record~2.0, all four at headline~2.
+The Q\# and Qmod headline scores are not a criticism of those systems; they reveal that function-structured programming is a necessary but not sufficient condition for the high-level tier.
+The instrument provides a vocabulary for this distinction that the field's informal classification does not.
+
+The contribution is to identify and characterise the quantum-implicit gap, not to fill it.
+A gap that has not been defined and measured cannot be systematically closed; the definition and empirical validation here are a necessary precondition for any future language design effort targeting this tier.
+The design implications this finding supports are drawn in Section~\ref{subsec:discussion:implications}, and the programme of work the gap motivates is addressed in Section~\ref{sec:conclusion}.
+
+\subsection{Design implications}\label{subsec:discussion:implications}
+The assessment findings support four design implications for a quantum-implicit programming language.
+Each is grounded in axis evidence from Section~\ref{sec:system_assessments} and makes contact with the abstract machine requirements identified in Section~\ref{sec:background}~\cite{nunez_corrales2025betterabstractmachines}.
+
+\paragraph{Quantum data model first}
+No assessed system reaches score~4 on axis~D.
+Four systems reach score~3, providing quantum-typed data structures with generic backend representations.
+The step from score~3 to score~4 requires a data model in which quantum operations are expressed as transformations over abstract data types rather than as circuit primitives~\cite{DiMatteo2024AbstractionHierarchy}.
+The instruction set should be designed against this data representation, not the reverse.
+Languages that begin with an instruction set and add type safety afterwards cannot avoid encoding circuit vocabulary in their type signatures.
+
+\paragraph{Computation model separation}
+Axis~C follows a step-function progression driven by successive type-theoretic advances: from untyped gate sequences to qubit-lifetime type checks to linear and affine type systems~\cite{bichsel2020silq}.
+Each tier transition on this axis was a theoretical advance, not an engineering one.
+Score~4 requires safety guarantees expressed without reference to quantum state at the type level.
+A type theory whose primitives are circuit objects cannot produce these guarantees by extension~\cite{yuan2025foundationalabstractions}.
+The computation model of a quantum-implicit language must be defined over the abstract data representation, not imposed as a constraint system on circuit-level operations.
+
+\paragraph{Measurement as system policy}
+Quff's quantum bias count of~3 identifies the empirical minimum vocabulary at headline tier~3: qubits as a distinct resource, measurement collapse and no-cloning and linearity.
+All three are irreducible at the circuit model boundary~\cite{yuan2025foundationalabstractions}.
+The closest existing evidence of progress beyond this boundary is compiler-managed uncomputation, which removes the ancilla reversal obligation from the programmer's working model~\cite{bichsel2020silq}.
+A quantum-implicit language must extend this pattern to measurement.
+Making the observation boundary a system-level policy requires a computation model in which measurement outcomes are consumed by the program structure, not returned to the programmer for explicit inspection~\cite{nunez_corrales2025betterabstractmachines}.
+
+\paragraph{Vocabulary-free by default, expert access preserved}
+A quantum-implicit language need not eliminate quantum vocabulary entirely.
+Practitioner evidence indicates that the primary barrier for the majority of current users is the requirement to use quantum vocabulary in common-case programming, not in advanced or performance-critical paths~\cite{ferreira2024qplusage}.
+The appropriate design target is a language in which programs can be written, tested and reasoned about without quantum-mechanical prerequisites in the common case, with explicit vocabulary available for optimisation, verification and low-level access.
+This is the established approach in safe-default language design, where expert access is preserved as an opt-in rather than required as a default.
