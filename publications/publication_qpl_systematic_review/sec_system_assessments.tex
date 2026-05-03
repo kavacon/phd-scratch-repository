@@ -1,12 +1,9 @@
 \section{System assessments}\label{sec:system_assessments}
-No system in the review set satisfies the litmus test in Section~\ref{subsubsec:taxonomy:quantum_implicit}; the quantum-implicit tier is unoccupied.
-This section documents the scored profiles from which that finding derives.
-The rubric defined in Table~\ref{tab:evaluation_rubric:scoring_levels}is applied to the ten primary systems selected in Sections~\ref{sec:taxonomy} and~\ref{sec:methodology}.
+The rubric defined in Table~\ref{tab:evaluation_rubric:scoring_levels} is applied to the ten primary systems selected in Sections~\ref{sec:taxonomy} and~\ref{sec:methodology}.
 Each system receives axis scores A--E, a spectrum score (arithmetic mean with observed range), a headline tier level and a quantum bias count.
-Per-system scorecards are in Section~\ref{subsec:system_assessments:system_scorecards}.
-Comparative analysis is in Section~\ref{subsec:system_assessments:comparative}.
-Quipper is excluded from the formal assessment;
-Subsection~\ref{subsec:system_assessments:quipper_aside} includes it as a labelled reference point.
+Per-system scorecards are in Subsection~\ref{subsec:system_assessments:system_scorecards}.
+Comparative analysis is in Subsection~\ref{subsec:system_assessments:comparative}.
+Quipper is excluded from the formal assessment; Subsection~\ref{subsec:system_assessments:quipper_aside} includes it as a labelled reference point.
 Findings are reported here; interpretation of RQ1 and RQ2 is in Section~\ref{sec:discussion}.
 
 \subsection{System scorecards}\label{subsec:system_assessments:system_scorecards}
@@ -46,7 +43,7 @@ OpenQASM 3.0 is a quantum assembly language and intermediate representation desi
     \item[C\,(0):] No static type or affine discipline is enforced; correctness is maintained by programming convention rather than language-level guarantees~\cite{cross2022openqasm3}.
     Score~1 requires precision sufficient for validation and qubit-lifetime checks; OpenQASM~3.0 does not enforce such checks statically.
 
-    \item[D\,(1):] OpenQASM~3.0 serves primarily as a lowering target in practice; embedded frameworks compile to it as an output format and the spec positions it as an intermediate representation for communicating with quantum hardware~\cite{cross2022openqasm3}.
+    \item[D\,(1):] OpenQASM~3.0 serves primarily as a lowering target in practice; frameworks compile to it as an output format and the spec positions it as an intermediate representation for communicating with quantum hardware~\cite{cross2022openqasm3}.
     Score~2 requires transpilation passes and compilation assistance available to programmers; OpenQASM~3.0 provides no such layer and the gate-level quantum structure within the representation is explicit whether authored directly or compiler-generated.
 
     \item[E\,(0):] Version~3.0 exposes hardware-adjacent constructs including explicit timing (duration, delay), calibration grammar and pulse-level definitions in the authoring surface~\cite{cross2022openqasm3}.
@@ -55,7 +52,7 @@ OpenQASM 3.0 is a quantum assembly language and intermediate representation desi
 
 \paragraph{Scoring analysis}
 OpenQASM 3.0 receives a headline score of~0; four of five axes score~0 and the single axis-D score of~1 does not meet the four-axis threshold for headline~1 under Table~\ref{tab:evaluation_rubric:scoring_levels}.
-The spectrum score of~0.2 (range~0--1) reflects this deviation: the compilation responsibility axis acknowledges OpenQASM's primary use as a lowering target for embedded frameworks.
+The spectrum score of~0.2 (range~0--1) reflects this deviation: the compilation responsibility axis acknowledges OpenQASM's primary use as a lowering target for frameworks.
 The gate-level vocabulary of the representation places axes A, B, C and E at score~0.
 All six hard-fail conditions are triggered.
 The authoring surface directly exposes gate sequences as the primary artefact, named qubit allocation, mandatory quantum/classical declarations, interference-dependent gate selection, hardware timing constraints and pulse-level definitions.
@@ -86,7 +83,7 @@ QIR is an LLVM-based quantum intermediate representation designed as a language-
 
 \begin{description}
     \item[A\,(1):] Quantum operations are expressed as LLVM intrinsic calls with opaque quantum types (\texttt{\%Qubit}, \texttt{\%Result}), targeting compiler and tooling authors rather than application programmers~\cite{qir_alliance_qir_spec_repo}.
-    Score~2 requires the host-language vocabulary of an embedded framework; QIR operates at the compilation layer where quantum concepts are explicit by design.
+    Score~2 requires the host-language vocabulary of a framework; QIR operates at the compilation layer where quantum concepts are explicit by design.
 
     \item[B\,(1):] The primary artefact is explicit IR intrinsics for quantum primitives, including allocation, release, gate application and measurement, embedded in LLVM instruction format~\cite{qir_alliance_qir_spec_repo}.
     Score~2 requires a circuit object or tape as the central artefact; QIR operates below the circuit abstraction at the IR instruction level.
@@ -107,7 +104,7 @@ The spectrum score of~1.0 (range~1--1) indicates no cross-axis variation,consist
 Four hard-fail conditions are triggered (conditions~1, 2, 3 and~6): the IR intrinsic sequence is the primary artefact, qubit allocation is explicit via runtime APIs.
 Opaque types enforce mandatory quantum/classical marking and hardware mapping begins at this layer.
 The quantum bias count of~6 reflects the full set of concepts required for compiler tooling authors working at the IR level.
-Score~2 would require an embedded framework surface available to application programmers; QIR is a compilation target layer.
+Score~2 would require a framework surface available to application programmers; QIR is a compilation target layer.
 
 \subsubsection{Q-MLIR}\label{subsubsec:system_assessments:system_scorecards:qmlir}
 Q-MLIR extends MLIR with a quantum dialect to enable progressive lowering from quantum assembly representations to LLVM IR and hardware targets~\cite{McCaskey2021MLIRDialectQASM}.
@@ -134,7 +131,7 @@ Q-MLIR extends MLIR with a quantum dialect to enable progressive lowering from q
 \begin{description}
     \item[A\,(1):] Q-MLIR programs are expressed as quantum dialect operations within MLIR.
     The vocabulary targets compiler and tooling authors, with all quantum-mechanical concepts exposed at the dialect level~\cite{McCaskey2021MLIRDialectQASM}.
-    Score~2 requires the host-language vocabulary of an embedded framework; Q-MLIR is a compiler infrastructure layer, not an application programming surface.
+    Score~2 requires the host-language vocabulary of a framework; Q-MLIR is a compiler infrastructure layer, not an application programming surface.
 
     \item[B\,(1):] The primary artefact is explicit quantum dialect operations, including qubit allocation, gate application and measurement, expressed in MLIR's SSA value-based instruction format~\cite{McCaskey2021MLIRDialectQASM}.
     Score~2 requires a circuit object or tape as the central artefact; Q-MLIR represents quantum computation at the instruction level below the circuit abstraction.
@@ -155,7 +152,7 @@ The spectrum score of~1.0 (range~1--1) indicates no cross-axis variation.
 Five hard-fail conditions are triggered (conditions~1, 2, 3, 5 and~6): dialect operations are the primary artefact, qubit allocation is explicit at the dialect level.
 Quantum/classical marking is mandatory, entanglement is a required concept for correct dialect use and hardware mapping begins at the lowering layer.
 The quantum bias count of~7 is one higher than QIR, with entanglement as a resource required at the dialect level.
-Score~2 would require an embedded framework surface available to application programmers; Q-MLIR is a compilation infrastructure layer.
+Score~2 would require a framework surface available to application programmers; Q-MLIR is a compilation infrastructure layer.
 
 \subsubsection{Qiskit}\label{subsubsec:system_assessments:qiskit}
 Qiskit is a Python-based quantum programming framework providing an in-memory circuit model and transpilation infrastructure for execution on quantum simulators and hardware backends~\cite{aleksandrowicz2019qiskit}.
@@ -173,7 +170,7 @@ Qiskit is a Python-based quantum programming framework providing an in-memory ci
         E:\;Execution / hardware adjacency  & 2                \\
         \midrule
         Spectrum (mean, range)              & 2.0\;(2--2)      \\
-        Headline tier                       & 2~(E. Framework) \\
+        Headline tier                       & 2~(Framework) \\
         Quantum bias count                  & 5                \\
         \bottomrule
     \end{tabular}
@@ -220,7 +217,7 @@ PennyLane is a Python-based quantum machine learning framework providing differe
         E:\;Execution / hardware adjacency  & 2                \\
         \midrule
         Spectrum (mean, range)              & 2.0\;(2--2)      \\
-        Headline tier                       & 2~(E. Framework) \\
+        Headline tier                       & 2~(Framework) \\
         Quantum bias count                  & 7                \\
         \bottomrule
     \end{tabular}
@@ -267,7 +264,7 @@ Q\# is a domain-specific quantum programming language designed for expressing qu
         E:\;Execution / hardware adjacency  & 3                \\
         \midrule
         Spectrum (mean, range)              & 2.4\;(2--3)      \\
-        Headline tier                       & 2~(E. Framework) \\
+        Headline tier                       & 2~(Framework) \\
         Quantum bias count                  & 6                \\
         \bottomrule
     \end{tabular}
@@ -362,7 +359,7 @@ Qmod is a high-level quantum domain-specific language embedded in Python, design
         E:\;Execution / hardware adjacency  & 2                \\
         \midrule
         Spectrum (mean, range)              & 2.4\;(2--3)      \\
-        Headline tier                       & 2~(E. Framework) \\
+        Headline tier                       & 2~(Framework) \\
         Quantum bias count                  & 5                \\
         \bottomrule
     \end{tabular}
@@ -506,14 +503,14 @@ Scores are reported for reference.
         E:\;Execution / hardware adjacency  & 3                \\
         \midrule
         Spectrum (mean, range)              & 2.2\;(2--3)      \\
-        Headline tier                       & 2~(E. Framework) \\
+        Headline tier                       & 2~(Framework) \\
         Quantum bias count                  & 4                \\
         \bottomrule
     \end{tabular}
 \end{center}
 
 Axes A--D place Quipper at the embedded-framework level, comparable to Qiskit and PennyLane, despite Quipper's Haskell embedding and functional paradigm.
-Axis~E reaches score~3, reflecting that Quipper's functional embedding provides greater hardware abstraction by default than the Python-embedded frameworks.
+Axis~E reaches score~3, reflecting that Quipper's functional embedding provides greater hardware abstraction by default than the Python-frameworks.
 The comparable positioning across axes A--D, regardless of host language and programming paradigm, indicates that the abstraction model governs tier assignment rather than the surface language.
 
 \subsection{Result summary}\label{subsec:system_assessments:summary}
@@ -559,6 +556,7 @@ Axis~A (mental model and vocabulary) shows the tightest constraint across the re
 Assembly systems score~0 and IR systems score~1.
 All four Embedded systems score~2; two of three High-level systems also score~2, with only Quff reaching score~3.
 No system reaches score~4 on axis~A, making it the most constrained axis in the assessment.
+Axis~A is the binding constraint on quantum-implicit tier membership in this review; it reflects the litmus test’s prerequisite-free learnability requirement rather than a limitation of any single implementation.
 
 Axis~B (primary artefact) shows the most within-tier differentiation in the Embedded group: Qiskit and PennyLane score~2 while Q\# and Qmod score~3 through program-structured authoring surfaces.
 All High-level systems score~3 on axis~B.
@@ -569,7 +567,7 @@ All Assembly systems score~0, both IR systems score~1, all four Embedded systems
 No within-tier outliers appear on axis~C, making it the axis most closely aligned with the tier hierarchy.
 
 Axis~D (compilation responsibility) follows a similar progression with one deviation.
-OpenQASM~3.0 scores~1 on axis~D, above its headline Assembly tier, reflecting its use as a lowering target for embedded frameworks.
+OpenQASM~3.0 scores~1 on axis~D, above its headline Assembly tier, reflecting its use as a lowering target for frameworks.
 All High-level systems score~3; Qmod also scores~3 in the Embedded group through its synthesis engine.
 
 Axis~E (execution and hardware adjacency) distinguishes Q\# from other Embedded systems.

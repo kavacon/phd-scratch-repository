@@ -33,7 +33,7 @@ The remaining lowering path is inherited via MLIR's built-in LLVM dialect, makin
 Programmers construct quantum circuits through Python library APIs, then transpile, optimise and execute on simulators or hardware backends.
 The SDK spans multiple layers: high-level algorithm libraries, a circuit construction layer, compilation and transpilation passes and backend execution interfaces.
 The primary authoring artefact is a circuit object model embedded in the host language, with optional import and export to lower-level formats including OpenQASM.
-Qiskit is the most widely adopted quantum programming framework by ecosystem breadth and project count~\cite{murillo2022sequantumprogramming,corralesgarro2025productivityexpressiveness}, providing the central reference point for the embedded circuit framework tier in this review.
+Qiskit is the most widely adopted quantum programming framework by ecosystem breadth and project count~\cite{murillo2022sequantumprogramming,corralesgarro2025productivityexpressiveness}, providing the central reference point for the framework tier in this review.
 
 \subsection{PennyLane}\label{subsec:system_descriptions:pennylane}
 \textit{PennyLane} is a Python framework for hybrid quantum--classical programming with a focus on differentiable computing~\cite{bergholm2018pennylane}.
@@ -88,7 +88,7 @@ The most notable abstraction is a Grover-based substring search operator: a quan
 
 \begin{figure}[htbp*]
     \centering
-    \begin{minipage}[t]{0.42\textwidth}
+    \begin{minipage}[t]{\linewidth}
         \centering
         \textbf{Qutes}
         \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
@@ -104,7 +104,7 @@ if ("01" in b) {
         \end{lstlisting}
     \end{minipage}
     \hfill
-    \begin{minipage}[t]{0.42\textwidth}
+    \begin{minipage}[t]{\linewidth}
         \centering
         \textbf{Qiskit (Python)}
         \begin{lstlisting}[basicstyle=\ttfamily\tiny,

@@ -1,6 +1,6 @@
 \section{Taxonomy of quantum programming systems}\label{sec:taxonomy}
 Classification of quantum programming systems lacks a consistent taxonomy that captures the different roles, purposes and abstraction levels of those systems.
-The landmark survey of the field~\cite{Gay2006QPLSurvey} classifies languages by formal properties: design paradigm, semantic model and compilation structure; it does not address abstraction level, ecosystem role or programmer productivity as classification dimensions, and predates the embedded framework and SDK ecosystem entirely.
+The landmark survey of the field~\cite{Gay2006QPLSurvey} classifies languages by formal properties: design paradigm, semantic model and compilation structure; it does not address abstraction level, ecosystem role or programmer productivity as classification dimensions, and predates the framework and SDK ecosystem entirely.
 Recent examination of progress in quantum system design finds that key requirements for greater programmer productivity remain unmet~\cite{corralesgarro2025productivityexpressiveness,nunez_corrales2025betterabstractmachines}; abstraction levels have not advanced despite the development of new self-described high-level quantum programming languages~\cite{furntratt2024higherabstractionlevels}.
 A move towards higher abstraction and better abstract machine models can only be accurately assessed with a well-defined, falsifiable mechanism for categorising quantum systems.
 This survey defines such a taxonomy, comprising five system types each occupying a distinct position in the quantum ecosystem by compilation role, usage model or abstraction level.
@@ -28,11 +28,11 @@ These axes follow directly from the abstraction hierarchy established in prior w
     Unlike classical IRs, which occupy a fixed position between source language and machine code, quantum IRs may operate at multiple levels of the compilation stack; a multi-level IR framework such as MLIR can represent quantum programs both before gate decomposition and after, depending on the dialect and compilation stage~\cite{McCaskey2021MLIRDialectQASM}.
     The tier is therefore defined by audience and intent rather than by stack position: IR systems target compiler and tooling authors, not programmers.
 
-    \item[Embedded framework]
-    Embedded framework-tier systems are libraries or SDKs hosted inside a general-purpose host language, typically Python.
+    \item[Framework]
+    Framework-tier systems are libraries or SDKs hosted inside a general-purpose host language, typically Python.
     Programmers construct circuit objects or quantum nodes via API calls; the circuit object model is the central programmer-facing artefact~\cite{aleksandrowicz2019qiskit,bergholm2018pennylane}.
     Abstraction is library-driven rather than language-defined: the host language provides control flow, data structures and tooling, while the framework provides quantum capabilities and backend portability via transpilation and IR export.
-    The key boundary from the high-level tier is that embedded frameworks expose the circuit as the primary artefact; high-level systems treat circuit construction as an implementation detail managed by the compiler.
+    The key boundary from the high-level tier is that frameworks expose the circuit as the primary artefact; high-level systems treat circuit construction as an implementation detail managed by the compiler.
 
     \item[High-level]
     High-level systems are quantum-explicit but structured.
@@ -83,34 +83,38 @@ Tier assignments are not reported here; they are findings produced by applying t
     \centering
     \caption{Systems under review. Tier assignments are reported in Section~\ref{sec:system_assessments}, not here.}
     \label{tab:taxonomy:systems}
-    \small
-    \begin{tabular}{ll}
-        \toprule
-        \textbf{System} & \textbf{Artefact type} \\
-        \midrule
-        OpenQASM~3.0~\cite{cross2022openqasm3} & Circuit description language \\
-        \addlinespace
-        QIR~\cite{qir_alliance_qir_spec_repo} & Compiler IR \\
-        \addlinespace
-        Q-MLIR~\cite{McCaskey2021MLIRDialectQASM} & Compiler IR \\
-        \addlinespace
-        Qiskit~\cite{aleksandrowicz2019qiskit} & Embedded circuit framework \\
-        \addlinespace
-        PennyLane~\cite{bergholm2018pennylane} & Embedded circuit framework \\
-        \addlinespace
-        Q\#~\cite{MicrosoftQSharpOverview} & Standalone QPL \\
-        \addlinespace
-        Silq~\cite{bichsel2020silq} & Standalone QPL \\
-        \addlinespace
-        Qmod~\cite{vax2025qmodexpressivehighlevelquantum} & Standalone QPL \\
-        \addlinespace
-        Quff~\cite{wright2024quff} & Standalone QPL \\
-        \addlinespace
-        Qutes~\cite{faro2025qutes,reversiblelifetime2026} & Standalone QPL \\
-        \addlinespace
-        Quipper~\cite{green2013quipper} & Embedded circuit framework\dag \\
-        \bottomrule
-    \end{tabular}
-    \footnotesize\dag~This system is unassessed and provided for comparison only.
-    See Section~\ref{subsec:methodology:quality}
+    \begin{threeparttable}
+        \small
+        \begin{tabular}{ll}
+            \toprule
+            \textbf{System}                                   & \textbf{Artefact type}       \\
+            \midrule
+            OpenQASM~3.0~\cite{cross2022openqasm3}            & Circuit description language \\
+            \addlinespace
+            QIR~\cite{qir_alliance_qir_spec_repo}             & Compiler IR                  \\
+            \addlinespace
+            Q-MLIR~\cite{McCaskey2021MLIRDialectQASM}         & Compiler IR                  \\
+            \addlinespace
+            Qiskit~\cite{aleksandrowicz2019qiskit}            & Embedded circuit framework   \\
+            \addlinespace
+            PennyLane~\cite{bergholm2018pennylane}            & Embedded circuit framework   \\
+            \addlinespace
+            Q\#~\cite{MicrosoftQSharpOverview}                & Standalone QPL               \\
+            \addlinespace
+            Silq~\cite{bichsel2020silq}                       & Standalone QPL               \\
+            \addlinespace
+            Qmod~\cite{vax2025qmodexpressivehighlevelquantum} & Standalone QPL               \\
+            \addlinespace
+            Quff~\cite{wright2024quff}                        & Standalone QPL               \\
+            \addlinespace
+            Qutes~\cite{faro2025qutes,reversiblelifetime2026} & Standalone QPL               \\
+            \addlinespace
+            Quipper~\cite{green2013quipper}\tnote{\dag}       & Embedded circuit framework   \\
+            \bottomrule
+        \end{tabular}
+        \begin{tablenotes}
+            \footnotesize
+            \item[\dag] Quipper is unassessed and provided for comparison only; see Section~\ref{subsec:methodology:quality}.
+        \end{tablenotes}
+    \end{threeparttable}
 \end{table}

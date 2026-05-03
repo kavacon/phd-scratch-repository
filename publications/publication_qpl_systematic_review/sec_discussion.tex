@@ -10,7 +10,7 @@ Existing systems satisfy the requirements of the tiers they occupy, but the quan
 
 The tier hierarchy is populated and each tier performs its designed function.
 Assembly and IR systems meet the hardware-fidelity and compilation requirements documented in Section~\ref{sec:system_assessments}.
-Embedded frameworks lower the circuit-construction barrier through API abstraction and transpilation infrastructure.
+Frameworks lower the circuit-construction barrier through API abstraction and transpilation infrastructure.
 The measured vocabulary burden remains substantial because the primary artefact is still a circuit; this reflects the tier's function, not a design failure~\cite{corralesgarro2025productivityexpressiveness,furntratt2024higherabstractionlevels}.
 High-level systems partially meet the usability requirements established in Section~\ref{sec:background}~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
 The most capable assessed systems provide program-level primary artefacts, compiler-managed resource handling and hardware agnosticism; quantum vocabulary remains required at the programming boundary.
@@ -22,8 +22,12 @@ The vocabulary requirement at the programming boundary reflects a paradigm prope
 Circuit-level programming requires bespoke quantum operations for each task in a manner the literature has likened to computation before abstraction layers became available~\cite{cobb2022higherlevelabstractions}.
 
 The spectrum score surfaces within-tier differentiation that the headline score alone does not capture.
-Q\# and Qmod score above their Embedded-tier peers on individual axes; both record a spectrum score of~2.4 against Qiskit and PennyLane at~2.0.
+Headline score is a gated classification: a system attains tier~$S$ only if at least four of five axes score $\geq S$.
+
+Accordingly, Q\# and Qmod should be read as mixed-profile systems: both exceed Framework-tier baselines on specific axes (reflected in their spectrum scores), but neither meets the four-axis threshold required for headline tier~3.
+Q\# and Qmod score above their framework-tier peers on individual axes; both record a spectrum score of~2.4 against Qiskit and PennyLane at~2.0.
 Within-tier differentiation of this kind is analogous to classical programming.
+
 C, Java and Rust are each classified within the same tier, yet they occupy measurably distinct positions within it.
 The quantum-implicit tier need not be perfectly implicit to provide a step change in accessibility.
 A language that hides quantum vocabulary by default while retaining expert access is a sufficient target; Java manages memory by default while preserving low-level access as an explicit choice.
@@ -37,8 +41,8 @@ Both systems are function-structured and provide substantial compiler assistance
 The near-perfect alignment between assessed and declared tiers might appear to indicate definitions calibrated to the assessed systems.
 Three findings are inconsistent with this interpretation.
 Q\# and Qmod score at headline~2, below their declared type; a rubric calibrated to confirmed declared types would not produce this downgrade.
-Quantum bias counts do not decrease monotonically with declared tier: PennyLane, an Embedded-tier system, has a higher quantum bias count than either IR system or the Assembly system.
-A Haskell-embedded functional language scores at the same tier as Python-embedded imperative frameworks on abstraction axes, confirming the instrument measures abstraction properties rather than host language or paradigm.
+Quantum bias counts do not decrease monotonically with declared tier: PennyLane, a framework-tier system, has a higher quantum bias count than either IR system or the Assembly system.
+A Haskell-embedded functional framework scores at the same tier as Python-embedded imperative frameworks on abstraction axes, confirming the instrument measures abstraction properties rather than host language or paradigm.
 The pre-registration of the review protocol prior to any scoring provides procedural protection against confirmation bias~\cite{kavadias2026qplSurveyProtocol}.
 The three findings above provide corroborating empirical evidence.
 
@@ -59,12 +63,12 @@ Both systems remain at score~2 on axis~A because the program's type system inher
 Axis~C provides a structural parallel.
 Axis~C follows a perfect tier-progression across the review set, from score~0 at Assembly to score~3 at High-level.
 Each tier transition was enabled by a type-theoretic advance.
-API-level discipline enabled the move from Assembly to Embedded; linear and affine type systems enabled the move to High-level~\cite{bichsel2020silq}.
+API-level discipline enabled the move from Assembly to Framework; linear and affine type systems enabled the move to High-level~\cite{bichsel2020silq}.
 Score~4 requires safety guarantees framed in non-quantum terms, with quantum operations accessible only as escape hatches.
 A type system that starts from quantum state and enforces constraints over it cannot reach this criterion by extension~\cite{yuan2025foundationalabstractions}.
 
 The quantum bias count distribution supports the same conclusion from a different direction.
-PennyLane, an Embedded-tier system, has a higher quantum bias count than either IR system or the Assembly system.
+PennyLane, a framework-tier system, has a higher quantum bias count than either IR system or the Assembly system.
 Quantum bias is use-case-driven, not tier-driven; variational optimisation requires interference, phase kickback and entanglement reasoning that basic circuit construction does not~\cite{corralesgarro2025productivityexpressiveness}.
 A quantum-implicit language must provide a use-case model in which these concepts do not arise as programmer responsibilities, not merely hide them behind an API.
 
