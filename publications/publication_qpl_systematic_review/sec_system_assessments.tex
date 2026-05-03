@@ -54,7 +54,7 @@ OpenQASM 3.0 is a quantum assembly language and intermediate representation desi
 \end{description}
 
 \paragraph{Scoring analysis}
-OpenQASM 3.0 receives a headline score of~0; four of five axes score~0 and the single axis-D score of~1 does not meet the four-axis threshold for headline~1 under Table~\ref{tab:scoring_levels}.
+OpenQASM 3.0 receives a headline score of~0; four of five axes score~0 and the single axis-D score of~1 does not meet the four-axis threshold for headline~1 under Table~\ref{tab:evaluation_rubric:scoring_levels}.
 The spectrum score of~0.2 (range~0--1) reflects this deviation: the compilation responsibility axis acknowledges OpenQASM's primary use as a lowering target for embedded frameworks.
 The gate-level vocabulary of the representation places axes A, B, C and E at score~0.
 All six hard-fail conditions are triggered.
@@ -147,7 +147,6 @@ Q-MLIR extends MLIR with a quantum dialect to enable progressive lowering from q
 
     \item[E\,(1):] Multiple backend targets are supported through progressive dialect lowering; hardware mapping is a property of the lowering pipeline rather than the surface representation~\cite{McCaskey2021MLIRDialectQASM}.
     Score~2 requires backend-portable frameworks with configurable options for programmers; Q-MLIR treats hardware mapping as a compiler concern.
-
 \end{description}
 
 \paragraph{Scoring analysis}
@@ -157,3 +156,488 @@ Five hard-fail conditions are triggered (conditions~1, 2, 3, 5 and~6): dialect o
 Quantum/classical marking is mandatory, entanglement is a required concept for correct dialect use and hardware mapping begins at the lowering layer.
 The quantum bias count of~7 is one higher than QIR, with entanglement as a resource required at the dialect level.
 Score~2 would require an embedded framework surface available to application programmers; Q-MLIR is a compilation infrastructure layer.
+
+\subsubsection{Qiskit}\label{subsubsec:system_assessments:qiskit}
+Qiskit is a Python-based quantum programming framework providing an in-memory circuit model and transpilation infrastructure for execution on quantum simulators and hardware backends~\cite{aleksandrowicz2019qiskit}.
+
+\begin{center}
+    \small
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Axis}                       & \textbf{Score}   \\
+        \midrule
+        A:\;Mental model / vocabulary       & 2                \\
+        B:\;Primary artefact                & 2                \\
+        C:\;Safety discipline \& guarantees & 2                \\
+        D:\;Compilation responsibility      & 2                \\
+        E:\;Execution / hardware adjacency  & 2                \\
+        \midrule
+        Spectrum (mean, range)              & 2.0\;(2--2)      \\
+        Headline tier                       & 2~(E. Framework) \\
+        Quantum bias count                  & 5                \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+\begin{description}
+    \item[A\,(2):] Qiskit programs are written in Python, but quantum vocabulary remains present in typical use; programmers construct\texttt{QuantumCircuit} objects by applying gate methods to named qubit registers~\cite{aleksandrowicz2019qiskit}.
+    Score~3 requires a structured algorithmic interface where programmers reason in quantum concepts; Qiskit requires explicit gate selection and circuit construction in typical workflows.
+
+    \item[B\,(2):] The central artefact is a \texttt{QuantumCircuit} object,constructed and manipulated within Python rather than authored as a standalone circuit file~\cite{aleksandrowicz2019qiskit}.
+    Score~3 requires that the primary artefact is a program rather than a circuit; in Qiskit, circuit construction is the primary authoring activity even though it occurs inside a Python script.
+
+    \item[C\,(2):] Safety discipline is API-driven; well-formed circuit construction, transpiler compatibility and measurement requirements are enforced at runtime rather than through a static type or affine system~\cite{aleksandrowicz2019qiskit}.
+    Score~3 requires stronger static discipline with linearity or effects guarantees; Qiskit provides no static safety and correctness depends on API adherence and runtime checks.
+
+    \item[D\,(2):] Qiskit performs significant transpilation and optimisation work including circuit decomposition, basis translation and hardware mapping.
+    Programmers still construct circuit structure explicitly and select gate-level operations~\cite{aleksandrowicz2019qiskit}.
+    Score~3 requires major compiler assistance such as safe uncomputation; Qiskit's transpiler operates on programmer-defined circuits without inferring quantum structure from higher-level intent.
+
+    \item[E\,(2):] Qiskit programs are often backend-portable through configurable transpiler passes, but backend constraints surface through transpilation choices and target-specific configuration~\cite{aleksandrowicz2019qiskit}.
+    Score~3 requires largely hardware-agnostic execution by default; Qiskit's hardware adjacency depends on the selected backend and transpilation level.
+\end{description}
+
+\paragraph{Scoring analysis}
+Qiskit receives a headline score of~2; all five axes score~2, reflecting uniform embedded-framework positioning under Table~\ref{tab:evaluation_rubric:scoring_levels}.
+The spectrum score of~2.0 (range~2--2) indicates no cross-axis variation.
+Three hard-fail conditions are triggered: the \texttt{QuantumCircuit} is the primary artefact (condition~1), qubits are named and explicitly allocated (condition~2) and quantum/classical register declarations are mandatory (condition~3).
+The quantum bias count of~5 reflects that phase kickback and basis change are required for correct gate selection in typical T\textsubscript{1}--T\textsubscript{5}workflows.
+Score~3 would require the primary artefact to be a program rather than a circuit; Qiskit's circuit-construction model places all five axes at score~2.
+
+\subsubsection{PennyLane}\label{subsubsec:system_assessments:pennylane}
+PennyLane is a Python-based quantum machine learning framework providing differentiable quantum computing through QNodes integrated with classical autodifferentiation libraries~\cite{bergholm2018pennylane}.
+
+\begin{center}
+    \small
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Axis}                       & \textbf{Score}   \\
+        \midrule
+        A:\;Mental model / vocabulary       & 2                \\
+        B:\;Primary artefact                & 2                \\
+        C:\;Safety discipline \& guarantees & 2                \\
+        D:\;Compilation responsibility      & 2                \\
+        E:\;Execution / hardware adjacency  & 2                \\
+        \midrule
+        Spectrum (mean, range)              & 2.0\;(2--2)      \\
+        Headline tier                       & 2~(E. Framework) \\
+        Quantum bias count                  & 7                \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+\begin{description}
+    \item[A\,(2):] PennyLane programs are written as Python QNode functions; quantum vocabulary including gates, wires, measurement statistics,entanglement and phase remains present and required throughout variational and optimisation workflows~\cite{bergholm2018pennylane}.
+    Score~3 requires a structured algorithmic interface; PennyLane requires gate-level and measurement-level understanding for correct circuit construction and optimisation convergence.
+
+    \item[B\,(2):] The central artefact is a QNode, a quantum circuit function embedded in a classical computational graph, constructed by applying quantum operations to wire indices within a Python function~\cite{bergholm2018pennylane}.
+    Score~3 requires that the primary artefact is a program rather than a circuit; PennyLane's QNode is circuit-centric even though it is expressed as a Python callable.
+
+    \item[C\,(2):] Safety discipline is API-driven; circuit validity,measurement requirements and backend compatibility are enforced by the framework at runtime without a static type or affine system~\cite{bergholm2018pennylane}.
+    Score~3 requires stronger static guarantees; PennyLane provides no static safety and correctness depends on framework-level runtime checks.
+
+    \item[D\,(2):] PennyLane provides major compilation assistance including automatic differentiation via parameter-shift rules and device-native gradient methods, but programmers still construct circuit structure and select quantum operations~\cite{bergholm2018pennylane}.
+    Score~3 requires major compiler assistance such as safe uncomputation; PennyLane's differentiation infrastructure does not infer quantum structure from non-quantum intent.
+
+    \item[E\,(2):] PennyLane's plugin architecture provides backend-portable execution across simulators and hardware providers under a unified interface, but phase and basis choices remain visible in typical circuit construction~\cite{bergholm2018pennylane}.
+    Score~3 requires largely hardware-agnostic execution by default; PennyLane's portability is at the execution level while the circuit vocabulary remains quantum-explicit.
+\end{description}
+
+\paragraph{Scoring analysis}
+PennyLane receives a headline score of~2; all five axes score~2, reflecting uniform embedded-framework positioning under Table~\ref{tab:evaluation_rubric:scoring_levels}.
+The spectrum score of~2.0 (range~2--2) indicates no cross-axis variation.
+Three hard-fail conditions are triggered: the QNode is the primary circuit artefact (condition~1),wires and qubits are explicitly indexed (condition~2) and quantum/classical function boundaries are mandatory (condition~3).
+The quantum bias count of~7 is the highest among the embedded-framework systems.
+Three additional concepts are present relative to Qiskit; entanglement, interference and phase kickback reflect the vocabulary requirements of variational optimisation workflows.
+Score~3 would require the primary artefact to be a program rather than a circuit; PennyLane's QNode model places all five axes at score~2.
+
+\subsubsection{Q\#}\label{subsubsec:system_assessments:qsharp}
+Q\# is a domain-specific quantum programming language designed for expressing quantum algorithms as structured callables with strong classical-quantum integration~\cite{MicrosoftQSharpOverview}.
+
+\begin{center}
+    \small
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Axis}                       & \textbf{Score}   \\
+        \midrule
+        A:\;Mental model / vocabulary       & 2                \\
+        B:\;Primary artefact                & 3                \\
+        C:\;Safety discipline \& guarantees & 2                \\
+        D:\;Compilation responsibility      & 2                \\
+        E:\;Execution / hardware adjacency  & 3                \\
+        \midrule
+        Spectrum (mean, range)              & 2.4\;(2--3)      \\
+        Headline tier                       & 2~(E. Framework) \\
+        Quantum bias count                  & 6                \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+\begin{description}
+    \item[A\,(2):] Q\# programs require explicit qubit allocation via \texttt{use} blocks, measurement returning \texttt{Result} values and reasoning about the quantum/classical control boundary; quantum vocabulary is present throughout typical programs~\cite{MicrosoftQSharpOverview}.
+    Score~3 requires structured quantum reasoning with an algorithmic interface; Q\# requires active qubit management and observation-boundary reasoning in typical workflows, placing the mental model at score~2.
+
+    \item[B\,(3):] Programs are structured as callables — operations and functions — with types, generics and control flow; the circuit is a compiler output rather than the primary authoring surface~\cite{MicrosoftQSharpOverview}.
+    Score~4 requires a mathematical or computational-level primary artefact without quantum type vocabulary; Q\# programs remain quantum-explicit in their callable signatures and type structure.
+
+    \item[C\,(2):] Q\# operations support \texttt{Adjoint} and \texttt{Controlled} functor declarations, enabling reuse of inverse and controlled variants, but no comprehensive static linearity or affine discipline is enforced across programs~\cite{MicrosoftQSharpOverview}.
+    Score~3 requires stronger static discipline with linearity, effects and an explicit uncomputation story; Q\# provides functor-based reuse without the annotation system required for score~3.
+
+    \item[D\,(2):] The runtime maps logical qubits to physical qubits, removing hardware-level qubit management from typical programs, but programmers still select quantum operations and construct quantum structure explicitly~\cite{MicrosoftQSharpOverview}.
+    Score~3 requires major compiler assistance such as safe uncomputation; Q\#'s runtime manages hardware mapping but does not infer quantum structure from non-quantum intent.
+
+    \item[E\,(3):] Hardware constraints including basis gates, connectivity and timing are not surfaced in typical Q\# programs; the runtime maps logical to physical qubits and handles hardware specifics~\cite{MicrosoftQSharpOverview}.
+    Score~4 requires that hardware constraints are hidden by default with opt-in access only; Q\# does not make this separation explicit at the language level, and lower-level access remains available.
+
+\end{description}
+
+\paragraph{Scoring analysis}
+Q\# receives a headline score of~2 under the gating rule in Table~\ref{tab:evaluation_rubric:scoring_levels}: only axes B and E reach score~3, which does not meet the four-axis threshold for headline~3.
+The spectrum score of~2.4 (range~2--3) reflects meaningful cross-axis variation; B and E reach the high-level tier while A, C and D remain at score~2.
+Two hard-fail conditions are triggered: qubit identity and lifetime obligation via \texttt{use} blocks and mandatory \texttt{Reset} before qubit release(condition~2), and mandatory quantum/classical marking through the operations-versus-functions distinction (condition~3).
+The quantum bias count of~6 includes reversibility and uncomputation, required as a conceptual prerequisite for correct use of \texttt{Adjoint} functors rather than as an operational obligation.
+Score~3 across A, C and D would require structured algorithmic vocabulary, a static linearity discipline and major compiler assistance; these axes determine the headline under the gating rule.
+
+\subsubsection{Silq}\label{subsubsec:system_assessments:silq}
+Silq is a standalone statically typed quantum programming language whose defining contribution is compiler-managed automatic uncomputation~\cite{bichsel2020silq}.
+
+\begin{center}
+    \small
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Axis}                       & \textbf{Score} \\
+        \midrule
+        A:\;Mental model / vocabulary       & 2              \\
+        B:\;Primary artefact                & 3              \\
+        C:\;Safety discipline \& guarantees & 3              \\
+        D:\;Compilation responsibility      & 3              \\
+        E:\;Execution / hardware adjacency  & 3              \\
+        \midrule
+        Spectrum (mean, range)              & 2.8\;(2--3)    \\
+        Headline tier                       & 3~(High-level) \\
+        Quantum bias count                  & 4              \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+\begin{description}
+    \item[A\,(2):] Every value must be classified as classical (\texttt{!}-typed) or quantum at declaration; understanding when this distinction applies requires understanding superposition and the consequences of measurement.
+    Quantum vocabulary is a prerequisite for correct use~\cite{bichsel2020silq}.
+    Score~3 requires structured quantum vocabulary at the surface; Silq requires quantum-mechanical reasoning for value classification, placing the mental model at score~2.
+
+    \item[B\,(3):] Programs are structured functions and control flow; the circuit is a compiler output rather than the authoring surface~\cite{bichsel2020silq}.
+    Score~4 requires a mathematical or computational-level primary artefact; Silq programs remain quantum-explicit in type vocabulary despite not requiring circuit construction.
+
+    \item[C\,(3):] Annotations (\texttt{!}, \texttt{qfree}, \texttt{const}, \texttt{lifted}, \texttt{mfree}) enforce linearity and no-cloning constraints; the compiler statically validates uncomputation safety before insertion~\cite{bichsel2020silq}.
+    Score~4 requires guarantees framed in non-quantum terms; Silq's safety discipline is expressed in quantum mechanical terms throughout.
+
+    \item[D\,(3):] The compiler inserts uncomputation wherever annotations permit safety, removing explicit adjoint circuit obligations~\cite{bichsel2020silq}.
+    Score~4 requires compiler inference of quantum structure from non-quantum intent; Silq synthesises uncomputation but requires quantum-explicit programming.
+
+    \item[E\,(3):] Device connectivity, timing and basis sets are absent from typical Silq workflows~\cite{bichsel2020silq}.
+    Score~4 requires hardware hidden by default with opt-in access only; Silq does not make this separation explicit and gate-level primitives remain accessible.
+\end{description}
+
+\paragraph{Scoring analysis}
+Silq receives a headline score of~3; four of five axes reach score~3, with axis~A at score~2 not affecting the tier assignment under Table~\ref{tab:evaluation_rubric:scoring_levels}.
+The spectrum score of~2.8 (range~2--3) indicates narrow, consistent positioning within the high-level tier.
+Two hard-fail conditions are triggered: mandatory \texttt{!}-type marking (condition~3: mandatory quantum/classical marking) and qubit lifetime obligation via the \texttt{const}/ownership discipline (condition~2: qubit identity or lifetime).
+Reversibility and uncomputation appear in the quantum bias count as conceptual prerequisites for the annotation system but are not independently triggered as a hard-fail condition, since the operation itself is compiler-managed.
+The four quantum bias items are superposition as amplitudes, measurement collapse, no-cloning and linearity, and reversibility and uncomputation.
+The axis-A ceiling is the primary constraint; raising it to score~3 would require removing mandatory classical/quantum classification from typical workflows.
+
+\subsubsection{Qmod}\label{subsubsec:system_assessments:qmod}
+Qmod is a high-level quantum domain-specific language embedded in Python, designed to express algorithmic intent through quantum-native types and a synthesis engine that handles gate-level realisation~\cite{vax2025qmodexpressivehighlevelquantum}.
+
+\begin{center}
+    \small
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Axis}                       & \textbf{Score}   \\
+        \midrule
+        A:\;Mental model / vocabulary       & 2                \\
+        B:\;Primary artefact                & 3                \\
+        C:\;Safety discipline \& guarantees & 2                \\
+        D:\;Compilation responsibility      & 3                \\
+        E:\;Execution / hardware adjacency  & 2                \\
+        \midrule
+        Spectrum (mean, range)              & 2.4\;(2--3)      \\
+        Headline tier                       & 2~(E. Framework) \\
+        Quantum bias count                  & 5                \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+\begin{description}
+    \item[A\,(2):] Quantum data lives in distinct types (\texttt{QNum}, \texttt{QArray}, \texttt{QStruct}) and programs use quantum-native numeric expressions including digital, phase and amplitude representations~\cite{vax2025qmodexpressivehighlevelquantum}.
+    Score~3 requires a structured algorithmic interface; Qmod requires understanding superposition as amplitudes and the qubit resource model to correctly select quantum type encodings, placing the mental model at score~2.
+
+    \item[B\,(3):] Programmers author algorithms that manipulate quantum objects rather than constructing circuit sequences; the synthesis engine produces gate-level realisations from the high-level description~\cite{vax2025qmodexpressivehighlevelquantum}.
+    Score~4 requires a mathematical or computational-level artefact without quantum type vocabulary; Qmod programs remain quantum-explicit through their type signatures and allocation structure.
+
+    \item[C\,(2):] Quantum-specific constraints including no-cloning via by-value semantics and reversibility obligations via within-apply restrictions are enforced, but no comprehensive static annotation system governs value safety~\cite{vax2025qmodexpressivehighlevelquantum}.
+    Score~3 requires stronger static discipline with linearity, effects and an explicit uncomputation story; Qmod enforces quantum constraints through synthesis semantics rather than a static type system.
+
+    \item[D\,(3):] The synthesis engine handles encoding choices, optimisation and uncomputation insertion without programmer instruction; programmers still select quantum constructs and type encodings~\cite{vax2025qmodexpressivehighlevelquantum}.
+    Score~4 requires compiler inference of quantum structure from non-quantum intent; Qmod synthesises from quantum-explicit descriptions rather than classical computational intent.
+
+    \item[E\,(2):] Qubit allocation is explicit via the \texttt{allocate} construct and values expose qubit-size information, making resource concerns visible in typical programs~\cite{vax2025qmodexpressivehighlevelquantum}.
+    Score~3 requires largely hardware-agnostic execution by default; Qmod's explicit qubit allocation model surfaces resource concerns that are not present at score~3.
+\end{description}
+
+\paragraph{Scoring analysis}
+Qmod receives a headline score of~2; only axes B and D reach score~3, which does not meet the four-axis threshold for headline~3 under Table~\ref{tab:evaluation_rubric:scoring_levels}.
+The spectrum score of~2.4 (range~2--3) reflects this cross-axis variation: the synthesis engine (axis~D) and object-level programming model (axis~B) reach high-level positioning while vocabulary, safety discipline and resource visibility remain at score~2.
+Three hard-fail conditions are triggered: qubit allocation is explicit via the \texttt{allocate} construct (condition~2: qubit identity or lifetime), quantum type declarations are mandatory (condition~3) and amplitude-level encoding selection is required for correct type use (condition~4: mandatory amplitude or phase mechanics).
+The five quantum bias items are qubits as a distinct resource, superposition as amplitudes, measurement collapse, no-cloning and linearity, and reversibility and uncomputation.
+Score~3 on the headline would require at least two of axes A, C and E to reach score~3; axes A and E are the primary constraints, with qubit resource visibility and amplitude-level vocabulary present throughout typical programs.
+
+\subsubsection{Quff}\label{subsubsec:system_assessments:quff}
+Quff is a scripting-language-style quantum programming language with a hybrid quantum--classical execution model and runtime-managed automatic uncomputation on variable scope exit~\cite{wright2024quff}.
+
+\begin{center}
+    \small
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Axis}                       & \textbf{Score} \\
+        \midrule
+        A:\;Mental model / vocabulary       & 3              \\
+        B:\;Primary artefact                & 3              \\
+        C:\;Safety discipline \& guarantees & 3              \\
+        D:\;Compilation responsibility      & 3              \\
+        E:\;Execution / hardware adjacency  & 3              \\
+        \midrule
+        Spectrum (mean, range)              & 3.0\;(3--3)    \\
+        Headline tier                       & 3~(High-level) \\
+        Quantum bias count                  & 3              \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+\begin{description}
+    \item[A\,(3):] Programs use functions, classes and control flow in a scripting-like surface; programmers still reason explicitly about the quantum--classical boundary and quantum mechanical constraints in typical use~\cite{wright2024quff}.
+    Score~4 requires non-trivial programs to be written without quantum vocabulary; Quff requires awareness of the quantum--classical boundary for correct programming, placing the mental model at score~3.
+
+    \item[B\,(3):] The primary artefact is a structured source program with high-level quantum and classical constructs rather than a circuit object~\cite{wright2024quff}.
+    Score~4 requires a mathematical or computational-level artefact; Quff programs express quantum operations explicitly even though circuit construction is not required.
+
+    \item[C\,(3):] The runtime and compiler IR detect unrealisable quantum actions and warn when attempted; uncomputation failure causes qubit unavailability, providing a stronger guarantee than convention-only safety~\cite{wright2024quff}.
+    Score~4 requires guarantees framed in non-quantum terms with quantum operations as optional escape hatches; Quff's safety story is expressed in quantum mechanical terms throughout.
+
+    \item[D\,(3):] Quantum variables are automatically uncomputed at scope exit by the runtime, removing explicit adjoint obligations; programmers still select quantum constructs explicitly~\cite{wright2024quff}.
+    Score~4 requires compiler inference of quantum structure from non-quantum intent; Quff synthesises uncomputation but requires quantum-explicit programming.
+
+    \item[E\,(3):] Typical Quff programs are hardware-agnostic; optional lower-level features such as explicitly sized unsigned-integer sugar for binary states are available but not required in typical workflows~\cite{wright2024quff}.
+    Score~4 requires hardware constraints hidden by default with opt-in access only; Quff does not make this separation explicit at the language level.
+\end{description}
+
+\paragraph{Scoring analysis}
+Quff receives a headline score of~3; all five axes score~3, reflecting uniform high-level positioning under Table~\ref{tab:evaluation_rubric:scoring_levels}.
+The spectrum score of~3.0 (range~3--3) indicates no cross-axis variation.
+Two hard-fail conditions are triggered: quantum variable resource management is programmer-visible through the scope-exit uncomputation model (condition~2: qubit identity or lifetime) and the quantum--classical boundary must be explicitly reasoned about in typical programs (condition~3: mandatory quantum/classical marking).
+The quantum bias count of~3 is the lowest in the review set; the three items are qubits as a distinct resource, measurement collapse and no-cloning and linearity.
+The score-4 ceiling on all axes is the quantum--classical boundary awareness required in typical use.
+All axis scores depend on a single peer-reviewed source~\cite{wright2024quff}; this single-source dependency is acknowledged as a limitation in Section~\ref{subsec:methodology:sensitivity}.
+
+\subsubsection{Qutes}\label{subsubsec:system_assessments:qutes}
+Qutes is a standalone imperative quantum programming language with a static compiler frontend and scope-bounded liveness-guided automatic uncomputation~\cite{faro2025qutes,reversiblelifetime2026}.
+
+\begin{center}
+    \small
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Axis}                       & \textbf{Score} \\
+        \midrule
+        A:\;Mental model / vocabulary       & 2              \\
+        B:\;Primary artefact                & 3              \\
+        C:\;Safety discipline \& guarantees & 3              \\
+        D:\;Compilation responsibility      & 3              \\
+        E:\;Execution / hardware adjacency  & 3              \\
+        \midrule
+        Spectrum (mean, range)              & 2.8\;(2--3)    \\
+        Headline tier                       & 3~(High-level) \\
+        Quantum bias count                  & 4              \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+\begin{description}
+    \item[A\,(2):] Quantum variables require explicit type declarations (\texttt{qubit}, \texttt{quint}, \texttt{qustring}) at every declaration; state initialisation uses Dirac notation, which has no classical analogue and requires understanding superposition~\cite{faro2025qutes}.
+    Score~3 requires structured quantum vocabulary with an algorithmic interface; Qutes requires mandatory quantum type declarations and superposition-level understanding for correct initialisation, placing the mental model at score~2.
+
+    \item[B\,(3):] The primary artefact is an imperative source program with functions, arrays and control flow compiled via a standalone frontend; circuit construction is not required~\cite{faro2025qutes}.
+    Score~4 requires a mathematical or computational-level artefact; Qutes programs remain quantum-explicit through mandatory quantum type declarations.
+
+    \item[C\,(3):] Static liveness and entanglement analysis determines safe uncomputation points at scope exit; the compiler inserts adjoint operations automatically and enforces a restoration invariant~\cite{reversiblelifetime2026}.
+    Score~4 requires guarantees framed in non-quantum terms; Qutes' safety discipline is expressed in quantum mechanical terms including liveness analysis, entanglement tracking and adjoint insertion.
+
+    \item[D\,(3):] The compiler schedules uncomputation in parallel with forward computation using a dependency graph, inserting adjoint operations without programmer instruction; programmers still select quantum constructs explicitly~\cite{reversiblelifetime2026}.
+    Score~4 requires compiler inference of quantum structure from non-quantum intent; Qutes synthesises uncomputation from quantum-explicit descriptions.
+
+    \item[E\,(3):] Hardware mapping is delegated by default to a Qiskit backend; gate-level keywords are available but not required for built-in algorithmic operations~\cite{faro2025qutes}.
+    Score~4 requires hardware constraints hidden by default with opt-in access only; Qutes exposes gate-level keywords in the language surface even though they are not required in typical use.
+\end{description}
+
+\paragraph{Scoring analysis}
+Qutes receives a headline score of~3; four of five axes reach score~3, with axis~A at score~2 not affecting the tier assignment under Table~\ref{tab:evaluation_rubric:scoring_levels}.
+The spectrum score of~2.8 (range~2--3) mirrors the Silq profile, reflecting consistent high-level positioning with a single axis below the headline threshold.
+Three hard-fail conditions are triggered: mandatory quantum type declarations at every variable (condition~2: qubit identity, and condition~3: mandatory quantum/classical marking) and Dirac notation for state initialisation requiring superposition understanding (condition~4: mandatory amplitude or phase mechanics).
+The four quantum bias items are qubits as a distinct resource, superposition as amplitudes, measurement collapse and no-cloning and linearity.
+The axis-A ceiling is the primary constraint; raising it to score~3 would require removing mandatory quantum type declarations and Dirac notation from typical initialisation workflows.
+The axis-C and axis-D scores of~3 depend critically on a single preprint~\cite{reversiblelifetime2026} for the reversible lifetime semantics mechanism; this dependency is flagged as a leave-one-out case in Section~\ref{subsec:methodology:sensitivity}.
+
+\subsection{Quipper reference aside}\label{subsec:system_assessments:quipper_aside}
+\textit{The following is an informal aside.
+Quipper was excluded from primary assessment in Section~\ref{sec:system_descriptions}; its scores do not contribute to the comparative analysis or the conclusions in Section~\ref{sec:discussion}.}
+
+Quipper is a Haskell-embedded functional quantum programming language~\cite{green2013quipper}.
+Scores are reported for reference.
+
+\begin{center}
+    \small
+    \begin{tabular}{@{}lc@{}}
+        \toprule
+        \textbf{Axis}                       & \textbf{Score}   \\
+        \midrule
+        A:\;Mental model / vocabulary       & 2                \\
+        B:\;Primary artefact                & 2                \\
+        C:\;Safety discipline \& guarantees & 2                \\
+        D:\;Compilation responsibility      & 2                \\
+        E:\;Execution / hardware adjacency  & 3                \\
+        \midrule
+        Spectrum (mean, range)              & 2.2\;(2--3)      \\
+        Headline tier                       & 2~(E. Framework) \\
+        Quantum bias count                  & 4                \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+Axes A--D place Quipper at the embedded-framework level, comparable to Qiskit and PennyLane, despite Quipper's Haskell embedding and functional paradigm.
+Axis~E reaches score~3, reflecting that Quipper's functional embedding provides greater hardware abstraction by default than the Python-embedded frameworks.
+The comparable positioning across axes A--D, regardless of host language and programming paradigm, indicates that the abstraction model governs tier assignment rather than the surface language.
+
+\subsection{Result summary}\label{subsec:system_assessments:summary}
+Table~\ref{tab:system_assessments:system_summary} presents axis scores, spectrum score, headline tier and quantum bias count for all ten primary systems.
+
+\begin{table*}[htbp*]
+    \centering
+    \caption{System assessment results.
+    Tier is the headline score assigned by the gating rule in Table~\ref{tab:evaluation_rubric:scoring_levels}.
+    Spectrum is the arithmetic mean of axes A--E (min--max).
+    QB~=~quantum bias count.}
+    \label{tab:system_assessments:system_summary}
+    \small
+    \begin{tabular}{@{}lcccccccc@{}}
+        \toprule
+        \textbf{System} & \textbf{Tier} & \textbf{A} & \textbf{B} & \textbf{C} & \textbf{D} & \textbf{E} & \textbf{Spectrum} & \textbf{QB} \\
+        \midrule
+        OpenQASM 3.0    & Assembly      & 0          & 0          & 0          & 1          & 0          & 0.2~(0--1)        & 6           \\
+        \midrule
+        QIR             & IR            & 1          & 1          & 1          & 1          & 1          & 1.0~(1--1)        & 6           \\
+        Q-MLIR          & IR            & 1          & 1          & 1          & 1          & 1          & 1.0~(1--1)        & 7           \\
+        \midrule
+        Qiskit          & Embedded      & 2          & 2          & 2          & 2          & 2          & 2.0~(2--2)        & 5           \\
+        PennyLane       & Embedded      & 2          & 2          & 2          & 2          & 2          & 2.0~(2--2)        & 7           \\
+        Q\#             & Embedded      & 2          & 3          & 2          & 2          & 3          & 2.4~(2--3)        & 6           \\
+        Qmod            & Embedded      & 2          & 3          & 2          & 3          & 2          & 2.4~(2--3)        & 5           \\
+        \midrule
+        Silq            & High-level    & 2          & 3          & 3          & 3          & 3          & 2.8~(2--3)        & 4           \\
+        Quff            & High-level    & 3          & 3          & 3          & 3          & 3          & 3.0~(3--3)        & 3           \\
+        Qutes           & High-level    & 2          & 3          & 3          & 3          & 3          & 2.8~(2--3)        & 4           \\
+        \bottomrule
+    \end{tabular}
+\end{table*}
+
+\subsection{Comparative analysis}\label{subsec:system_assessments:comparative}
+Tier groupings throughout this subsection refer to the headline score assigned by the gating rule in Table~\ref{tab:evaluation_rubric:scoring_levels}.
+Four systems receive a headline score of~2 and are grouped at the Embedded tier: Qiskit, PennyLane, Q\# and Qmod.
+
+\subsubsection{Axis pattern analysis}\label{subsubsec:system_assessments:axis_patterns}
+Axis scores increase with headline tier level on all five dimensions, but the degree of within-tier consistency varies by axis.
+
+Axis~A (mental model and vocabulary) shows the tightest constraint across the review set.
+Assembly systems score~0 and IR systems score~1.
+All four Embedded systems score~2; two of three High-level systems also score~2, with only Quff reaching score~3.
+No system reaches score~4 on axis~A, making it the most constrained axis in the assessment.
+
+Axis~B (primary artefact) shows the most within-tier differentiation in the Embedded group: Qiskit and PennyLane score~2 while Q\# and Qmod score~3 through program-structured authoring surfaces.
+All High-level systems score~3 on axis~B.
+Score~4, defined as a mathematical or computational-level primary artefact without quantum vocabulary, is not reached by any system.
+
+Axis~C (safety discipline and guarantees) follows the most consistent tier-progression pattern in the review set.
+All Assembly systems score~0, both IR systems score~1, all four Embedded systems score~2 and all three High-level systems score~3.
+No within-tier outliers appear on axis~C, making it the axis most closely aligned with the tier hierarchy.
+
+Axis~D (compilation responsibility) follows a similar progression with one deviation.
+OpenQASM~3.0 scores~1 on axis~D, above its headline Assembly tier, reflecting its use as a lowering target for embedded frameworks.
+All High-level systems score~3; Qmod also scores~3 in the Embedded group through its synthesis engine.
+
+Axis~E (execution and hardware adjacency) distinguishes Q\# from other Embedded systems.
+Q\# reaches score~3 alongside the three High-level systems while Qiskit, PennyLane and Qmod score~2.
+This shows that hardware agnosticism is not exclusively a feature of the High-level tier.
+
+The comparison of headline score with spectrum score reveals an additional pattern.
+Systems with uniform axis scores within their tier — Qiskit, PennyLane, QIR and Q-MLIR — have headline and spectrum scores that align exactly.
+Q\# and Qmod have spectrum scores of~2.4 despite headline scores of~2; two axes in each case reach score~3 without meeting the four-axis threshold for headline~3.
+Silq and Qutes have spectrum scores of~2.8 with headline scores of~3; axis~A at score~2 pulls the mean below the headline without affecting tier assignment.
+These gaps identify systems where individual axes reach higher-tier positioning without achieving the consistency required for a higher headline score.
+
+\subsubsection{Quantum bias drivers}\label{subsubsec:system_assessments:qb_drivers}
+Quantum bias counts range from~3 (Quff) to~7 (Q-MLIR and PennyLane) across the review set.
+The three High-level systems have the lowest counts (3--4), consistent with the expected reduction in required quantum concepts at higher tier levels.
+
+Q-MLIR's count of~7 reflects the full IR-level concept set, including entanglement as a resource required for correct understanding of multi-qubit dialect operations.
+PennyLane's count of~7 reflects the variational optimisation context.
+Phase kickback, basis change, interference and entanglement are all required for correct gradient-based optimisation workflows, beyond what basic circuit construction demands.
+
+Quantum bias count does not decrease monotonically from Assembly to Embedded.
+OpenQASM (Assembly, quantum bias count~=~6), QIR (IR, quantum bias count~=~6) and Q\# (Embedded, quantum bias count~=~6) share the same count despite spanning three tiers.
+The items differ: OpenQASM includes interference amplitude; Q\# includes reversibility and uncomputation required for correct use of the Adjoint functor; QIR includes hardware constraints and reversibility at the IR level.
+
+Axis~B scores correlate with quantum bias reduction: systems whose primary artefact is a structured program consistently show lower quantum bias counts.
+Q\# and Qmod retain counts of~6 and~5 respectively despite scoring~3 on axis~B, driven by qubit-level and amplitude-level vocabulary requirements that persist alongside the program-level authoring surface.
+
+\subsubsection{Spectrum distribution}\label{subsubsec:system_assessments:spectrum_distribution}
+Figure~\ref{fig:system_assessments:tier_distribution} shows the count of primary systems at each headline tier level.
+The review set spans four of the five taxonomy tiers: one system at Assembly, two at IR, four at Embedded and three at High-level.
+The Embedded tier contains the largest group.
+The quantum-implicit tier is unoccupied.
+
+The distribution is skewed toward the lower tiers; seven of ten systems score at headline level~2 or below.
+The three High-level systems represent the uppermost populated tier.
+No system crosses the tier boundary established by the litmus test in Section~\ref{subsubsec:taxonomy:quantum_implicit}.
+
+\begin{figure}[h]
+    \centering
+% Placeholder: horizontal bar chart
+% x-axis: count of systems (0--5)
+% y-axis: tier levels (Assembly, IR, Embedded, High-level, Quantum-implicit)
+% Quantum-implicit bar = 0; bars labelled with counts
+    \caption{Distribution of primary systems across headline tier levels.}
+    \label{fig:system_assessments:tier_distribution}
+\end{figure}
+
+\subsubsection{Cross-axis score heatmap}\label{subsubsec:system_assessments:heatmap}
+Figure~\ref{fig:system_assessments:score_heatmap} presents the complete scoring matrix as a heatmap, with systems in rows ordered by tier and axes A--E in columns.
+The heatmap reveals three visual zones: a low-value cluster for Assembly and IR systems (scores 0--1), a mid-range band for Embedded systems (predominantly score~2 with isolated score~3 cells) and a high-value band for High-level systems (predominantly score~3).
+Axis~A appears consistently lighter than axes B--E in the High-level band, reflecting the single-axis constraint identified in Section~\ref{subsubsec:system_assessments:axis_patterns}.
+No cell reaches score~4.
+
+\begin{figure}[h]
+    \centering
+% Placeholder: 10x5 heatmap
+% Rows: systems in §8.1 order; columns: axes A--E
+% Colour scale: 0--4 (white to dark blue); cells labelled with scores
+    \caption{Cross-axis score heatmap for all ten primary systems.}
+    \label{fig:system_assessments:score_heatmap}
+\end{figure}
+
+\subsubsection{Quantum-implicit gap finding}\label{subsubsec:system_assessments:qi_gap}
+No system in the review set scores~4 on any rubric axis.
+The highest axis score observed is~3, achieved by Quff uniformly across all five axes and by Silq and Qutes on axes B--E.
+Axis~A is the most constrained: only Quff reaches score~3, and no system approaches score~4.
+
+The quantum-implicit tier requires a headline score of~4 under the gating rule in Table~\ref{tab:evaluation_rubric:scoring_levels}.
+No system satisfies the litmus test in Section~\ref{subsubsec:taxonomy:quantum_implicit}; the quantum-implicit tier is unoccupied.
+The closest approach is Quff, whose uniform score of~3 across all five axes places it one level below the quantum-implicit threshold on every dimension.
+The findings of this section are interpreted in Section~\ref{sec:discussion}.
