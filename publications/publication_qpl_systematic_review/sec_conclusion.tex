@@ -1,0 +1,33 @@
+\section{Conclusion}\label{sec:conclusion}
+The central finding of this review is that the quantum-implicit tier is definable, its entry criteria are derivable from the existing literature and no current quantum programming system occupies it.
+The tier hierarchy is populated at Assembly, IR, Framework and High-level, but the tier at which programmers write non-trivial programs without quantum-mechanical prerequisites remains absent.
+This finding answers both research questions.
+No existing system meets the requirements for the quantum-implicit tier (RQ1); the gap is structural rather than incremental and a new language targeting this tier is justified (RQ2).
+The five contributions are a criterion-based tier taxonomy, a five-axis evaluation rubric with explicit score-4 entry conditions, an operationalisation of quantum bias, comparative assessments of eleven systems and empirical evidence that the quantum-implicit tier is unoccupied.
+
+\paragraph{Limitations}
+The evaluation rubric is theoretically grounded but has not been subjected to empirical validation.
+Axis weights and score thresholds are derived from the literature and should be treated as principled rather than empirically calibrated~\cite{Coblenz2021PLIERS,Myers2016PLUsabilitySIG}.
+The findings reflect a snapshot of the field as of 2026-04-08; the quantum programming ecosystem evolves rapidly and systems may advance beyond their assessed state by the time of publication.
+The assessment is against theoretical abstraction requirements; practitioner evidence cited in Section~\ref{sec:background} is observational~\cite{ferreira2024qplusage} and a complementary user study would strengthen the design implications independently of the rubric.
+The system selection criteria were pre-specified and PRISMA-compliant, but photonic computing languages and topological qubit frameworks are underrepresented; findings may not generalise fully across all quantum computing paradigms.
+
+\paragraph{Rubric validation}
+The most immediate future work is empirical validation of the evaluation instrument.
+A documentation-only learnability study, in which participants complete T1--T5 using only public documentation for a small set of systems, would provide observable proxies for quantum bias burden~\cite{Coblenz2021PLIERS}.
+An inter-rater reliability study establishing Cohen's $\kappa$ across independent reviewers would provide a formal reliability measure for the axis scores~\cite{Myers2016PLUsabilitySIG}.
+
+\paragraph{System set and task suite expansion}
+Systems excluded for failing a single inclusion criterion and systems that post-date the protocol registration are natural candidates for an expanded review.
+Domain-specific task suites covering quantum chemistry, variational algorithms and quantum networking would stress-test the rubric beyond the general T1--T5 workloads~\cite{ferreira2024qplusage}.
+The Assembly-tier boundary is also evolving; OpenQASM's progression toward intermediate representation features suggests that tier boundaries themselves may require revision as the field matures.
+
+\paragraph{Formalisation directions}
+Formalising the semantics of quantum-implicit constructs is the theoretical counterpart to this empirical study.
+The foundational abstractions framework~\cite{yuan2025foundationalabstractions} provides the most direct starting point for specifying compiler obligations at the quantum-implicit tier.
+Verified compilation patterns for quantum domains demonstrate that end-to-end correctness guarantees across a compilation pipeline are achievable~\cite{verifiedcompiler2025qblue}.
+ZX-calculus completeness results establish a graphical framework capable of verifying any quantum circuit equivalence~\cite{zxworkingquantumscientist2020}, providing a candidate theoretical foundation for semantics-preserving compilation rewrites.
+
+\paragraph{Prototype language design}
+The design implications in Section~\ref{subsec:discussion:implications} motivate a prototype language that embodies score-4 on all five axes while retaining explicit escape hatches for optimisation and hardware-specific tuning.
+Designing, implementing and evaluating such a language against the T1--T5 task suite is the immediate next step in the research programme to which this review contributes.
