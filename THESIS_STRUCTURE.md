@@ -78,6 +78,10 @@ Top-level:
         - `sec_{section_slug}.tex` (individual sections)
     - `publication_language_design/`
     - `publication_compilation_dynamic_static/`
+- `reports/` (Thesis reports and reviews)
+    - `report_pre_confirmation/`
+        - `main.tex` (standalone report build entrypoint, self-contained)
+    - `report_confirmation/`
 - `figures/`
 - `tables/`
 - `bib/references.bib`
@@ -126,6 +130,96 @@ Agent instructions:
 - Ensure the thesis build (`/main.tex`) and paper builds do not conflict:
     - keep paper-specific class/style files in `latex_styles/` and reference via relative paths.
     - keep macros shared in `preamble/macros.tex` and input them from both thesis and paper builds as appropriate.
+
+## Shared preamble usage (packages.tex)
+
+All LaTeX documents (thesis, publications, reports) should use the shared preamble files to avoid duplicating package imports:
+
+- `preamble/packages.tex` — Common LaTeX packages used across all documents
+- `preamble/macros.tex` — Custom macros and commands
+- `preamble/bibliography.tex` — Common bibliography resources
+
+Each document's `main.tex` should input these files using relative paths, then specify the bibliography resource directly:
+
+```latex
+\input{../../preamble/packages}
+\input{../../preamble/macros}
+\input{../../preamble/bibliography}
+```
+
+Then use `\printbibliography` (not `\bibliography{}`) in the document body.
+
+## Reports and reviews (thesis milestones)
+
+Reports and reviews are supplemental documents for thesis milestones (e.g., pre-confirmation, confirmation). Unlike publications, they are NOT imported into the thesis. They:
+
+- Live under `reports/report_{unique_term}/`
+- Contain a single `main.tex` (self-contained, no `content.tex` split)
+- Use the shared preamble (`preamble/packages.tex`, etc.)
+- Can share references and macros with the thesis and publications
+- Are compiled independently via the build script: `./build.sh report_pre_confirmation`
+
+Naming convention: `reports/report_{unique_term}/` (no numeric identifiers).
+
+### Report `main.tex` template
+
+```latex
+\documentclass{article}
+
+\input{../../preamble/packages}
+\input{../../preamble/macros}
+\input{../../preamble/bibliography}
+
+\begin{document}
+
+\title{Report Title}
+\author{Your Name}
+
+\maketitle
+
+% Report content goes here directly
+
+\printbibliography
+
+\end{document}
+```
+
+## Build script (`build.sh`)
+
+The repo includes a `build.sh` script that compiles LaTeX documents using `pdflatex` and `biber`. It handles the working directory correctly so all relative paths resolve properly.
+
+### Usage
+
+```bash
+./build.sh <target>
+```
+
+### Available targets
+
+- `thesis` — Compiles the main thesis
+- `publication_{unique_term}` — Compiles a standalone publication
+- `report_{unique_term}` — Compiles a standalone report
+
+Run `./build.sh` without arguments to see all available targets.
+
+### How it works
+
+1. Sets the `SOURCE_DIR` based on the target:
+   - `thesis` → `thesis/`
+   - `publication_*` → `publications/<target>/`
+   - `report_*` → `reports/<target>/`
+
+2. Changes to `SOURCE_DIR` so all relative `\input{}` and `\include{}` paths resolve correctly
+
+3. Runs `pdflatex` → `biber` → `pdflatex` → `pdflatex` (standard LaTeX + biblatex workflow)
+
+4. Moves the final `main.pdf` to `SOURCE_DIR/build/` and cleans auxiliary files
+
+### Bibliography backend detection
+
+The script detects whether to use `bibtex` or `biber` by checking for biblatex commands in the `main.tex` file:
+- If `\addbibresource` or `\printbibliography` is found → uses `biber`
+- Otherwise → uses `bibtex`
 
 ## Chapter folder template
 
