@@ -10,6 +10,9 @@ usage() {
     for dir in "$REPO_ROOT"/publications/publication_*; do
         [ -d "$dir" ] && echo "  $(basename "$dir")"
     done
+    for dir in "$REPO_ROOT"/reports/report_*; do
+        [ -d "$dir" ] && echo "  $(basename "$dir")"
+    done
     exit 1
 }
 
@@ -25,6 +28,9 @@ case "$TARGET" in
         ;;
     publication_*)
         SOURCE_DIR="$REPO_ROOT/publications/$TARGET"
+        ;;
+    report_*)
+        SOURCE_DIR="$REPO_ROOT/reports/$TARGET"
         ;;
     *)
         echo "Error: Unknown target '$TARGET'"
@@ -60,12 +66,22 @@ echo ""
 OLD_DIR="$PWD"
 cd "$SOURCE_DIR"
 
+# Clear Biber cache to avoid stale/corrupted PAR cache issues
+echo "--- clear biber cache ---"
+rm -rf "$(biber --cache 2>/dev/null)"
+
 echo "--- pdflatex (1/4) ---"
+export BIBINPUTS="$REPO_ROOT/bib:"
 pdflatex -interaction=nonstopmode main.tex > /tmp/build-latex.log 2>&1
 
 echo "--- $BIB_BACKEND ---"
 if [ "$BIB_BACKEND" = "biber" ]; then
-    biber main
+    biber main 2>&1 | tee /tmp/build-biber.log
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        echo "ERROR: Biber failed"
+        cat /tmp/build-biber.log
+        exit 1
+    fi
 else
     bibtex -terse main
 fi
