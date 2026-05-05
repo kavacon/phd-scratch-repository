@@ -22,7 +22,7 @@ The review presented here does not do that and instead focuses on the intended p
         \toprule
         \textbf{Family} & \textbf{Description}          \\ \midrule
         High-level & Human-readable algorithmic logic; quantum resource management abstractions. \\
-        Embedded framework & Frameworks or libraries for interacting with quantum hardware hosted in classical languages like Python, also referred to as hosted languages~\cite{corralesgarro2025productivityexpressiveness}. \\
+        Framework & Frameworks or libraries for interacting with quantum hardware hosted in classical languages like Python, also referred to as hosted languages~\cite{corralesgarro2025productivityexpressiveness}. \\
         Intermediate representation (IR) & Machine-independent optimization and canonical representation (IR). \\
         Assembly & Mapping logic to hardware-level gate sequences and qubit registers. \\ \bottomrule
     \end{tabularx}
@@ -30,7 +30,7 @@ The review presented here does not do that and instead focuses on the intended p
 
 Each family represents a different role in the compilation and execution of quantum programs or provides ergonomic or abstraction benefits.
 The families of languages selected represent languages that are used by programmers in the development of quantum programs or those required to demonstrate the full compilation chains and comparisons of complexity.
-From those criteria languages eligible for inclusion are embedded frameworks in classical languages, intermediate representation languages, quantum assembly languages and high-level quantum development languages.
+From those criteria languages eligible for inclusion are frameworks in classical languages, intermediate representation languages, quantum assembly languages and high-level quantum development languages.
 Languages that solely represent hardware control and vendor or specific machine level languages are excluded from review as they are either not intended for human development or fail to add value to discussions about abstraction.
 
 To evaluate the current state of quantum programming languages, the review will consider the following elements of each language and family:
@@ -62,28 +62,23 @@ Regardless of the path, the literature converges on fundamental principles such 
     \item The programmers mental model exists in the problem space; not quantum mechanics or circuits.
 \end{itemize}
 
-Four language families are identified in the literature and introduced in Subsection~\ref{subsec:lit_rev:qpl:scope}:
-\begin{itemize}
-    \item High-level
-    \item Embedded framework
-    \item Intermediate representation
-    \item Assembly
-\end{itemize}
+Four language families are introduced in Table~\ref{tab:lit_rev:qpl:language_families}:
 
 Each offers different aspirational goals in the quantum programming domain.
-A summary is provided in Table~\ref{tab:lit_rev:qpl:language_family_taxonomy}.
+Examples of each are provided in Table~\ref{tab:lit_rev:qpl:language_family_taxonomy}.
 This subsection characterises each family; Subsection~\ref{subsec:lit_rev:qpl:reading} examines them in detail.
 \begin{table}[htbp]
     \centering
     \caption{Summary of quantum programming languages families and their defined aspirations.}
     \label{tab:lit_rev:qpl:language_family_taxonomy}
     \begin{tabularx}{\textwidth}{@{}>{\hsize=0.2\hsize}X>{\hsize=0.2\hsize}X>{\hsize=0.6\hsize}X@{}}
-        \toprule
-        \textbf{Family} & \textbf{Language Example} & \textbf{Description}          \\ \midrule
-        High-level & Silq & Algorithmic expression with compiler-managed quantum obligations. \\
-        Embedded framework & Qiskit & Ecosystem integration, hardware portability and simulation access; hosted in familiar classical environments.  \\
-        Intermediate representation (IR) & QIR & Stable compilation substrate enabling optimisation passes, toolchain portability across front-ends, and a formal verification surface for cross-layer equivalence. \\
-        Assembly & OpenQASM & Portable, complete execution-level specification; hardware-independent circuit interchange. \\ \bottomrule
+		\toprule
+        \textbf{Family} & \textbf{Language Example} & \textbf{Description} \\ \midrule
+        High-level & Silq & High-level programs with compiler-managed uncomputation (automatic cleanup). \\
+        Framework & Qiskit & Python-hosted workflow with a full stack: circuits, transpilation, simulation, and execution. \\
+        Intermediate representation (IR) & QIR & LLVM-based IR for quantum kernels, enabling shared optimisation and analysis across front-ends/back-ends. \\
+        Assembly & OpenQASM & Low-level circuit/measurement program interchange for portable execution on diverse back-ends. \\
+        \bottomrule
     \end{tabularx}
 \end{table}
 
@@ -101,7 +96,7 @@ IRs retain the intent of the source layer while enabling compiler optimisation p
 Current quantum IRs may or may not encode quantum-physical constraints such as no-cloning or teleportation.
 QIR and Q-MLIR achieve these outcomes~\cite{irreview2024}.
 
-Embedded frameworks enable ecosystem integration for remote execution and simulation of quantum programs from within a classical programming language, providing ergonomic tools for common quantum algorithms and circuit compilation for quantum execution systems.
+Frameworks enable ecosystem integration for remote execution and simulation of quantum programs from within a classical programming language, providing ergonomic tools for common quantum algorithms and circuit compilation for quantum execution systems.
 Qiskit~\cite{aleksandrowicz2019qiskit} is a representative example, offering Python libraries for circuit construction, compilation across multiple hardware backends and remote execution.
 PennyLane~\cite{bergholm2018pennylane} offers comparable tooling with a focus on variational quantum circuits and machine learning techniques.
 
@@ -114,8 +109,8 @@ High-level languages do not divorce the quantum from quantum programming.
 The taxonomy reveals a missing ``fifth-tier'' of quantum programming languages.
 The quantum-agnostic, application programming paradigm aspired to in the literature is not realisable with any of the language families presented.
 Assembly and intermediate representations are explicitly quantum by design, requiring a fundamental understanding of circuit primitives and hardware concerns.
-Embedded frameworks were not intended to produce quantum-agnosticism; their goal is to improve access to near-term quantum computers and remote execution of quantum circuit definitions.
-Embedded frameworks achieve this effectively, but it is not an adequate solution to the missing tier.
+Frameworks were not intended to produce quantum-agnosticism; their goal is to improve access to near-term quantum computers and remote execution of quantum circuit definitions.
+Frameworks achieve this effectively, but it is not an adequate solution to the missing tier.
 High-level languages come closest, but their fundamental coupling to quantum circuit primitives and resource management requires the programmer to have a quantum mechanical mental model.
 These languages do not enable problems and solutions to be formulated purely algorithmically.
 
@@ -125,7 +120,7 @@ Assessing programming languages solely against their computability biases succes
 
 Current quantum programming languages suffer from a usability issue failing to be addressed at a fundamental level~\cite{ferreira2024qplusage, nunez_corrales2025betterabstractmachines}.
 A survey of active quantum programming projects on GitHub showed a lack of novel development or algorithmic investigation~\cite{murillo2022sequantumprogramming}.
-Surveys of embedded framework usage found that their popularity can be attributed to the improved programmer experience when using a classical language; however, programmers still struggled with the circuit architecture~\cite{ferreira2024qplusage}.
+Surveys of framework usage found that their popularity can be attributed to the improved programmer experience when using a classical language; however, programmers still struggled with the circuit architecture~\cite{ferreira2024qplusage}.
 Programmers consistently report quantum domain knowledge, vocabulary and concepts as barriers to entry and understanding of quantum languages~\cite{ferreira2024qplusage, murillo2022sequantumprogramming}.
 
 High-level programming languages realise the abstraction requirements described in Section~\ref{sec:lit_rev:abstraction}.
@@ -158,7 +153,7 @@ Portability is achieved through a shared vocabulary of quantum operations: hardw
     \begin{minipage}[t]{0.48\textwidth}
         \centering
         \textbf{x86 Assembly (Classical)}
-        \begin{lstlisting}[basicstyle=\ttfamily\tiny,
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
             frame=single,
             label={lst:lit_rev:qpl:assembly_comparison_x86}]
 ; Flip all bits in a register
@@ -177,7 +172,7 @@ _start:
     \begin{minipage}[t]{0.46\textwidth}
         \centering
         \textbf{OpenQASM 3.0 (Quantum)}
-        \begin{lstlisting}[basicstyle=\ttfamily\tiny,
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
             frame=single,
             label={lst:lit_rev:qpl:assembly_comparison_openqasm}]
 OPENQASM 3.0;
@@ -307,7 +302,7 @@ c[1] = measure q[1];
     \begin{minipage}[t]{0.5\textwidth}
         \centering
         \textbf{QIR (LLVM IR)}
-        \begin{lstlisting}[basicstyle=\ttfamily\tiny,
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
             frame=single,label={lst:lit_rev:qpl:openqasm_to_qir_qir}]]
 %Qubit  = type opaque
 %Result = type opaque
@@ -370,10 +365,10 @@ The IR family sits below quantum assembly and above hardware execution in the co
 Applying the computational thinking framework established in Section~\ref{sec:lit_rev:abstraction}, the IR layer does not support problem-space mental models.
 The contribution of IRs is enabling stable, reusable transformations between layers, not reducing the programmer's required quantum vocabulary.
 The IR layer is providing the abstraction boundary its design intends: a stable, hardware-agnostic substrate that absorbs low-level concerns below the programmer-facing stack~\cite{irreview2024, qiralliance_spec}.
-Whether the layers above it consistently exploit that boundary is explored in discussions on Embedded Frameworks and High level languages.
+Whether the layers above it consistently exploit that boundary is explored in discussions on Frameworks and High level languages.
 
-\subsubsection{Embedded Frameworks}\label{subsubsec:lit_rev:qpl:frameworks}
-Embedded frameworks represent a third design response to the quantum programming problem.
+\subsubsection{Frameworks}\label{subsubsec:lit_rev:qpl:frameworks}
+Frameworks represent a third design response to the quantum programming problem.
 Rather than defining a new standalone language, they extend an existing general-purpose host to accommodate quantum constructs through library APIs and domain-specific abstractions.
 Python is the dominant host language in this family, though not the exclusive one.
 Haskell-hosted frameworks such as quAPL occupy the same structural position~\cite{corralesgarro2025productivityexpressiveness}.
@@ -381,7 +376,7 @@ The defining design choice reflects a deliberate premise: programmers already po
 The family's stated goal is not the elimination of quantum prerequisites; it is the acceleration of programmers in expressing quantum algorithms reliably and portably, with a reduction in manually specifying low-level circuit concerns at every step~\cite{corralesgarro2025productivityexpressiveness}.
 
 Three systems are examined here, selected to represent the breadth and internal limits of this family's design space.
-\textbf{Qiskit} is the most widely adopted embedded framework~\cite{murillo2022sequantumprogramming}.
+\textbf{Qiskit} is the most widely adopted framework~\cite{murillo2022sequantumprogramming}.
 Its model centres on the circuit object as the primary artefact.
 The programmer constructs quantum circuits through Python API calls, applies transpilation passes to target a specific backend and submits the compiled circuit for execution or simulation~\cite{aleksandrowicz2019qiskit}.
 Hardware portability across backends and access to a mature ecosystem of algorithm libraries are Qiskit's primary value proposition~\cite{aleksandrowicz2019qiskit}.
@@ -426,7 +421,7 @@ The reduction is in expression length rather than in the quantum knowledge requi
 
 \begin{figure}[htbp]
     \centering
-    \begin{minipage}[t]{0.46\textwidth}
+    \begin{minipage}[t]{0.5\textwidth}
         \centering
         \textbf{OpenQASM 3.0 (Assembly)}
         \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
@@ -447,9 +442,9 @@ c = measure q;
         \end{lstlisting}
     \end{minipage}
     \hfill
-    \begin{minipage}[t]{0.46\textwidth}
+    \begin{minipage}[t]{0.44\textwidth}
         \centering
-        \textbf{Qiskit (Embedded Framework)}
+        \textbf{Qiskit (Framework)}
         \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
             language=Python,
             frame=single,
@@ -467,10 +462,10 @@ qc.measure_all()
 
     \vspace{1em}
 
-    \begin{minipage}[t]{0.48\textwidth}
+    \begin{minipage}[t]{0.5\textwidth}
         \centering
-        \textbf{PennyLane (Embedded Framework)}
-        \begin{lstlisting}[basicstyle=\ttfamily\tiny,
+        \textbf{PennyLane (Framework)}
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
             language=Python,
             frame=single,
             label={lst:lit_rev:qpl:superposition_pennylane}]
@@ -490,9 +485,9 @@ probs = circuit()
         \end{lstlisting}
     \end{minipage}
     \hfill
-    \begin{minipage}[t]{0.46\textwidth}
+    \begin{minipage}[t]{0.44\textwidth}
         \centering
-        \textbf{Qrisp (Embedded Framework)}
+        \textbf{Qrisp (Framework)}
         \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
             language=Python,
             frame=single,
@@ -509,7 +504,7 @@ h(qf[3])
 print(qf)
         \end{lstlisting}
     \end{minipage}
-    \caption{Uniform superposition over a 4-bit value across all embedded frameworks and assembly languages.
+    \caption{Uniform superposition over a 4-bit value across all frameworks and assembly languages.
     Qrisp's \texttt{QuantumFloat} abstracts arithmetic but not state initialisation; explicit gate application to qubit indices is required in every case.}
     \label{fig:lit_rev:qpl:superposition_comparison}
 \end{figure}
@@ -518,12 +513,12 @@ Evaluating the family against the three criteria established in Subsection~\ref{
 Abstraction level has been raised in specific dimensions: resource allocation, arithmetic synthesis and structured uncomputation are managed at a layer above the circuit model~\cite{seidel2024qrisp, aleksandrowicz2019qiskit}.
 System portability is a documented contribution across all three systems, with hardware-agnostic compilation pipelines that target multiple backends without programmer intervention~\cite{aleksandrowicz2019qiskit, bergholm2018pennylane}.
 Required quantum knowledge is where the family's characteristic limit is most clearly visible.
-The embedded framework premise is that programmers can remain within a familiar classical reasoning mode and delegate quantum concerns to the framework~\cite{Wing2006ComputationalThinking}.
+The framework premise is that programmers can remain within a familiar classical reasoning mode and delegate quantum concerns to the framework~\cite{Wing2006ComputationalThinking}.
 The Python layer supports this, but engaging the quantum substrate requires a mode switch into circuit-level reasoning.
 Gate selection, qubit wiring, measurement mechanics and transpilation constraints become unavoidable in the typical workflow regardless of which framework is used~\cite{ferreira2024qplusage, murillo2022sequantumprogramming}.
 The computational thinking boundary sits inside the typical workflow rather than at the system's edge.
 
-Tooling accessibility and conceptual simplicity are separable dimensions; the embedded framework family has advanced the first without the second~\cite{ferreira2024qplusage, murillo2022sequantumprogramming}.
+Tooling accessibility and conceptual simplicity are separable dimensions; the framework family has advanced the first without the second~\cite{ferreira2024qplusage, murillo2022sequantumprogramming}.
 The literature's stated abstraction trajectory, programming without quantum-mechanical prerequisites~\cite{cobb2022higherlevelabstractions}, is not approached by any system in this family.
 
 Qrisp's position at the family's boundary raises a question for the next family.
@@ -588,7 +583,7 @@ if ("01" in b) {
     \vspace{1em}
     \begin{minipage}[t]{0.8\textwidth}
         \textbf{Silq}~\cite{bichsel2020silq,bezganovic2024silq}
-        \begin{lstlisting}[basicstyle=\tiny\ttfamily,
+        \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,
             frame=single, xleftmargin=2pt, xrightmargin=2pt, label={lst:lit_rev:qpl:grover_comparison:silq}]
 def grover[n:!N](f: const uint[n] !=> lifted B,
 marks: !N): !N {
@@ -719,7 +714,7 @@ ONDA's position in the family is singular: the only proposal that eliminates the
 The four families examined in this section arrive at a consistent limitation: no system reviewed supports problem-space reasoning throughout a complete quantum programming workflow.
 Assembly exposes the execution model by design.
 Intermediate representations target toolchain authors; their abstraction boundary does not propagate upward to the programmer's experience.
-Embedded frameworks lower ergonomic costs without changing the programmer's required mental model.
+Frameworks lower ergonomic costs without changing the programmer's required mental model.
 High-level languages manage specific obligations through type systems and compiler annotations, but the programmer's conceptual vocabulary remains quantum-explicit.
 These are not independent shortcomings: they are four manifestations of a shared ceiling.
 A survey of 251 active quantum programmers found that 83\% hold at least five years of classical programming experience, yet quantum vocabulary, comprising qubits, gates, measurement mechanics and circuit architecture, remains the primary reported barrier to productive use across all frameworks~\cite{ferreira2024qplusage}.

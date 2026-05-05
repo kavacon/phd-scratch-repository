@@ -30,6 +30,91 @@ For $n$ qubits it is $2^n$-dimensional, allowing a register of $n$ qubits to be 
 Two or more qubits can be \textit{entangled}: in an entangled state the joint state of the qubits cannot be expressed as a product of the individual qubit states.
 Entangled qubits have correlated measurement outcomes regardless of spatial separation, and many quantum algorithms exploit entanglement as a computational resource~\cite{nielsen2000quantum}.
 
+Where a system consists of more than one qubit its global state can be described by the tensor product of those qubits.
+As shown in Equation~\ref{eq:introduction:quantum_computing_foundations:qubit_tensor}, the tensor product allows us to compute the full range of possible states for a two-qubit system.
+
+\begin{equation}
+    \begin{aligned}
+        \ket{\psi_{1}} &= \alpha_{1}\ket{0} + \beta_{1}\ket{1},\\
+        \ket{\psi_{2}} &= \alpha_{2}\ket{0} + \beta_{2}\ket{1},\\[4pt]
+        \ket{\psi_{12}}
+        &= \ket{\psi_{1}} \otimes \ket{\psi_{2}}\\
+        &= \left(\alpha_{1}\ket{0} + \beta_{1}\ket{1}\right)\otimes
+        \left(\alpha_{2}\ket{0} + \beta_{2}\ket{1}\right)\\
+        &= \alpha_{1}\alpha_{2}\ket{0}\ket{0}
+        + \alpha_{1}\beta_{2}\ket{0}\ket{1}
+        + \beta_{1}\alpha_{2}\ket{1}\ket{0}
+        + \beta_{1}\beta_{2}\ket{1}\ket{1}\\
+        &= \alpha_{1}\alpha_{2}\ket{00}
+        + \alpha_{1}\beta_{2}\ket{01}
+        + \beta_{1}\alpha_{2}\ket{10}
+        + \beta_{1}\beta_{2}\ket{11}.
+    \end{aligned}
+    \label{eq:introduction:quantum_computing_foundations:qubit_tensor}
+\end{equation}
+
+The result of Equation~\ref{eq:introduction:quantum_computing_foundations:qubit_tensor} can also be shown in a matrix form as can all qubit states.
+\[
+    \begin{aligned}
+        \ket{\psi_{1}} \otimes \ket{\psi_{2}}
+        &=
+        \left(
+            \alpha_{1}
+            \begin{pmatrix}
+                1\\
+                0
+            \end{pmatrix}
+            +
+            \beta_{1}
+            \begin{pmatrix}
+                0\\
+                1
+            \end{pmatrix}
+        \right)
+        \otimes
+        \left(
+            \alpha_{2}
+            \begin{pmatrix}
+                1\\
+                0
+            \end{pmatrix}
+            +
+            \beta_{2}
+            \begin{pmatrix}
+                0\\
+                1
+            \end{pmatrix}
+        \right)\\[6pt]
+        &=
+        \begin{pmatrix}
+            \alpha_{1}\\
+            \beta_{1}
+        \end{pmatrix}
+        \otimes
+        \begin{pmatrix}
+            \alpha_{2}\\
+            \beta_{2}
+        \end{pmatrix}\\[6pt]
+        &=
+        \begin{pmatrix}
+            \alpha_{1}\begin{pmatrix}\alpha_{2}\\ \beta_{2}\end{pmatrix}\\[6pt]
+            \beta_{1}\begin{pmatrix}\alpha_{2}\\ \beta_{2}\end{pmatrix}
+        \end{pmatrix}\\[8pt]
+        &=
+        \begin{pmatrix}
+            \alpha_{1}\alpha_{2}\\
+            \alpha_{1}\beta_{2}\\
+            \beta_{1}\alpha_{2}\\
+            \beta_{1}\beta_{2}
+        \end{pmatrix}
+        =
+        \alpha_{1}\alpha_{2}\ket{00}
+        +\alpha_{1}\beta_{2}\ket{01}
+        +\beta_{1}\alpha_{2}\ket{10}
+        +\beta_{1}\beta_{2}\ket{11}.
+    \end{aligned}
+\]
+
 Understanding ket notation and quantum state is a prerequisite for writing correct programs in existing quantum programming systems.
 The quantum state model is not hidden behind the programming interface but must be actively reasoned about to use it correctly~\cite{ferreira2024qplusage}.
 
@@ -39,7 +124,7 @@ A matrix $U$ is unitary if $U^\dagger U = I$, where $U^\dagger$ is the conjugate
 Unitarity ensures that every gate preserves the norm of the state vector and therefore the requirement that probabilities sum to one~\cite{nielsen2000quantum}.
 Three gates appear frequently in quantum programs, illustrated in Figure~\ref{fig:introduction:quantum_computing_foundations:gates}.
 The Pauli-$X$ gate performs a bit flip: $\ket{0} \leftrightarrow \ket{1}$.
-The Hadamard gate $H$ places a qubit in equal superposition: $H\ket{0} = \frac{1}{\sqrt{2}}\left(\ket{0} + \ket{1}\right)$.
+The Hadamard gate $H$ places a qubit in equal superposition with the relative phase (see Subsection~\ref{subsec:introduction:quantum_computing_foundations:phases_interference_measurement}) of the superpositioned states differing based on the qubit's initial value: $H\ket{0} = \frac{1}{\sqrt{2}}\left(\ket{0} + \ket{1}\right)$, $H\ket{1} = \frac{1}{\sqrt{2}}\left(\ket{0} - \ket{1}\right)$.
 The controlled-NOT gate (CNOT) entangles two qubits by flipping the target qubit conditioned on the state of the control.
 
 \begin{figure}[h!]
@@ -102,7 +187,9 @@ The adjoint $U^\dagger$ reverses the action of $U$, returning the qubit register
 \textit{Gate inversion} is the direct application of this property; applying $U^\dagger$ immediately after $U$ restores the state as if neither operation occurred.
 
 \textit{Uncomputation} applies inversion to a specific programming problem.
-When an ancilla qubit, a temporary qubit introduced to hold an intermediate result, has become entangled with the main register, it cannot be safely discarded or re-used without first being returned to a known state.
+Many quantum computations use additional qubits in order to store temporary values during computation, this is the same mechanism as a carry bit in classical addition circuits.
+Qubits used in this temporary manner are referred to as ancilla qubits.
+When an ancilla qubit has become entangled with the main register, it cannot be safely discarded or re-used without first being returned to a known state.
 Discarding an entangled ancilla traces it out of the joint state, reducing the remaining system to a mixed state and corrupting the output distribution, as established in Subsection~\ref{subsec:introduction:quantum_computing_foundations:phases_interference_measurement}.
 Re-using it without uncomputation propagates the entanglement forward into later computation.
 Uncomputation resolves both problems by running the gate sequence that produced the ancilla's current state in reverse, disentangling it and returning it to $\ket{0}$, at which point it can be safely released or re-used~\cite{nielsen2000quantum}.

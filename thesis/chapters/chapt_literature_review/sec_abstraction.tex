@@ -330,8 +330,9 @@ An abstraction hierarchy for quantum computing has been suggested following the 
 
 Abstract machines like the von Neumann random access memory (RAM) were critical in the successful development of productive classical systems.
 Abstract machines provide a conceptual framework for defining the responsibilities of lower and higher level abstractions.
-Candidate machines for quantum systems exist, such as quantum random access memory or the quantum Turing machine~\cite{nunez_corrales2025betterabstractmachines}
-Their suitability as foundations for productive programming abstractions has not been established.
+Candidate machines for quantum systems exist, such as quantum random access memory or the quantum Turing machine~\cite{nunez_corrales2025betterabstractmachines}.
+No systematic verification about the suitability of these machines as foundations for productive programming abstractions has been established.
+While all candidate systems are universal there is no consensus about what other features are required for productivity.
 Criteria to assess their suitability has been suggested building on what makes classical abstract machines successful and what is required in general for productive programming with fifteen criteria established as shown in Table~\ref{tab:lit_rev:abstraction:qam_criteria}~\cite{nunez_corrales2025betterabstractmachines}.
 
 \begin{longtable}[htbp]{@{}p{7cm}p{7cm}@{}}
@@ -370,7 +371,7 @@ Through that definition it is shown clearly that there is significant ``bleed th
 \begin{figure}[h!]
     \centering
     \includegraphics[width=0.75\linewidth]{../figures/fig-lit_rev-abstraction-abstraction_bleed_through}
-    \caption{An example showing how Silq bleeds abstractions from the programming to execution layers while implementing Grover's algorithm, note this may not be fully syntactically valid Silq~\cite{bichsel2020silq}.}
+    \caption{An example showing how Silq bleeds abstractions from the programming to execution layers while implementing Grover's algorithm, note the example is incomplete and lacks definitions such as the classical oracle, this makes it incomplete syntactically~\cite{bichsel2020silq}.}
     \label{fig:lit_rev:abstraction:abstraction_bleed_through}
 \end{figure}
 
