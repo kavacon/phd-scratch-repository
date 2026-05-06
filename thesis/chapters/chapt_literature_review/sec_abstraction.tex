@@ -335,26 +335,38 @@ No systematic verification about the suitability of these machines as foundation
 While all candidate systems are universal there is no consensus about what other features are required for productivity.
 Criteria to assess their suitability has been suggested building on what makes classical abstract machines successful and what is required in general for productive programming with fifteen criteria established as shown in Table~\ref{tab:lit_rev:abstraction:qam_criteria}~\cite{nunez_corrales2025betterabstractmachines}.
 
-\begin{longtable}[htbp]{@{}p{7cm}p{7cm}@{}}
-    \caption{Fifteen criteria for assessing the suitability and effectiveness of abstract machines for quantum computing~\cite{nunez_corrales2025betterabstractmachines}.}
-    \label{tab:lit_rev:abstraction:qam_criteria} \\
+\begin{longtable}{p{3.cm}p{4.0cm}p{7.0cm}}
+    \caption{Grouped criteria for assessing quantum abstract machines (QAMs), grouped by the role each criterion plays in supporting abstraction adapted from~\cite{nunez_corrales2025betterabstractmachines}.}
+    \label{tab:lit_rev:abstraction:qam_criteria}\\
+
     \toprule
-    \textbf{Criterion} & \textbf{Description} \\ \midrule
-    1. Turing completeness & Can perform the same computations as any other classical or quantum machine; can simulate other machines and run any valid program without new features. \\
-    2. Finite symbolic state & Available resources, symbols, memory, and states are finite and known; state can be decomposed into addressable subunits. \\
-    3. Symbolic denotational syntax & Reasoning in terms of how operations impact system state (side effects) without needing to understand hardware execution; no circuit elements. \\
-    4. Representation-independent data types & No reference to low-level, specific circuit elements (bits, qubits, etc.) for data types; data representation does not impact programming. \\
-    5. Stable instruction set architecture & Instructions are finite, limited, and can express all programs; they remain constant across different hardware and are compact enough for humans to remember. \\
-    6. Verifiable formal content & Operations are mathematically defined and independent of their specific hardware implementation. \\
-    7. Compact instruction representation & The size of storing an instruction is constant and not influenced by the complexity of its hardware implementation. \\
-    8. Classical-quantum regularity & Classical and quantum instructions coexist in the same machine at the same level of importance; neither requires hardware knowledge to reason about. \\
-    9. Degeneracy of implementation & Building and running instructions does not violate physics; specific hardware is not required to preserve contracts between instructions or outcomes. \\
-    10. Predictable procedural composability & Instructions can be combined into procedures with known outcomes and predictable system impact. \\
-    11. Intrinsic ensemble semantics & Instructions can receive multiple inputs and produce multiple outputs; distribution data types are well-defined; the number of shots required is elided. \\
-    12. Resource constructible functions & Time and space complexity can be reasoned about in abstract units rather than physical hardware realizations. \\
-    13. Standard instruction cycle & Instructions execute within a single, mechanizable control loop dependent only on addressable units, not their internal workings. \\
-    14. Classical control flow & Classical control structures can be implemented succinctly using the provided instruction set. \\
-    15. Quantum/hybrid control flow & Quantum or hybrid control structures can be implemented succinctly using the instruction set. \\ \bottomrule
+    \textbf{Abstraction role} & \textbf{Criteria} & \textbf{What this group ensures} \\ \midrule
+
+    \textbf{Expressive foundation (computational scope)}
+    & \parbox[t]{\linewidth}{(1) Turing completeness}
+    & The QAM provides a universal baseline: it can express/simulate the class of computations needed without requiring ad-hoc extensions, so higher-level abstractions do not “outgrow” the machine model. \\
+    \addlinespace
+
+    \textbf{Symbolic state model (what the machine exposes as manipulable)}
+    & \parbox[t]{\linewidth}{(2) Finite symbolic state\\(12) Resource constructible functions}
+    & The machine state is addressable and bounded in a way that can be represented symbolically (supporting abstraction over storage/registers), and it supports reasoning about resource usage (time/space) in machine-level but hardware-independent units. \\
+    \addlinespace
+
+    \textbf{Programmer-facing interface (meaning of symbols vs hardware detail)}
+    & \parbox[t]{\linewidth}{(3) Symbolic denotational syntax\\(4) Representation-independent data types\\(6) Verifiable formal content\\(9) Degeneracy of implementation}
+    & The “contract” of the QAM is defined at the level of symbols, types, and formal semantics rather than circuit micro-details: programmers can reason about effects without hardware simulation; definitions remain valid across implementations and do not rely on non-physical assumptions. \\
+    \addlinespace
+
+    \textbf{Instruction-level stability and execution discipline (how programs are run)}
+    & \parbox[t]{\linewidth}{(5) Stable instruction set architecture\\(7) Compact instruction representation\\(13) Standard instruction cycle}
+    & Abstraction can be built on a stable, finite instruction vocabulary with predictable execution structure: the instruction interface is learnable, portable across hardware backends, and mechanizable (supporting toolchains, compilers, and analysis). \\
+    \addlinespace
+
+    \textbf{Composition, control and data modalities (how abstraction scales to programs)}
+    & \parbox[t]{\linewidth}{(8) Classical-quantum regularity\\(10) Predictable procedural composability\\(11) Intrinsic ensemble semantics\\(14) Classical control flow\\(15) Quantum/hybrid control flow}
+    & The QAM supports scalable programming abstractions: procedures compose predictably; classical/quantum instructions coexist at one conceptual level; ensemble/distribution outputs are first-class; and both classical and quantum/hybrid control patterns can be expressed succinctly. \\
+
+    \bottomrule
 \end{longtable}
 
 Quantum computing systems have made and continue to make progress towards higher levels of productive abstraction.
