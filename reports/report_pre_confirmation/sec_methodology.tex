@@ -1,1 +1,39 @@
 \section{Methodology}\label{sec:pre_confirmation:methodology}
+The research programme of the thesis is situated within the constructive research tradition of computer science: its primary contribution is a designed and built artefact rather than an empirical observation or theoretical derivation.
+Design Science Research (DSR)~\cite{Hevner2004DesignScienceIS} is the governing methodology.
+DSR is the established framework for research whose contribution is a novel IT artefact evaluated against a practical problem; it provides both a process model for artefact construction and an evaluative standard grounded in utility rather than optimality~\cite{Hevner2004DesignScienceIS}.
+The research programme satisfies that condition: the planned contribution is a quantum-implicit programming language and its supporting formal and computational infrastructure, evaluated against the abstraction gap identified in Section~\ref{sec:pre_confirmation:literature_review}.
+
+Three alternative research designs were considered and rejected.
+Empirical and experimental methods require a pre-existing system to observe or experiment upon; no such system exists prior to this work.
+A proof-only approach would establish the formal properties of the type system and compilation pipeline but cannot account for the design and construction of the language and compiler as research contributions.
+Qualitative methods are not applicable to artefact construction.
+The most substantive objection to the DSR design is that improved compilation technology renders a new source language unnecessary; if a compiler can automatically infer quantum-level decisions, a quantum-implicit language provides no additional value.
+This objection fails because a compiler can only infer what the source language provides.
+Quantum-explicit languages encode quantum-level decisions at the vocabulary level, leaving no higher-level intent for a compiler to recover.
+DSR explicitly supports the iterative design-build-evaluate cycle appropriate for language and compiler development and is therefore the appropriate choice.
+
+The research follows a problem-centred entry point into the DSRM process~\cite{Peffers2007DSRM}: the abstraction gap in quantum programming languages is established as the motivating problem before solution goals are defined.
+The six DSRM activities map directly onto the planned research structure.
+Problem identification and motivation are addressed through the literature review and the planned systematic review publication, which together establish the abstraction gap and supply the requirements the artefact must satisfy.
+The objectives of a solution are defined as a quantum-implicit programming language: a programming abstraction model compilable to gate-based quantum hardware and accessible to programmers without quantum expertise.
+Design and development will be delivered through the planned language specification, formal theoretical basis and compilation framework.
+Demonstration will be provided through proof-of-concept programs and compiler output on simulators and NISQ hardware.
+Evaluation will be conducted against six criteria defined later in this section.
+Communication will be delivered through the four planned incorporated publications and the thesis.
+The planned formal proofs will span the design and development and evaluation activities simultaneously: they will constitute both a component of the design deliverable and the primary evaluation mechanism for SRQ2 and SRQ3.
+
+The planned research contribution comprises three integrated artefact components.
+The \textit{language specification} is the primary design contribution, targeting a formal definition of the syntax, semantics and type system of the quantum-implicit language.
+The \textit{formal theoretical basis} targets type safety through progress and preservation proofs for the core language and semantic preservation for a defined core fragment of the compilation pipeline.
+The \textit{compilation framework} targets the lowering of programs in the source language to executable form on gate-based NISQ hardware.
+The research adopts a gate-based quantum computing model throughout; measurement-based quantum computing, hardware-specific scheduling, pulse-level control, quantum error correction at the language level and full compiler verification are out of scope and identified as future work.
+
+DSR evaluates artefacts against utility for the stated problem~\cite{Hevner2004DesignScienceIS}.
+Six criteria operationalise this standard for the planned artefact.
+\textbf{Type safety}: the research targets a formal proof of progress and preservation for the core language, targeting peer review as part of the language specification publication.
+\textbf{Compilation correctness}: the research targets a formal semantic preservation argument for a defined core fragment, with scope boundaries and limitations stated.
+\textbf{Executability}: the research targets compilation and execution of programs on gate-based NISQ hardware via the University of Melbourne's membership of the IBM Quantum Network~\cite{UoMIBMQuantumHub}, with simulator execution as the minimum threshold.
+\textbf{Expressiveness}: the research targets implementation and compilation of at least two non-trivial quantum algorithms without escape hatches.
+\textbf{Programming language abstraction model}: the research targets demonstrating that representative algorithmic tasks are expressible using programming language abstractions only, without requiring quantum vocabulary.
+\textbf{Absence of mandatory quantum vocabulary}: the research targets case studies and example programs demonstrating that a programmer with a classical background can engage with the language without quantum-mechanical knowledge; a formal usability study is identified as future work.

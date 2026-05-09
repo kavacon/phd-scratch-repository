@@ -1,1 +1,26 @@
 \section{Research questions}\label{sec:pre_confirmation:research_questions}
+The research questions addressed by this thesis follow directly from the gap identified in Section~\ref{sec:pre_confirmation:literature_review}: no existing quantum programming language provides a programming model separated from the quantum substrate, and the structural constraints of quantum mechanics prevent that gap from being closed by incremental improvement to existing designs.
+The central research question is:
+
+\begin{quote}
+    \textit{\textbf{CRQ: }Can a quantum-implicit programming language, whose surface model is agnostic of the underlying physical quantum substrate, be formally designed, proven correct and compiled to execute on gate-based quantum hardware?}
+\end{quote}
+
+The CRQ is decomposed into three subsidiary research questions:
+
+\begin{quote}
+    \textit{\textbf{SRQ1: }Can a quantum-implicit language be formally specified through computational abstractions requiring no knowledge of quantum mechanical principles or the circuit execution model, while remaining expressive enough to encode quantum algorithms?}
+\end{quote}
+
+\begin{quote}
+    \textit{\textbf{SRQ2: }Can the core source language be proven type-safe: specifically, can \emph{progress} (well-typed programs never reach a stuck state) and \emph{preservation} (evaluation preserves the type of well-typed expressions) be formally established for the language's type system?}
+\end{quote}
+
+\begin{quote}
+    \textit{\textbf{SRQ3: }Can semantic preservation be formally established for the compilation pipeline: specifically, does the compiler's translation from source language to quantum IR faithfully preserve the meaning of source programs?}
+\end{quote}
+
+SRQ1 will be addressed by the planned language specification publication, targeting the formal definition of the syntax, operational semantics and type system of the quantum-implicit language.
+SRQ2 will be addressed by the planned formal theory publication, targeting progress and preservation proofs for the core language.
+SRQ3 will be addressed jointly by the formal theory and compiler publications: the former will establish the semantic preservation proof and the latter will demonstrate it end-to-end for programs compiled to and executed on NISQ hardware.
+The CRQ will be answered collectively across all four planned publications and synthesised in the results and evaluation chapter of the thesis.
