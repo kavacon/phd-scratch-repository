@@ -1,126 +1,159 @@
-\section{Evaluation rubric}\label{sec:evaluation_rubric}
+\section{Evaluation instrument}\label{sec:evaluation_instrument}
+This section defines the evaluation instrument used to classify each reviewed system against the taxonomy in Section~\ref{sec:taxonomy}.
+The instrument specifies the representative task suite, the condition outcomes recorded for each system with primary-source evidence and how tier assignments are justified from that evidence.
+This section defines the instrument; it does not apply it.
+Section~\ref{sec:system_assessments} applies the instrument to each reviewed system and reports the resulting evidence profiles and tier classifications.
 
-The rubric defined in this section operationalises the taxonomy from Section~\ref{sec:taxonomy}.
-Each score (0--4) corresponds directly to a taxonomy tier, from Assembly through to quantum-implicit.
-The hard-fail conditions in Subsection~\ref{subsec:evaluation_rubric:hard_fails} are the operational form of the quantum-implicit litmus test stated in Section~\ref{sec:taxonomy}.
-Section~\ref{sec:system_assessments} applies this rubric to each of the eleven reviewed systems and reports tier assignments.
+The instrument operationalises the taxonomy from Section~\ref{sec:taxonomy}: the tier labels (Assembly, IR, Framework, High-level and quantum-implicit) are defined there, and the quantum-implicit gating constraints in Subsection~\ref{subsec:evaluation_instrument:gating} are the operational form of the quantum-implicit litmus test stated in that section.
 
-Each system is scored on five axes (A--E) and placed on a spectrum from \textit{Assembly} through \textit{IR}, \textit{Framework}, \textit{High-level (quantum-explicit)} to \textit{Quantum-implicit}.
+The instrument is evidence-first.
+For each system, canonical code examples are collected or constructed where no canonical example exists.
+For the representative tasks defined in Subsection~\ref{subsec:evaluation_instrument:task_suite} condition outcomes are recorded with primary-source citations as defined in Subsection~\ref{subsec:evaluation_instrument:conditions}.
+A tier is assigned via a justified profile match.
+Tier assignment applies the explicit gating constraints for quantum-implicit claims defined in Subsection~\ref{subsec:evaluation_instrument:gating}.
 
-\subsection{Scoring axes}\label{subsec:evaluation_rubric:scoring_axes}
-The five scoring axes (A--E) are defined below.
-Each of them addresses a different element of the programmer experience and system design.
-
+\subsection{Evaluation lenses}\label{subsec:evaluation_instrument:lenses}
+The evaluation instrument is guided by five lenses that describe what varies across tiers and how evidence should be interpreted.
 \begin{description}
-    \item[Required mental model and vocabulary (A)] How quantum-aware a programmer must be to use the system in typical workflows.
-    \item[Primary artefact (B)] What the programmer primarily authors or manipulates.
-    \item[Safety discipline and semantic guarantees (C)] What type-theoretic or effects-based discipline the language enforces, including linearity, affinity, uncomputation and validity constraints~\cite{pierce2002tapl-doc9,bichsel2020silq}.
-    \item[Compilation responsibility (D)] Who introduces quantum structure, who manages resources and whether inference is present.
-    \item[Execution and hardware adjacency (E)] How close the surface model is to basis gates, timing, controller instructions and device-specific constraints.
+    \item[Required mental model and vocabulary] What quantum-mechanical and execution-model concepts a programmer must use to complete representative workflows.
+    \item[Primary artefact] What the programmer primarily authors or manipulates (e.g.\ a program over values versus an explicit circuit/tape/IR object).
+    \item[Safety discipline and semantic guarantees] What type-theoretic or effects-based discipline the system enforces, including linearity, affinity, uncomputation and validity constraints~\cite{pierce2002tapl-doc9,bichsel2020silq}.
+    \item[Compilation responsibility] Which obligations fall on the programmer versus the compiler/runtime (e.g.\ introduction of quantum structure, resource management and clean-up).
+    \item[Execution and hardware adjacency] How much execution- and hardware-layer detail surfaces in representative programming, including basis gates, timing, controller instructions and device-specific constraints.
 \end{description}
+The term \textit{bleed-through} names the central interpretation mechanism: execution- and hardware-layer concerns surface at the programming layer, making quantum-native vocabulary mandatory even when the programmer's intent could be expressed without it~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
+Bleed-through guides the graduated condition outcomes reported in Subsection~\ref{subsec:evaluation_instrument:conditions}: the more a representative workflow forces the programmer to drop into lower-layer obligations (e.g., circuit surgery, qubit bookkeeping, measurement plumbing, backend constraints), the more likely the relevant condition should be judged negatively.
 
-The degree to which a programmer must drop into execution- or hardware-layer concepts during typical tasks directly lowers scores on axes A, D and E~\cite{DiMatteo2024AbstractionHierarchy}.
-The term \textit{bleed-through} names this mechanism: execution- and hardware-layer concerns surface at the programming layer, making quantum-native vocabulary mandatory even when the programmer's intent could be expressed without it~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
-Bleed-through is assessed with respect to the task suite defined in Subsection~\ref{subsec:evaluation_rubric:task_suite}.
+The lenses are not evaluated directly, instead they provide interpretive framing for the condition outcomes.
+In typical cases, conditions concerning superposition-as-value, marking and required quantum concepts primarily reflect the mental-model lens.
+Conditions concerning circuit-centric authoring and composition reflect the primary-artefact lens.
+Conditions concerning uncomputation reflect the safety and compilation-responsibility lenses and conditions concerning hardware/execution constraints reflect the hardware-adjacency lens.
 
-\subsection{Scores}\label{subsec:evaluation_rubric:scores}
-Table~\ref{tab:evaluation_rubric:scoring_levels} defines the five scores.
-Rows correspond to taxonomy tiers; columns to scoring axes.
+Table~\ref{tab:evaluation_instrument:tier_lenses} provides a descriptive summary of how the five tiers differ across the abstraction dimensions identified by the lenses.
+The table contextualises the tier labels used throughout the paper; tier assignment in this review is based on representative tasks and condition outcomes with primary-source evidence, as defined in Subsections~\ref{subsec:evaluation_instrument:task_suite} and~\ref{subsec:evaluation_instrument:conditions}.
 
 \begin{table*}[ht*]
-    \caption{Scores 0--4 across axes A--E. Each row corresponds to a taxonomy tier; columns define what that tier requires of a programmer across the five evaluation dimensions.}
-    \label{tab:evaluation_rubric:scoring_levels}
+    \caption{Descriptive tier characteristics across five abstraction dimensions. This table contextualises the tier labels. Tier assignment in this review is based on representative tasks and condition outcomes with primary-source evidence.}
+    \label{tab:evaluation_instrument:tier_lenses}
     \footnotesize
-    \begin{tabular}{c p{1.5cm} p{2.1cm} p{2.1cm} p{2.1cm} p{2.1cm} p{2.1cm}}
+    \begin{tabular}{p{1.6cm} p{2.3cm} p{2.3cm} p{2.3cm} p{2.3cm} p{2.3cm}}
         \toprule
-        \textbf{Score} & \textbf{Tier} & \textbf{A: Mental model} & \textbf{B: Primary artefact} & \textbf{C: Safety} & \textbf{D: Compilation} & \textbf{E: Hardware adjacency} \\ \midrule
-        0
-        & Assembly & Quantum vocabulary unavoidable: qubits, gates, registers and measurement are the basic interface.
-        & Explicit instruction sequence or circuit, with limited classical control.
-        & Few language-level guarantees; safety mainly by convention.
-        & Programmer specifies quantum operations explicitly.
-        & Hardware-adjacent concepts visible: basis gates, measurement targets and controller details. \\
+        \textbf{Tier}    & \textbf{Mental model}                                                                            & \textbf{Primary artefact}                                                                       & \textbf{Safety}                                                                                                                 & \textbf{Compilation} & \textbf{Hardware adjacency} \\ \midrule
+        Assembly         & Quantum vocabulary unavoidable: qubits, gates, registers and measurement are the basic interface & Explicit instruction sequence or circuit, with limited classical control & Few language-level guarantees; safety mainly by convention & Programmer specifies quantum operations explicitly & Hardware-adjacent concepts visible: basis gates, measurement targets and controller details. \\
         \addlinespace
-        1
-        & IR
-        & Quantum-explicit, targeted at compiler and tooling authors.
-        & Explicit IR intrinsics for primitives: allocation, release, gates,measurement and control flow.
-        & Precise enough for validation and verification hooks, including qubit-lifetime checks.
-        & Primarily a lowering target; quantum structure is already explicit.
-        & Designed for multiple backends; hardware mapping begins at this layer. \\
+        IR               & Quantum-explicit, targeted at compiler and tooling authors                                       & Explicit IR intrinsics for primitives: allocation, release, gates, measurement and control flow & Precise enough for validation and verification hooks, including qubit-lifetime checks & Primarily a lowering target; quantum structure is already explicit & Designed for multiple backends; hardware mapping begins at this layer. \\
         \addlinespace
-        2
-        & Framework
-        & Host language (typically Python), but quantum vocabulary remains common in typical use.
-        & Circuit object, tape or graph as the central artefact.
-        & Safety discipline mostly API-driven; guarantees vary by framework.
-        & Framework provides transpilation, passes and automatic differentiation, but programmers still construct circuits explicitly.
-        & Often backend-portable with configurable basis and backend options. \\
+        Framework        & Host language (typically Python), but quantum vocabulary remains common in typical use & Circuit object, tape or graph as the central artefact & Safety discipline mostly API-driven; guarantees vary by framework & Framework provides transpilation, passes and automatic differentiation, but programmers still construct circuits explicitly & Often backend-portable with configurable basis and backend options. \\
         \addlinespace
-        3
-        & High-level (quantum-explicit)
-        & Programmers reason in quantum concepts, but the interface is structured and algorithmic.
-        & Primary artefact is a program, not merely a circuit file.
-        & Stronger static discipline: linearity, affinity, effects and an explicit uncomputation or disposal story~\cite{bichsel2020silq}.
-        & Compiler provides major assistance, such as safe uncomputation, but the programmer still selects quantum constructs.
-        & Largely hardware-agnostic by default, with optional low-level tuning. \\
+        High-level       & Programmers reason in quantum concepts, but the interface is structured and algorithmic & Primary artefact is a program, not merely a circuit file & Stronger static discipline: linearity, affinity, effects and an explicit uncomputation or disposal story~\cite{bichsel2020silq} & Compiler provides major assistance, such as safe uncomputation, but the programmer still selects quantum constructs & Largely hardware-agnostic by default, with optional low-level tuning. \\
         \addlinespace
-        4
-        & Quantum-implicit
-        & Non-trivial programs can be written and debugged without learning quantum vocabulary.
-        & Primary artefact is a mathematical or computational-level description, not a circuit.
-        & Guarantees framed in non-quantum terms; quantum operations exist only as optional escape hatches.
-        & Compiler infers and synthesises the quantum realisation, then lowers to IR or circuits.
-        & Hardware constraints not user-facing except through opt-in interoperability or tuning. \\
+        Quantum-implicit & Non-trivial programs can be written and debugged without learning quantum vocabulary & Primary artefact is a mathematical or computational-level description, not a circuit & Guarantees framed in non-quantum terms; quantum operations exist only as optional escape hatches & Compiler infers and synthesises the quantum realisation, then lowers to IR or circuits & Hardware constraints not user-facing except through opt-in interoperability or tuning. \\
         \bottomrule
     \end{tabular}
 \end{table*}
 
-\subsection{Aggregation rules}\label{subsec:evaluation_rubric:aggregation}
-Two aggregated scores are computed from the five axis scores.
+\subsection{Overview}\label{subsec:evaluation_instrument:overview}
+Each reviewed system is assigned a tier on the spectrum \textit{Assembly} through \textit{IR}, \textit{Framework}, \textit{High-level} to \textit{Quantum-implicit} by applying a fixed evaluation instrument.
+The instrument proceeds as follows.
+First, a fixed suite of representative tasks is attempted see Subsection~\ref{subsec:evaluation_instrument:task_suite}.
+Second, for each system and each task, outcomes are recorded on a fixed set of self-contained conditions, supported by primary-source evidence see Subsection~\ref{subsec:evaluation_instrument:conditions}.
+Third, a tier is assigned via a justified classification from the resulting condition profile.
+Tier assignment applies the explicit gating constraints for quantum-implicit claims defined in Subsection~\ref{subsec:evaluation_instrument:gating}.
 
-The \textit{headline score} is the highest score $S$ such that the system scores $\geq S$ on at least four of the five axes.
-This prevents a single strong feature from masking a fundamentally lower-level workflow: a system with one axis at score~4 and four axes at score~2 receives a headline score of~2.
+The five tiers are described alongside the evaluation lenses in Subsection~\ref{subsec:evaluation_instrument:lenses}, the expected condition profile against which tier assignment is justified is defined alongside the conditions in Subsection~\ref{subsec:evaluation_instrument:conditions}, subject to the gating constraints in Subsection~\ref{subsec:evaluation_instrument:gating}.
 
-The \textit{spectrum score} is the arithmetic mean of axes A--E, reported with the observed minimum and maximum.
-This captures internal tension in mixed systems: a language with a high-level surface model but an explicitly circuit-centric compilation workflow scores high on axis~A and low on axis~D, and the spectrum score reflects that asymmetry.
-
-\subsection{Typical task suite}\label{subsec:evaluation_rubric:task_suite}
+\subsection{Representative task suite}\label{subsec:evaluation_instrument:task_suite}
 Programming language evaluation methods based on representative tasks ground assessments in concrete programmer intent rather than theoretical capabilities~\cite{Myers2016PLUsabilitySIG}.
 The PLIERS process formalises this by requiring that tasks be defined before evaluation begins, representative of real workflows rather than adversarial edge cases and completed using the language's primary surface model rather than optional escape hatches~\cite{Coblenz2021PLIERS}.
-Following this approach, the five tasks below are defined prior to any scoring; axis scores are assigned only with respect to the ability to complete them without recourse to lower abstraction layers.
+Following this approach, the four tasks below are defined prior to evaluation.
+Condition outcomes are recorded only with respect to the ability to complete these tasks using the system's representative programming model, with primary-source evidence.
 
 \begin{description}
-    \item[$T_1$ Create a superposition-like object] Express a distribution-like value or state over outcomes.
-    \item[$T_2$ Transform it] Apply a transformation or computation to that object; composition should be natural.
-    \item[$T_3$ Apply computational structure] Exercise conditionals, iteration and parameterisation at the language's own abstraction level, without reference to quantum mechanics.
-    \item[$T_4$ Observe and summarise results] Sample or observe to obtain classical data and compute a summary statistic.
-    \item[$T_5$ Iterate or optimise] Run repeated executions, a parameter sweep or an optimisation loop, without rewriting into circuit form.
+    \item[$T_1$ Deutsch--Jozsa] Implement the Deutsch--Jozsa decision procedure (promise problem: constant versus balanced) for a small input size, including an explicit oracle definition or the system's intended oracle hook.
+    The minimum deliverable parameterises the construction for a small $n$, provides a single oracle construction or hook with a balanced oracle by default and runs the procedure to expose a clear decision artefact.
+    If the system requires measurement or sampling to get the decision, the observation boundary is recorded under Condition~\ref{subsec:evaluation_instrument:conditions}.
+    \item[$T_2$ Grover search] Implement one Grover iteration, or a small fixed number, for a simple marked-state or predicate oracle, including the diffusion operator.
+    The minimum deliverable defines an oracle that marks a single basis state or simple predicate, implements one full Grover iterate as an oracle phase flip followed by diffusion and provides the canonical pathway to execute and get an outcome.
+    Any explicit sampling, shots or observable boundary is recorded under Condition~\ref{subsec:evaluation_instrument:conditions}.
+    \item[$T_3$ Quantum phase estimation] Implement quantum phase estimation for a small unitary and small precision, including controlled powers and an inverse QFT mechanism.
+    The minimum deliverable chooses and documents a simple unitary $U$ with a known phase or eigenvalue and implements the controlled-$U^{2^k}$ sequence for $k=0,\ldots,t-1$.
+    The inverse QFT is implemented explicitly or via a cited library routine and exposes the estimated phase bits or a documented analogue.
+    If measurement is required, the observation boundary is recorded under Condition~\ref{subsec:evaluation_instrument:conditions}.
+    \item[$T_4$ Bell state preparation] Prepare a Bell state from $\ket{00}$ and expose it as a reusable construction to exercise composition.
+    The minimum deliverable defines or calls a routine that produces an entangled pair and demonstrates use of the pair in a follow-on step, such as passing it to another routine or applying an additional controlled operation.
+    Measurement is avoided in the core construction where possible; if it is required by the system's result model, the boundary is recorded under Condition~\ref{subsec:evaluation_instrument:conditions}.
 \end{description}
 
-\subsection{Quantum bias score}\label{subsec:evaluation_rubric:quantum_bias}
-The quantum bias score is a count of quantum-native concepts a programmer must understand to write correct T\textsubscript{1}--T\textsubscript{5} programs.
-Concepts that exist internally but are fully hidden by the compiler or runtime do not contribute to the count.
-Bleed-through, as defined in Subsection~\ref{subsec:evaluation_rubric:scoring_axes}, serves as a tiebreaker.
-If a concept becomes necessary only because programmers must frequently drop to lower abstraction layers to complete typical tasks, it counts.
+Canonical examples are used wherever available in primary sources.
+Constructed examples are used only when a canonical code example does not exist, and each non-trivial feature used is justified by a primary-source citation.
+Tasks serve as evidence carriers for condition outcomes rather than scoring items.
 
-Expected counts across tiers:
-\begin{itemize}
-    \item Assembly and IR systems require many concepts.
-    \item Frameworks require several.
-    \item High-level systems require fewer, though quantum vocabulary remains necessary.
-    \item Quantum-implicit systems should require at most the concept of the observation boundary.
-\end{itemize}
+\subsection{Conditions and outcome labels}\label{subsec:evaluation_instrument:conditions}
+For each system and each representative task, outcomes are recorded on a fixed set of self-contained conditions, using three outcome labels.
+\begin{description}
+    \item[Fail (F)] The condition is not met in representative constructions.
+    \item[Constrained (C)] The condition is met only with restrictions, leakage of lower-layer obligations or reliance on escape hatches.
+    \item[Pass (P)] The condition is met in the representative programming model for the task suite.
+\end{description}
 
-\subsection{Hard-fail conditions}\label{subsec:evaluation_rubric:hard_fails}
-The following conditions operationalise the quantum-implicit litmus test from Section~\ref{subsubsec:taxonomy:quantum_implicit}: a system cannot receive a quantum-implicit score if any one of these is required in typical T\textsubscript{1}--T\textsubscript{5} workflows.
-The litmus test is therefore not reduced to axis~A alone: score~4 requires meeting the score-4 criteria across axes A–-E, and is additionally blocked whenever any hard-fail condition is required in typical workflows.
+The conditions are:
+\begin{description}[style=unboxed]
+    \item[$C1$ Superposition introduced as a value] Superposition-like quantum data is introduced without explicit qubit identity and gate-level initiation as the conceptual entry point.
+    \item[$C2$ Primary artefact is not a circuit/tape/IR] Representative authoring is a program over values rather than construction or manipulation of a circuit, tape, IR or graph object.
+    \item[$C3$ Qubit identity and lifetime not user-visible] Representative constructions do not require explicit qubit handles, allocation, indexing, lifetime management, reset or release.
+    \item[$C4$ Uncomputation not manual reverse-programming] Clean-up is automatic or structured rather than requiring manual inversion as a normal correctness step.
+    \item[$C5$ Quantum and classical marking not mandatory] Representative code does not require explicit marking or staging boundaries between quantum and classical computation.
+    \item[$C6$ Measurement or observation boundary absent from the surface model] Getting results does not require explicit measurement, sampling, shots or observable-boundary concepts in representative constructions.
+    \item[$C7$ Hardware adjacency optional and separated] Basis gates, topology, timing and backend constraints are absent from representative programming, with tuning remaining opt-in.
+    \item[$C8$ Amplitude/phase and entanglement/interference concepts not required] Correctness in representative programming does not require reasoning directly about amplitudes, phases, entanglement or interference.
+    \item[$C9$ First-class subroutine composition] Larger programs are built by composing subroutines rather than circuit surgery or staging glue.
+\end{description}
+Condition outcomes are recorded for each system and each task.
+The resulting condition profile is used for tier assignment as described in Subsection~\ref{subsec:evaluation_instrument:overview}, with gating constraints for quantum-implicit claims defined in Subsection~\ref{subsec:evaluation_instrument:gating}.
 
-\begin{enumerate}
-    \item \textbf{Circuit as primary artefact.} The programmer must construct or manipulate circuits or gate sequences as the primary artefact.
-    \item \textbf{Qubit identity or lifetime.} The programmer must name, allocate, free or count qubits, or reason about ancilla lifetimes.
-    \item \textbf{Mandatory quantum or classical marking.} The programmer must annotate functions or values as quantum versus classical in the common case.
-    \item \textbf{Mandatory amplitude or phase mechanics.} Correctness requires reasoning directly about amplitudes or phases.
-    \item \textbf{Mandatory entanglement or interference.} The programmer must understand entanglement or interference to avoid typical correctness errors.
-    \item \textbf{Mandatory hardware model.} Typical programming requires hardware adjacency: basis sets, device connectivity, timing or scheduling constraints.
-\end{enumerate}
+Table~\ref{tab:evaluation_instrument:expected_profile} records the expected condition outcomes for a system at each tier in representative $T_1$--$T_4$ constructions.
+Tier assignment is by justified profile match against this table as described in Subsection~\ref{subsec:evaluation_instrument:overview}.
+The four bold cells in the quantum-implicit row are the gating outcomes defined in Subsection~\ref{subsec:evaluation_instrument:gating}.
+A system whose representative constructions do not produce $P$ on those four conditions cannot be classified quantum-implicit, regardless of the remaining profile.
+
+\begin{table}[ht*]
+    \caption{Expected condition outcomes per tier.
+    Cells record the expected outcome $F$, $C$ or $P$ for a system at the given tier on each of the conditions defined in this subsection.
+    Bold entries in the quantum-implicit row are the gating outcomes defined in Subsection~\ref{subsec:evaluation_instrument:gating}.}
+    \label{tab:evaluation_instrument:expected_profile}
+    \footnotesize
+    \begin{tabular}{p{1.2cm}ccccccccc}
+        \toprule
+        \textbf{Tier}    & $C1$ & $C2$         & $C3$         & $C4$ & $C5$ & $C6$         & $C7$ & $C8$ & $C9$         \\ \midrule
+        Assembly         & $F$  & $F$          & $F$          & $F$  & $F$  & $F$          & $F$  & $F$  & $F$          \\ \addlinespace
+        IR               & $F$  & $F$          & $F$          & $F$  & $F$  & $F$          & $C$  & $F$  & $F$          \\ \addlinespace
+        Framework        & $F$  & $F$          & $F$          & $F$  & $C$  & $F$          & $P$  & $C$  & $C$          \\ \addlinespace
+        High-level       & $C$  & $C$          & $C$          & $P$  & $C$  & $C$          & $P$  & $C$  & $P$          \\ \addlinespace
+        Quantum-implicit & $P$  & $\mathbf{P}$ & $\mathbf{P}$ & $P$  & $P$  & $\mathbf{P}$ & $P$  & $P$  & $\mathbf{P}$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Two conditions vary materially across the task suite and should be read with the task context.
+Outcomes on $C4$ (uncomputation) are most strongly exercised by $T_1$--$T_3$, where oracle, diffusion and controlled-power constructions involve auxiliary state that must be released.
+Those outcomes are largely inert for $T_4$, which does not require uncomputation in its core construction $C4$ outcomes are read primarily from $T_1$--$T_3$.
+Outcomes on $C6$ (measurement or observation boundary) admit a measurement-free core construction for $T_4$ but require a result-extraction step in $T_1$--$T_3$ in most systems.
+$C6$ outcomes are read from the worst case across $T_1$--$T_4$.
+
+Three cells distinguish the high-level and quantum-implicit tiers and act as the principal discriminators between them: $C2$ (primary artefact), $C3$ (qubit identity and lifetime) and $C6$ (measurement or observation boundary).
+The remaining conditions on which the two tiers might otherwise be compared, $C4$ (uncomputation) and $C9$ (subroutine composition), are both $P$ at high-level and quantum-implicit and therefore do not discriminate between them.
+
+\subsection{Quantum-implicit gating constraints}\label{subsec:evaluation_instrument:gating}
+This subsection operationalises the quantum-implicit litmus test stated in Section~\ref{sec:taxonomy}.
+A system is classified as quantum-implicit only if all the following gating conditions pass in representative $T_1$--$T_4$ constructions, using the outcomes recorded in Subsection~\ref{subsec:evaluation_instrument:conditions}.
+
+\begin{description}
+    \item[C2] The primary artefact is not a circuit, tape or IR object.
+    \item[C3] Qubit identity and lifetime are not user-visible; representative constructions do not require explicit allocation, indexing, lifetime management, reset or release.
+    \item[C6] The measurement or observation boundary is absent from the surface model; results are obtained without explicit measurement, sampling or shots.
+    \item[C9] Subroutine composition is first-class; larger programs are built by composing subroutines rather than through circuit surgery or staging glue.
+\end{description}
+
+If any of the four gates does not pass, the quantum-implicit tier is not awarded.
+These conditions are necessary but not sufficient: passing all four does not by itself confer the quantum-implicit tier, which still requires a justified profile match against the tier definitions.
+A system whose representative constructions fail to satisfy any one of them cannot be classified at this tier.

@@ -4,9 +4,11 @@
 \usepackage{longtable}
 \usepackage{hyperref}
 \makeatletter
-\@ifclassloaded{quantumarticle}{}{\usepackage{tabularx}}
+\@ifclassloaded{quantumarticle}{}{
+    \usepackage{tabularx}
+    \usepackage{xltabular}
+}
 \makeatother
-\usepackage{xltabular}
 \usepackage{listings}
 \usepackage{braket}
 \usepackage{amssymb}
@@ -14,3 +16,4 @@
 \usepackage{threeparttable}
 \usepackage{amsmath}
 \usepackage[T1]{fontenc}
+\usepackage{enumitem}

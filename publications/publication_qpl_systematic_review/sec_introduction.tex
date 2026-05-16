@@ -31,7 +31,7 @@ Quantum bias is a documented barrier to adoption.
 A 2025 empirical survey of quantum programmers found that the prevalence of quantum-specific vocabulary and concepts was a primary challenge, with 31\% of respondents identifying the absence of higher-level abstraction as a key missing feature of the field~\cite{ferreira2024qplusage}.
 An empirical study of quantum computing discussions on Stack Overflow corroborates this, finding persistent developer friction around hybrid quantum--classical toolchains and the difficulty of composing programs across systems~\cite{stackoverflowqc2026}.
 
-That friction manifests in four recurring patterns, each addressed by the evaluation rubric in Section~\ref{sec:evaluation_rubric}.
+That friction manifests in four recurring patterns, each addressed by the evaluation rubric in Section~\ref{sec:evaluation_instrument}.
 Type systems become non-intuitive when their constructs rely on quantum physical concepts that lack classical analogues; describing quantum-biased types at the programming layer erodes domain separation and compounds cognitive load.
 Quantum-biased constructs surface in nominally higher-level interfaces, requiring vocabulary that belongs below the programming layer.
 Interoperability across abstraction tiers is poor, with composition across systems requiring significant manual re-encoding.
@@ -46,7 +46,7 @@ This review is structured around two research questions:
     \item[RQ2] Given the abstraction gap identified in RQ1, is the development of a new quantum programming language targeting higher abstraction justified, or can existing systems be adapted to close the gap?
 \end{description}
 
-RQ1 is answered empirically in Section~\ref{sec:system_assessments}, through the systematic assessment of eleven quantum programming systems against the evaluation rubric defined in Section~\ref{sec:evaluation_rubric}.
+RQ1 is answered empirically in Section~\ref{sec:system_assessments}, through the systematic assessment of eleven quantum programming systems against the evaluation rubric defined in Section~\ref{sec:evaluation_instrument}.
 RQ2 is answered qualitatively in Section~\ref{sec:discussion}, drawing on the RQ1 findings and practitioner evidence~\cite{ferreira2024qplusage}.
 
 \subsection{Contributions}\label{subsec:introduction:contributions}
@@ -68,7 +68,7 @@ The assessments and their implications together constitute the answer to RQ2, ev
 \subsection{Paper organisation}\label{subsec:introduction:organisation}
 Section~\ref{sec:background} examines prior quantum programming taxonomies, usability frameworks and systematic literature review (SLR) methodology, positioning this review relative to existing work.
 Section~\ref{sec:taxonomy} defines the five-tier taxonomy and introduces the quantum-implicit tier.
-Section~\ref{sec:evaluation_rubric} presents the evaluation rubric and task suite.
+Section~\ref{sec:evaluation_instrument} presents the evaluation rubric and task suite.
 Section~\ref{sec:methodology} describes the systematic review protocol, including search strategy, screening criteria and validity considerations.
 Section~\ref{sec:system_descriptions} provides factual descriptions of the eleven assessed systems.
 Section~\ref{sec:system_assessments} applies the rubric to each system, presenting scored profiles and comparative analysis.
