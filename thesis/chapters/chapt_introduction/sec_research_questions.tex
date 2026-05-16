@@ -27,40 +27,41 @@ different~\cite{nunez_corrales2025betterabstractmachines}:
 Table~\ref{tab:introduction:research_questions:criteria_violations} illustrates why this tier is currently unoccupied.
 Three of the most advanced existing high-level languages are assessed against four criteria governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}; each records at least one violation.
 
-\begin{table}[ht!]
-    \centering
-    \caption{Representative criteria violations across three advanced high-level quantum programming languages. Each language records at least one violation of the four criteria most directly governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}.
+\footnotesize
+\begin{xltabular}{\textwidth}{p{2.8cm}XXXX}
+    \caption{Representative criteria violations across advanced quantum programming systems. Each records at least one violation of the four criteria most directly governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}.
     The full criteria set is presented in Chapter~\ref{ch:literature_review}.}
-    \label{tab:introduction:research_questions:criteria_violations}
-    \small
-    \begin{tabular}{p{3.2cm} p{3.5cm} p{3.5cm} p{3.5cm}}
-        \toprule
-        \textbf{Criterion} & \textbf{Silq} & \textbf{Quff} & \textbf{Qutes} \\\midrule
-        \textbf{Symbolic denotational syntax.}
-        No circuit elements required to reason about program effects on state.
-        & \texttt{qfree}, \texttt{const}, \texttt{lifted} and \texttt{mfree} annotations encode circuit-execution semantics as mandatory surface syntax. Both require circuit-model knowledge to apply correctly.
-        & Runtime function inversion (\texttt{invertF}) is a circuit-level surface concept. Phase notation and explicit qubit operations remain at the programming surface.
-        & \texttt{ref} advances toward quantum-agnostic pass-by-reference. Explicit gate instructions (\texttt{hadamard}, \texttt{mcp}, \texttt{swap}) are still required for algorithms outside the built-in set. \\ \addlinespace
-        \textbf{Representation-independent data types.}
-        No reference to circuit elements in data types.
-        & \texttt{uint[n]} hard-codes qubit count \texttt{n} into every numeric type. Every declaration couples data representation to a physical resource quantity.
-        & Explicit bit-width specification is required for all quantum types. The programmer must declare and manage qubit count for each variable.
-        & Quantum register types carry explicit size or qubit-level structure for operations outside the built-in set. \\ \addlinespace
-        \textbf{Classical-quantum regularity.}
-        Classical and quantum instructions coexist at the same level.
-        & The \texttt{!} annotation mandates a programmer-visible stratification between classical and quantum values, with different rules for control flow and function application.
-        & Distinct quantum and classical type families are required. Programmers must reason about which operations are valid in each context.
-        & Classical and quantum contexts remain syntactically distinguished. The classical/quantum boundary is programmer-managed rather than compiler-inferred. \\ \addlinespace
-        \textbf{Intrinsic ensemble semantics.}
-        Shot count elided; distribution types well-defined at the language level.
-        & Explicit \texttt{measure} is required to obtain classical output. Shot management is external to the language.
-        & Measurement must be explicitly inserted by the programmer. Shot count for statistical reliability is managed outside the language.
-        & Scope-bounded uncomputation handles one class of quantum-to-classical transition. General measurement and shot management remain explicit. \\
-        \bottomrule
-    \end{tabular}
-\end{table}
+    \label{tab:introduction:research_questions:criteria_violations} \\
+    \toprule
+    \textbf{Criterion} & \textbf{Silq} & \textbf{Quff} & \textbf{Qutes} & \textbf{Tower} \\\midrule
+    \textbf{Symbolic denotational syntax.}
+    No circuit elements required to reason about program effects on state.
+    & \texttt{qfree}, \texttt{const}, \texttt{lifted} and \texttt{mfree} annotations encode circuit-execution semantics as mandatory surface syntax. Both require circuit-model knowledge to apply correctly.
+    & Runtime function inversion (\texttt{invertF}) is a circuit-level surface concept. Phase notation and explicit qubit operations remain at the programming surface.
+    & \texttt{ref} advances toward quantum-agnostic pass-by-reference. Explicit gate instructions (\texttt{hadamard}, \texttt{mcp}, \texttt{swap}) are still required for algorithms outside the built-in set.
+    & Data structure operations (push, pop, insert) require no circuit element reasoning. \texttt{assign}/\texttt{unassign} sequencing and\texttt{with-do} constructs are mandatory surface syntax for any stateful operation, encoding reversibility obligations absent from classical programming. \\ \addlinespace
+    \textbf{Representation-independent data types.}
+    No reference to circuit elements in data types.
+    & \texttt{uint[n]} hard-codes qubit count \texttt{n} into every numeric type. Every declaration couples data representation to a physical resource quantity.
+    & Explicit bit-width specification is required for all quantum types. The programmer must declare and manage qubit count for each variable.
+    & Quantum register types carry explicit size or qubit-level structure for operations outside the built-in set.
+    & Data structure types (list, stack, queue, set, string) hide internal pointer layout and memory representation from the programmer. \\ \addlinespace
+    \textbf{Classical-quantum regularity.}
+    Classical and quantum instructions coexist at the same level.
+    & The \texttt{!} annotation mandates a programmer-visible stratification between classical and quantum values, with different rules for control flow and function application.
+    & Distinct quantum and classical type families are required. Programmers must reason about which operations are valid in each context.
+    & Classical and quantum contexts remain syntactically distinguished. The classical/quantum boundary is programmer-managed rather than compiler-inferred.
+    & The system operates entirely in superposition with no programmer-visible classical/quantum type stratification.\texttt{assign}/\texttt{unassign} sequencing is a quantum-specific surface obligation with no classical analogue.  \\ \addlinespace
+    \textbf{Intrinsic ensemble semantics.}
+    Shot count elided; distribution types well-defined at the language level.
+    & Explicit \texttt{measure} is required to obtain classical output. Shot management is external to the language.
+    & Measurement must be explicitly inserted by the programmer. Shot count for statistical reliability is managed outside the language.
+    & Scope-bounded uncomputation handles one class of quantum-to-classical transition. General measurement and shot management remain explicit.
+    & Measurement and shot management are external to the language. Distribution types are not language-level concepts. \\
+    \bottomrule
+\end{xltabular}
 
-Violations are consistent across the three most advanced high-level languages in the reviewed literature, confirming that the gap is a property of the existing design space rather than a shortcoming of any single system.
+Violations are consistent across advanced quantum programming systems, including Tower that advances furthest toward data structure abstraction operating in superposition, confirming that the gap is a structural property of the existing design space.
 The full criteria set and a systematic assessment across all reviewed languages is presented in Chapter~\ref{ch:literature_review}.
 
 \subsection{Research questions}\label{subsec:introduction:research_questions:questions}

@@ -28,4 +28,13 @@ Each also retains quantum-mechanical obligations in the general case: Silq requi
 Programming competency is not the underlying cause to this barrier.
 With the majority of quantum programmers also having significant classical experience.
 The issue fundamentally sits with the distance between the representative circuit model of quantum programming and the abstractions classical programmers are familiar with.
-No existing quantum programming system achieves a surface model agnostic of the underlying quantum substrate or in line with these familiar abstractions.
+
+Recent work introduces a data structure framework and control machine model that advances substrate-agnosticism at the data layer~\cite{yuan2025foundationalabstractions}.
+\textbf{Tower} presents a classical-facing data structure API, including sets, lists, queues, stacks and strings, whose operations execute entirely in superposition without exposing qubit-level implementation to the programmer.
+The accompanying control machine model removes circuit primitives from the programming surface at the ISA level.
+These contributions advance furthest among existing systems toward a programming surface that does not require quantum-mechanical vocabulary for data operations.
+
+Tower's design goal is to run classical programs correctly in superposition, achieving quantum speedup on classical algorithmic structures, rather than to allow quantum-computational intent to be expressed without quantum-mechanical vocabulary.
+Three classes of programming-surface obligation remain: reversibility must be managed explicitly through \texttt{assign} and \texttt{unassign}sequencing; uncomputation requires programmer-managed \texttt{with-do}constructs; and recursive bounds must be specified as explicit classical parameters.
+The system provides no mechanism for expressing quantum-computational primitives without quantum-mechanical vocabulary; superposition semantics, distribution types and amplitude amplification remain outside the abstraction boundary.
+No existing system achieves full separation of the programming surface from the quantum substrate for the general case of quantum-computational programming.
