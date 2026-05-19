@@ -4,7 +4,7 @@ The instrument specifies the representative task suite, the condition outcomes r
 This section defines the instrument; it does not apply it.
 Section~\ref{sec:system_assessments} applies the instrument to each reviewed system and reports the resulting evidence profiles and tier classifications.
 
-The instrument operationalises the taxonomy from Section~\ref{sec:taxonomy}: the tier labels (Assembly, IR, Framework, High-level and quantum-implicit) are defined there, and the quantum-implicit gating constraints in Subsection~\ref{subsec:evaluation_instrument:gating} are the operational form of the quantum-implicit litmus test stated in that section.
+The instrument operationalises the taxonomy from Section~\ref{sec:taxonomy} and the quantum-implicit gating constraints in Subsection~\ref{subsec:evaluation_instrument:gating} are the operational form of the quantum-implicit litmus test stated in that section.
 
 The instrument is evidence-first.
 For each system, canonical code examples are collected or constructed where no canonical example exists.
@@ -69,19 +69,19 @@ Following this approach, the four tasks below are defined prior to evaluation.
 Condition outcomes are recorded only with respect to the ability to complete these tasks using the system's representative programming model, with primary-source evidence.
 
 \begin{description}
-    \item[$T_1$ Deutsch--Jozsa] Implement the Deutsch--Jozsa decision procedure (promise problem: constant versus balanced) for a small input size, including an explicit oracle definition or the system's intended oracle hook.
+    \item[$T_1$ Deutsch--Jozsa] Implement the Deutsch--Jozsa decision procedure for a small input size, including an explicit oracle definition or the system's intended oracle hook.
     The minimum deliverable parameterises the construction for a small $n$, provides a single oracle construction or hook with a balanced oracle by default and runs the procedure to expose a clear decision artefact.
-    If the system requires measurement or sampling to get the decision, the observation boundary is recorded under Condition~\ref{subsec:evaluation_instrument:conditions}.
+    If the system requires measurement or sampling to get the decision, the observation boundary is recorded under the conditions in~\ref{subsec:evaluation_instrument:conditions}.
     \item[$T_2$ Grover search] Implement one Grover iteration, or a small fixed number, for a simple marked-state or predicate oracle, including the diffusion operator.
-    The minimum deliverable defines an oracle that marks a single basis state or simple predicate, implements one full Grover iterate as an oracle phase flip followed by diffusion and provides the canonical pathway to execute and get an outcome.
-    Any explicit sampling, shots or observable boundary is recorded under Condition~\ref{subsec:evaluation_instrument:conditions}.
+    The minimum deliverable defines an oracle that marks a single basis state or simple predicate, implements one full Grover iteration as an oracle phase flip followed by diffusion and provides the canonical pathway to execute and get an outcome.
+    Any explicit sampling, shots or observable boundary is recorded under the conditions in~\ref{subsec:evaluation_instrument:conditions}.
     \item[$T_3$ Quantum phase estimation] Implement quantum phase estimation for a small unitary and small precision, including controlled powers and an inverse QFT mechanism.
     The minimum deliverable chooses and documents a simple unitary $U$ with a known phase or eigenvalue and implements the controlled-$U^{2^k}$ sequence for $k=0,\ldots,t-1$.
     The inverse QFT is implemented explicitly or via a cited library routine and exposes the estimated phase bits or a documented analogue.
-    If measurement is required, the observation boundary is recorded under Condition~\ref{subsec:evaluation_instrument:conditions}.
+    If measurement is required, the observation boundary is recorded under the conditions in~\ref{subsec:evaluation_instrument:conditions}.
     \item[$T_4$ Bell state preparation] Prepare a Bell state from $\ket{00}$ and expose it as a reusable construction to exercise composition.
     The minimum deliverable defines or calls a routine that produces an entangled pair and demonstrates use of the pair in a follow-on step, such as passing it to another routine or applying an additional controlled operation.
-    Measurement is avoided in the core construction where possible; if it is required by the system's result model, the boundary is recorded under Condition~\ref{subsec:evaluation_instrument:conditions}.
+    Measurement is avoided in the core construction where possible; if it is required by the system's result model, the boundary is recorded under the conditions in~\ref{subsec:evaluation_instrument:conditions}.
 \end{description}
 
 Canonical examples are used wherever available in primary sources.

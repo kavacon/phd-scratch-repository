@@ -5,9 +5,9 @@ The section covers search protocol, screening and selection, study quality asses
 Results are reported in Section~\ref{sec:system_assessments}.
 
 \subsection{Search protocol}\label{subsec:methodology:search_protocol}
-Searches were conducted on 2026-04-27 across four bibliographic databases: ACM Digital Library, IEEE Xplore, arXiv and Google Scholar.
+Searches were conducted on 2026-04-27 across three bibliographic databases: ACM Digital Library, IEEE Xplore, and arXiv.
 Official project and specification sites were consulted on a per-system basis throughout the assessment period.
-A literature cutoff of 2026-04-08 was applied; evidence published after this date was not used for scoring.
+A literature cutoff of 2026-04-08 was applied; evidence published after this date was not used for assessment.
 
 Three verbatim search strings were applied consistently across all databases.
 The primary string (S1) used broad seed terms targeting quantum programming languages and intermediate representations: \texttt{"quantum programming language" OR "quantum intermediate representation" OR OpenQASM OR "quantum MLIR" OR Silq OR Qiskit OR PennyLane}.
@@ -15,8 +15,9 @@ A second string (S2) targeted language-specific terms not reliably surfaced by d
 A third string (S3) focused on abstraction-level framing: \texttt{"quantum programming" AND "abstraction" AND "language"}.
 Full verbatim strings, per-database result counts and search URLs are published in Appendix~A of~\cite{kavadias2026qplSurveySupplementary}.
 
-Pre-deduplication totals were 923 records from arXiv, 1,328 from ACM Digital Library, 728 from IEEE Xplore and 29,202 from Google Scholar, giving a combined total of 32,181 records.
-The estimated unique record count after deduplication is 895--1,500; the Google Scholar corpus overlaps substantially with the other three databases.
+Pre-deduplication totals were 923 records from arXiv, 1{,}328 from ACM Digital Library, and 728 from IEEE Xplore, giving a combined total of 2{,}979 records.
+The estimated unique record count after deduplication is 895--1{,}500.
+
 A supplementary AI-assisted discovery process ran across the study period using a scheduled agent that scanned active project context and surfaced candidate papers on a fortnightly cadence.
 This method does not produce reproducible verbatim queries and does not constitute a primary PRISMA search~\cite{page2021prisma}.
 All candidates surfaced by this process were subsequently screened against the pre-specified criteria before inclusion.
@@ -24,7 +25,7 @@ All candidates surfaced by this process were subsequently screened against the p
 \subsection{Screening and selection}\label{subsec:methodology:screening}
 The review covers a pre-specified, bounded system set.
 The database searches are therefore used to demonstrate coverage and reduce discovery bias.
-The unit of analysis for extraction and scoring is each included system’s authoritative evidence base (primary paper/specification and official documentation) rather than the full retrieved corpus.
+The unit of analysis for extraction and assessment is each included system’s authoritative evidence base (primary paper/specification and official documentation) rather than the full retrieved corpus.
 
 Candidate systems were assessed against four inclusion criteria.
 A system is included if it meets at least two of the following:
@@ -32,15 +33,15 @@ A system is included if it meets at least two of the following:
     \item[$C_1$] A formal specification or peer-reviewed primary paper exists.
     \item[$C_2$] Active releases or specification updates within 24 months prior to the cutoff.
     \item[$C_3$] Multivendor or multi-device backend support beyond a single lab or vendor.
-    \item[$C_4$] Public documentation is sufficient to complete tasks defined in Section~\ref{subsec:evaluation_instrument:task_suite} without access to private knowledge.
+    \item[$C_4$] Public documentation is enough to complete the representative tasks defined in Section~\ref{subsec:evaluation_instrument:task_suite} without access to private knowledge.
 \end{description}
 Systems were excluded if their primary materials were marketing-only, if the project had been inactive for more than 36 months or if documentation was not enough to assess representative workflows.
 The version rule stipulates that the latest stable major release or specification available by 2026-04-08 is the evaluation target; earlier versions are used only as labelled historical contrast.
 
 Screening was conducted by a single reviewer.
 This review covers a pre-defined system set rather than a large open literature corpus; full-text exclusion rationale is recorded for each system in Appendix~B of~\cite{kavadias2026qplSurveySupplementary}.
-Two additional reviewers participate in independent scoring and calibration reconciliation.
-Dual screening of the full inclusion corpus was not feasible given the review scope and is acknowledged as a limitation per PRISMA 2020 item~16b~\cite{page2021prisma}.
+Two additional reviewers participate in independent assessment and calibration reconciliation.
+Dual screening of the full inclusion corpus was not possible given the review scope and is acknowledged as a limitation per PRISMA 2020 item~16b~\cite{page2021prisma}.
 
 Ten systems were included in the primary review: OpenQASM~3.0, QIR, Q-MLIR, Qiskit, PennyLane, Q\#, Silq, Qmod, Quff and Qutes.
 Quipper was excluded as a primary system, failing C\textsubscript{2} and C\textsubscript{3}; it is retained as a labelled historical contrast reference in Section~\ref{sec:system_descriptions}.
@@ -89,38 +90,59 @@ A \textit{Medium} confidence rating denotes a source tier~2 primary citation or 
 \end{table*}
 
 \subsection{Data extraction and synthesis}\label{subsec:methodology:extraction}
-For each system, the following data were extracted.
-System identity, version, primary citation and documentation type were recorded alongside taxonomy category and typical workflow description.
-Task completion evidence was captured for T\textsubscript{1}--T\textsubscript{5}, with axis scores A--E supported by one to three evidence quotes per axis citing the specific paper section or documentation anchor.
-Quantum bias items with justification, confidence tier, scoring reviewer and date completed the extraction record.
-Where evidence was absent or ambiguous, the more conservative score was assigned; scores inferred from examples marked as optional or advanced were not used.
-The extraction dataset is published as Appendix~C and per-axis evidence quotes as Appendix~D of~\cite{kavadias2026qplSurveySupplementary}.
+The evaluation instrument (representative task suite, recorded condition outcomes and tier assignment rules) is defined in Section~\ref{sec:evaluation_instrument}.
+This subsection describes how the instrument was applied during the review, including evidence handling, extraction record structure, calibration and synthesis.
 
-Calibration was conducted by two reviewers independently scoring three to five systems before proceeding to full independent scoring.
+Task completion evidence was captured for the representative tasks $T_1$--$T_4$.
+For each system and each task, outcomes were recorded for conditions $C_1$--$C_9$ using the outcome labels defined in Section~\ref{sec:evaluation_instrument}.
+Each recorded outcome is supported by a minimal code construction and primary-source citations, with a one-sentence justification.
+
+\paragraph{Evidence policy: canonical and constructed examples.}
+Canonical examples from a system’s primary sources (specification, primary paper, official documentation and official tutorials) take precedence.
+Constructed examples are used only when no canonical example exists for the task or feature.
+Constructed examples are explicitly labelled as such in the extraction record.
+For constructed examples, each non-trivial feature used in the construction is justified by a primary-source citation.
+
+\paragraph{Evidence policy: abridgement.}
+Abridged examples are permitted only when the omitted portion is a cited routine or a referenced helper that is not the subject of the evidence claim.
+Abridgement must not omit or conceal the mechanism being evaluated, in particular when recording outcomes for the measurement or result boundary, subroutine composition and uncomputation conditions.
+
+\paragraph{Evidence record structure.}
+For each system $\times$ task $\times$ condition, the evidence record captures: example type (canonical or constructed), primary source links, a minimal code snippet, preconditions (backend, simulator and version assumptions), the condition outcome label with a one-sentence justification and notes used to record required escape hatches or cross-layer leakage.
+Where evidence is absent or ambiguous, the more conservative outcome label was assigned; outcomes inferred from examples marked as optional or advanced were not used.
+The extraction dataset is published as Appendix~C and the specific assessed code samples as Appendix~D of~\cite{kavadias2026qplSurveySupplementary}.
+
+Calibration was conducted by two reviewers independently assessing three to five systems before proceeding to full independent assessment.
 Disagreements greater than one level were discussed and resolved with a documented rationale; any amendments made post-calibration were applied prospectively.
 
 Synthesis follows the structured narrative approach without meta-analysis~\cite{KitchenhamCharters2007SLR}.
 Systems are grouped by the taxonomy tiers defined in Section~\ref{sec:taxonomy}.
-Per-system outputs follow the aggregation rules defined in Section~\ref{sec:evaluation_instrument}: headline score, spectrum score (arithmetic mean of A--E with minimum--maximum range) and quantum bias count.
+Per-system outputs follow the aggregation rules defined in Section~\ref{sec:evaluation_instrument}: a tier assignment with a short justification grounded in discriminating conditions, a compact condition profile summary and representative evidence bullets with citations.
+Each per-system synthesis explicitly notes where key evidence is constructed rather than canonical.
 
 \subsection{Sensitivity analysis and threats to validity}\label{subsec:methodology:sensitivity}
-A pre-specified leave-one-out sensitivity analysis was conducted on systems where a single document is the sole or pivotal source for one or more axis scores~\cite{kavadias2026qplSurveyProtocol}.
+A pre-specified leave-one-out sensitivity analysis was conducted on systems where a single document is the sole or pivotal source for one or more tasks or conditions~\cite{kavadias2026qplSurveyProtocol}.
 Two cases were identified.
 
-\textit{Quff}: all axis scores depend on a single peer-reviewed source~\cite{wright2024quff}.
+\textit{Quff}: all recorded outcomes depend on a single peer-reviewed source~\cite{wright2024quff}.
 No additional published specification or paper existed at the review cutoff.
 Removal of this source would leave no evidence base.
-Scores are retained given the peer-reviewed venue; the single-source dependency is noted as a limitation.
+Outcomes are retained given the peer-reviewed venue; the single-source dependency is noted as a limitation.
 
-\textit{Qutes axis~C and axis~D scores of~3}: both scores depend critically on one preprint~\cite{reversiblelifetime2026} for the reversible lifetime semantics mechanism.
-The HPDC~2025 paper alone~\cite{faro2025qutes} would not sustain either score; removal would reduce both to score~2, shifting the headline from high-level to framework.
-The broader Qutes research programme has two peer-reviewed venue publications; the preprint status of this specific mechanism is noted as a limitation rather than a basis for score reduction.
+\textit{Qutes}: two tier-relevant outcomes depend critically on one preprint~\cite{reversiblelifetime2026} describing the reversible lifetime semantics mechanism.
+The HPDC~2025 paper alone~\cite{faro2025qutes} would not sustain the same tier justification.
+The broader Qutes research programme has peer-reviewed venue publications; the preprint status of this specific mechanism is noted as a limitation.
 
 The principal threats to validity are as follows.
 \begin{itemize}
-    \item \textit{Scoring subjectivity}: is mitigated by dual independent scoring with calibration, required evidence quotes and predefined decision rules for ambiguous cases.
-    \item \textit{Rubric dependence on T\textsubscript{1}--T\textsubscript{5}}: the task suite was pre-specified in the protocol~\cite{kavadias2026qplSurveyProtocol}; any post-calibration amendments are documented and applied prospectively only.
+    \item \textit{Assessment subjectivity}: is mitigated by dual independent assessment with calibration, required evidence quotes and predefined decision rules for ambiguous cases.
+    \item \textit{Dependence on $T_1$--$T_4$}: the task suite was pre-specified in the protocol~\cite{kavadias2026qplSurveyProtocol}; any post-calibration amendments are documented and applied prospectively only.
     \item \textit{Maturity differences across ecosystems}: source-tier labelling and per-claim confidence ratings mitigate misattribution.
     \item \textit{Version churn}: the versioning rule, latest stable major release by 2026-04-08, is applied consistently.
     \item \textit{Publication bias}: grey literature, including official specifications, standards-body publications and maintainer documentation, is included by design to avoid systematic under-representation of IR-tier and industry-produced frameworks~\cite{KitchenhamCharters2007SLR,page2021prisma}.
+    \item \textit{Evidence availability and representativeness}: canonical examples are unevenly available across systems.
+    Constructed examples are used only when necessary and are explicitly labelled, but they introduce a risk of over-approximating idiomatic workflows.
+    This risk is mitigated by requiring primary-source justification for each non-trivial feature used in a constructed example and by recording any required escape hatches or cross-layer leakage in the evidence record.
+    \item \textit{Interpretation drift across systems}: the condition ladders enforce a common decision basis, but ambiguous features can still be interpreted inconsistently across systems.
+    This risk is mitigated by calibration on a shared subset of systems, one-sentence justifications per recorded outcome and conservative defaulting when evidence is ambiguous.
 \end{itemize}
