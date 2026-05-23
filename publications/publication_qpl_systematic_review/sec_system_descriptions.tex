@@ -1,8 +1,10 @@
 \section{System descriptions}\label{sec:system_descriptions}
-The eleven systems surveyed were selected according to criteria C\textsubscript{1}--C\textsubscript{4} defined in Section~\ref{sec:taxonomy} and the inclusion/exclusion protocol described in Section~\ref{sec:methodology}.
+The thirteen systems surveyed were selected according to criteria C\textsubscript{1}--C\textsubscript{4} defined in Section~\ref{sec:taxonomy} and the inclusion/exclusion protocol described in Section~\ref{sec:methodology}.
 Systems are described in implied abstraction tier order: Assembly, Intermediate Representation, Framework and High-Level Language, mirroring the taxonomy structure from Section~\ref{sec:taxonomy}.
 No tier assignments, rubric scores or evaluative language appear in this section; all evaluation is deferred to Section~\ref{sec:system_assessments}.
-Quipper is described in Subsection~\ref{subsec:system_descriptions:quipper} but does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{3}; it is retained as a comparison case for the non-Python embedded DSL tradition and excluded from primary assessment in Section~\ref{sec:system_assessments}.
+Quipper is described in Subsection~\ref{subsec:system_descriptions:quipper} but does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{3}.
+Tower is described in Subsection~\ref{subsec:system_descriptions:tower} but does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{4}.
+They are retained as comparison cases for the non-Python embedded DSL tradition and data model abstraction and excluded from primary assessment in Section~\ref{sec:system_assessments}.
 
 \subsection{OpenQASM 3.0}\label{subsec:system_descriptions:openqasm}
 \textit{OpenQASM 3.0} is a quantum assembly language designed as a circuit-level interchange format and execution description language for hybrid quantum--classical programs~\cite{cross2022openqasm3}.
@@ -145,3 +147,14 @@ print(result.top_measurement)
 Uncomputation is provided through scope-bounded liveness-guided reclamation.
 The compiler statically analyses data dependency and entanglement graphs to determine the earliest safe reclamation point for each variable.
 Adjoint operations are inserted at scope boundaries, reducing both circuit depth and ancilla count relative to the standard compute-then-uncompute pattern~\cite{faro2025qutes,reversiblelifetime2026}.
+
+\subsection{Qwerty}\label{subsec:system_descriptions:qwerty}
+\textit{Qwerty} is a basis-oriented quantum programming language that makes measurement basis and basis changes explicit in the programming surface, with the goal of supporting programs whose semantics depend on (and must control) the measurement context~\cite{adams2024qwerty}.
+The language provides constructs for writing quantum programs while tracking basis information as a first-class concern, aiming to reduce ambiguity around how values are prepared, transformed and observed when multiple bases are involved.
+Qwerty is accompanied by a dedicated compilation toolchain; \textit{ASDF} is a compiler for Qwerty that targets efficient execution of basis-oriented programs and documents the lowering/optimisation pipeline for the language~\cite{adams2025asdf}.
+
+\subsection{Tower}\label{subsec:system_descriptions:tower}
+\textit{Tower} is a data structure framework for quantum computation that presents classical-facing abstractions whose operations execute entirely in superposition~\cite{yuan2025foundationalabstractions}.
+Rather than exposing a circuit-construction interface, Tower provides an API for familiar structures such as lists, stacks, queues, sets and strings, aiming to support classical algorithmic patterns while preserving reversibility.
+The system is paired with a control machine model that removes circuit primitives from the programming surface at the ISA level, positioning Tower as an advanced reference point for abstraction at the data layer~\cite{yuan2025foundationalabstractions}.
+Reversibility obligations remain explicit in the surface language through mandatory \texttt{assign}/\texttt{unassign} sequencing for stateful updates and \texttt{with-do} constructs to structure uncomputation; recursive bounds must also be provided as explicit classical parameters.

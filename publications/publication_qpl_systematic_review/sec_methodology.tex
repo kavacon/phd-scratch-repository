@@ -5,7 +5,7 @@ The section covers search protocol, screening and selection, study quality asses
 Results are reported in Section~\ref{sec:system_assessments}.
 
 \subsection{Search protocol}\label{subsec:methodology:search_protocol}
-Searches were conducted on 2026-04-27 across three bibliographic databases: ACM Digital Library, IEEE Xplore, and arXiv.
+Searches were conducted on 2026-05-19 across three bibliographic databases: ACM Digital Library, IEEE Xplore and arXiv.
 Official project and specification sites were consulted on a per-system basis throughout the assessment period.
 A literature cutoff of 2026-04-08 was applied; evidence published after this date was not used for assessment.
 
@@ -15,20 +15,20 @@ A second string (S2) targeted language-specific terms not reliably surfaced by d
 A third string (S3) focused on abstraction-level framing: \texttt{"quantum programming" AND "abstraction" AND "language"}.
 Full verbatim strings, per-database result counts and search URLs are published in Appendix~A of~\cite{kavadias2026qplSurveySupplementary}.
 
-Pre-deduplication totals were 923 records from arXiv, 1{,}328 from ACM Digital Library, and 728 from IEEE Xplore, giving a combined total of 2{,}979 records.
-The estimated unique record count after deduplication is 895--1{,}500.
+Pre-deduplication totals were 852 records from arXiv, 1{,}295 from ACM Digital Library and 704 from IEEE Xplore, giving a combined total of 2{,}851 records.
+The unique record count after deduplication was 2{,}233.
 
 A supplementary AI-assisted discovery process ran across the study period using a scheduled agent that scanned active project context and surfaced candidate papers on a fortnightly cadence.
 This method does not produce reproducible verbatim queries and does not constitute a primary PRISMA search~\cite{page2021prisma}.
 All candidates surfaced by this process were subsequently screened against the pre-specified criteria before inclusion.
 
 \subsection{Screening and selection}\label{subsec:methodology:screening}
-The review covers a pre-specified, bounded system set.
-The database searches are therefore used to demonstrate coverage and reduce discovery bias.
-The unit of analysis for extraction and assessment is each included system’s authoritative evidence base (primary paper/specification and official documentation) rather than the full retrieved corpus.
+The review began from a pre-specified, bounded seed set of quantum programming systems, used to design and validate the search strategy.
+The database searches then served as the primary discovery mechanism for identifying additional candidate systems beyond the seed set and reducing discovery bias.
+The unit of analysis for extraction and assessment is each included system’s authoritative evidence base (primary paper/specification and official documentation), rather than the full retrieved corpus.
 
 Candidate systems were assessed against four inclusion criteria.
-A system is included if it meets at least two of the following:
+A system is included if it meets at least three of the following:
 \begin{description}
     \item[$C_1$] A formal specification or peer-reviewed primary paper exists.
     \item[$C_2$] Active releases or specification updates within 24 months prior to the cutoff.
@@ -43,8 +43,8 @@ This review covers a pre-defined system set rather than a large open literature 
 Two additional reviewers participate in independent assessment and calibration reconciliation.
 Dual screening of the full inclusion corpus was not possible given the review scope and is acknowledged as a limitation per PRISMA 2020 item~16b~\cite{page2021prisma}.
 
-Ten systems were included in the primary review: OpenQASM~3.0, QIR, Q-MLIR, Qiskit, PennyLane, Q\#, Silq, Qmod, Quff and Qutes.
-Quipper was excluded as a primary system, failing C\textsubscript{2} and C\textsubscript{3}; it is retained as a labelled historical contrast reference in Section~\ref{sec:system_descriptions}.
+Eleven systems were included in the primary review: OpenQASM~3.0, QIR, Q-MLIR, Qiskit, PennyLane, Q\#, Silq, Qmod, Quff, Qwerty and Qutes.
+Quipper and Tower were excluded as primary systems, failing C\textsubscript{2} and C\textsubscript{3} or C\textsubscript{4} respectively; they are retained as labelled systems of interest in Section~\ref{sec:system_descriptions}.
 
 \subsection{Study quality assessment}\label{subsec:methodology:quality}
 Evidence quality was assessed for each system prior to data extraction using a source-tier hierarchy adapted from the evidence-based software engineering guidelines~\cite{KitchenhamCharters2007SLR}.
@@ -80,6 +80,7 @@ A \textit{Medium} confidence rating denotes a source tier~2 primary citation or 
             Qmod            & \cite{vax2025qmodexpressivehighlevelquantum} & 2                    & Medium              & ---          \\
             Quff            & \cite{wright2024quff}                        & 1                    & Medium              & \checkmark   \\
             Qutes           & \cite{faro2025qutes,reversiblelifetime2026}  & 1                    & High                & \checkmark   \\
+            Qwerty          & \cite{adams2024qwerty}                       & 1                    & Medium              & ---          \\
             \bottomrule
         \end{tabular}
         \begin{tablenotes}
