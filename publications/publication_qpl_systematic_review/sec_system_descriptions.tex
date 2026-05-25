@@ -2,9 +2,8 @@
 The thirteen systems surveyed were selected according to criteria C\textsubscript{1}--C\textsubscript{4} defined in Section~\ref{sec:taxonomy} and the inclusion/exclusion protocol described in Section~\ref{sec:methodology}.
 Systems are described in implied abstraction tier order: Assembly, Intermediate Representation, Framework and High-Level Language, mirroring the taxonomy structure from Section~\ref{sec:taxonomy}.
 No tier assignments, rubric scores or evaluative language appear in this section; all evaluation is deferred to Section~\ref{sec:system_assessments}.
-Quipper is described in Subsection~\ref{subsec:system_descriptions:quipper} but does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{3}.
 Tower is described in Subsection~\ref{subsec:system_descriptions:tower} but does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{4}.
-They are retained as comparison cases for the non-Python embedded DSL tradition and data model abstraction and excluded from primary assessment in Section~\ref{sec:system_assessments}.
+It is retained as a comparison for data model abstraction and excluded from primary assessment in Section~\ref{sec:system_assessments}.
 
 \subsection{OpenQASM 3.0}\label{subsec:system_descriptions:openqasm}
 \textit{OpenQASM 3.0} is a quantum assembly language designed as a circuit-level interchange format and execution description language for hybrid quantum--classical programs~\cite{cross2022openqasm3}.
@@ -43,14 +42,6 @@ The framework models a hybrid computation as a directed acyclic graph of process
 Quantum subroutines are encapsulated as QNodes: functions that can be composed with classical machine learning code and differentiated using automatic differentiation.
 A device-agnostic plugin architecture abstracts over simulators and hardware providers, with native integration for PyTorch, TensorFlow and JAX.
 Differentiation is supported via backpropagation on simulators and parameter-shift rules for hardware execution, enabling end-to-end gradient computation through hybrid pipelines~\cite{bergholm2018pennylane}.
-
-\subsection{Quipper}\label{subsec:system_descriptions:quipper}
-\textit{Quipper} is a functional quantum programming language embedded in Haskell, designed to generate and manipulate quantum circuits as first-class values~\cite{green2013quipper}.
-The language uses monadic operational semantics, encapsulating qubit operations within the \texttt{Circ} monad.
-Circuits are constructed by composing gate applications, higher-order combinators and named circuit blocks defined with the \texttt{box} construct.
-Quipper compiles to parameterised object code that generates circuits at runtime rather than emitting static circuit descriptions, enabling circuits of practically large scale to be expressed concisely.
-Dynamic lifting permits measurement results from one circuit to become parameters of a subsequent circuit, supporting multi-stage classical-quantum workflows~\cite{green2013quipper}.
-Quipper does not satisfy inclusion criteria C\textsubscript{2} and C\textsubscript{3} (Sections~\ref{sec:taxonomy}and~\ref{sec:methodology}) and is excluded from primary assessment in Section~\ref{sec:system_assessments}.
 
 \subsection{Q\#}\label{subsec:system_descriptions:qsharp}
 \textit{Q\#} is a standalone quantum programming language developed by Microsoft as part of the Azure Quantum platform~\cite{MicrosoftQSharpOverview}.

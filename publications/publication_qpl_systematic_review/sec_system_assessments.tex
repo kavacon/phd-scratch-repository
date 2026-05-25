@@ -5,7 +5,7 @@ The code samples are available in Appendix D~\cite{kavadias2026qplSurveySuppleme
 Per-system evidence summaries are in Subsection~\ref{subsec:system_assessments:per_system}.
 Comparative analysis is in Subsection~\ref{subsec:system_assessments:comparative}.
 
-Quipper and Tower are excluded from the formal assessment; Subsection~\ref{subsec:system_assessments:quipper_tower_aside} includes them as labelled reference points.
+Tower is excluded from the formal assessment; Subsection~\ref{subsec:system_assessments:tower_aside} includes them as labelled reference points.
 Findings are reported here; interpretation of RQ1 and RQ2 is in Section~\ref{sec:discussion}.
 
 \subsection{Per-system evidence summaries}\label{subsec:system_assessments:per_system}
@@ -119,7 +119,7 @@ Q-MLIR extends MLIR with a quantum dialect to enable progressive lowering from q
         T1$^{\dagger}$ & F           & F           & F           & F           & F           & F           & P           & C           & C           \\
         T2             & F           & F           & F           & C           & F           & F           & P           & F           & C           \\
         T3$^{\dagger}$ & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
-        T4$^{\dagger}$ & F           & F           & F           & --          & F           & --          & P           & F           & C           \\
+        T4$^{\dagger}$ & F           & F           & F           & --          & F           & F           & P           & F           & C           \\
         \bottomrule
     \end{tabular}
     \footnotesize$^{\dag}$ Constructed example.
@@ -209,10 +209,10 @@ PennyLane is a Python-based quantum machine learning framework providing differe
         \toprule
         \textbf{Task} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
         \midrule
-        T1           & F           & F           & F           & F           & F           & F           & P           & C           & C           \\
-        T2           & F           & F           & F           & F           & F           & F           & P           & C           & C           \\
-        T3           & F           & F           & F           & C           & F           & -           & P           & C           & C           \\
-        T4           & F           & F           & F           & -           & F           & -           & P           & F           & F           \\
+        T1            & F           & F           & F           & F           & F           & F           & P           & C           & C           \\
+        T2            & F           & F           & F           & F           & F           & F           & P           & C           & C           \\
+        T3            & F           & F           & F           & C           & F           & -           & P           & C           & C           \\
+        T4            & F           & F           & F           & -           & F           & -           & P           & F           & F           \\
         \bottomrule
     \end{tabular}
 \end{center}
@@ -299,28 +299,42 @@ Silq is a standalone statically typed quantum programming language whose definin
         \toprule
         \textbf{Task} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
         \midrule
-        T1            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T2            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T3            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T4            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
+        T1            & F           & C           & C           & C           & C           & C           & P           & C           & P           \\
+        T2            & F           & C           & C           & C           & C           & C           & P           & C           & P           \\
+        T3$^{\dag}$   & F           & C           & C           & -           & C           & C           & P           & F           & P           \\
+        T4$^{\dag}$   & F           & C           & C           & -           & C           & C           & P           & C           & P           \\
         \bottomrule
     \end{tabular}
+    \footnotesize$^{\dag}$ Constructed example.
 \end{center}
-% \noindent\footnotesize$^{\dag}$ Constructed example.\normalsize
 
 \begin{center}
+    \paragraph{Aggregated condition profile}
     \small
     \begin{tabular}{@{}ccccccccc@{}}
+        \addlinespace
         \toprule
         C1 & C2 & C3 & C4 & C5 & C6 & C7 & C8 & C9 \\
         \midrule
-        ?  & ?  & ?  & ?  & ?  & ?  & ?  & ?  & ?  \\
+        F  & C  & C  & C  & C  & C  & P  & F  & P  \\
         \bottomrule
     \end{tabular}
 \end{center}
 
 \paragraph{Evaluation analysis}
-\textit{[To draft.]}
+Silq most closely matches the \textit{High-level} tier when the aggregated condition profile is compared against the expected signatures in Table~\ref{tab:evaluation_instrument:expected_profile}.
+Silq supports ordinary program-level composition, keeps hardware adjacency optional and reduces several low-level obligations to constrained surface vocabulary rather than circuit plumbing.
+The representative artefact model is a standalone language in which quantum data is manipulated directly as typed values, with control flow and abstraction expressed using ordinary functions.
+For example $\texttt{def grover[...] (f: const uint[n] !→ lifted 𝔹): !ℕ}$, calls such as $\texttt{groverDiffusion(cand)}$ and returning a measured value via $\texttt{measure(cand)}$.
+This differs from framework-style circuit construction in that the primary surface is a program over quantum-typed data rather than an object that is assembled and then executed.
+
+Across the task suite, the evidence repeatedly shows reuse and encapsulation rather than inlined gate scripting.
+T1 and T2 package algorithm structure as parameterised routines and use ordinary composition when invoking the oracle and diffusion components, while T4 is expressed as a reusable $\texttt{bell\_pair}$ routine returning a pair that can be consumed by other code.
+Measurement remains a required step for extracting classical outcomes, but it appears as a single builtin operation rather than explicit wiring of classical registers or measurement bookkeeping, which supports the constrained (rather than fail) judgement on C6.
+By contrast, T3 requires explicit phase reasoning and a concrete inverse-QFT decomposition, forcing a C8 failure even though the rest of the surface reads as program-like.
+
+Relative to the \textit{High-level} expected profile in Table~\ref{tab:evaluation_instrument:expected_profile}, the primary deviations are C1 and C8.
+C1 is F rather than C because superposition is still introduced through explicit $\texttt{H}$ applications on addressed components, and C8 is F rather than C because representative phase estimation requires explicit phase-parameter reasoning rather than remaining purely recipe-level.
 
 \subsubsection{Qmod (Classiq)}\label{subsubsec:system_assessments:per_system:qmod}
 Qmod is a high-level quantum domain-specific language embedded in Python, designed to express algorithmic intent through quantum-native types and a synthesis engine that handles gate-level realisation~\cite{vax2025qmodexpressivehighlevelquantum}.
@@ -331,28 +345,41 @@ Qmod is a high-level quantum domain-specific language embedded in Python, design
         \toprule
         \textbf{Task} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
         \midrule
-        T1            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T2            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T3            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T4            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
+        T1            & C           & C           & C           & C           & C           & -           & P           & C           & P           \\
+        T2            & C           & C           & C           & C           & C           & C           & P           & C           & P           \\
+        T3$^{\dag}$   & F           & C           & C           & F           & C           & C           & P           & F           & P           \\
+        T4            & F           & C           & C           & -           & C           & C           & P           & C           & P           \\
         \bottomrule
     \end{tabular}
 \end{center}
-% \noindent\footnotesize$^{\dag}$ Constructed example.\normalsize
 
 \begin{center}
+    \paragraph{Aggregated condition profile}
     \small
     \begin{tabular}{@{}ccccccccc@{}}
+        \addlinespace
         \toprule
         C1 & C2 & C3 & C4 & C5 & C6 & C7 & C8 & C9 \\
         \midrule
-        ?  & ?  & ?  & ?  & ?  & ?  & ?  & ?  & ?  \\
+        F  & C  & C  & F  & C  & C  & P  & F  & P  \\
         \bottomrule
     \end{tabular}
 \end{center}
 
 \paragraph{Evaluation analysis}
-\textit{[To draft.]}
+Qmod most closely matches the \textit{High-level} tier when the aggregated condition profile is compared against the expected signatures in Table~\ref{tab:evaluation_instrument:expected_profile}.
+Qmod supports ordinary subroutine composition, keeps hardware adjacency optional and presents representative code as functions over typed quantum objects rather than direct circuit-object mutation.
+The representative artefact model is a typed, quantum-explicit programming surface with dedicated role annotations and callable types.
+It includes example such as $\texttt{qfunc}$ and $\texttt{qperm}$, explicit allocation $\texttt{allocate(res)}$, and higher-order composition through $\texttt{QCallable}$ parameters and reusable routines such as $\texttt{bell(res)}$ and $\texttt{within\_apply(\{...\},\{...\})}$.
+
+Across the task suite, the higher-level structure is consistently expressed through reusable components rather than inlined circuit surgery.
+T1 packages the Deutsch--Jozsa core as a conjugation pattern using $\texttt{within\_apply}$ around $\texttt{hadamard\_transform(x)}$ and $\texttt{phase\_oracle(\ldots)}$, while T2 expresses iteration through $\texttt{power(r,\{...\})}$ and delegates the Grover iterate structure to a library combinator $\texttt{grover\_operator(\ldots)}$.
+The observation boundary is present even when it is not written as a raw measurement primitive, for example, via $\texttt{Output[...]}$ parameters and explicit $\texttt{measure(count)}$ in the constructed QPE listing.
+By contrast, the phase-estimation task forces a gate-level decomposition and phase-parameter management, including a handwritten two-qubit inverse QFT and controlled phase powers, which drives failures in uncomputation and phase operations.
+
+Relative to the \textit{High-level} expected profile in Table~\ref{tab:evaluation_instrument:expected_profile}, the primary deviations are C1, C4 and C8.
+C1 is F because superposition is still introduced through explicit Hadamard applications on addressed elements, C4 is F because the representative phase-estimation construction requires manual inverse-QFT decomposition as ordinary code.
+C8 is F because both phase estimation and Bell-state preparation require explicit phase and entanglement understanding for correctness rather than remaining purely recipe-level.
 
 \subsubsection{Quff}\label{subsubsec:system_assessments:per_system:quff}
 Quff is a scripting-language-style quantum programming language with a hybrid quantum--classical execution model and runtime-managed automatic uncomputation on variable scope exit~\cite{wright2024quff}.
@@ -363,31 +390,44 @@ Quff is a scripting-language-style quantum programming language with a hybrid qu
         \toprule
         \textbf{Task} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
         \midrule
-        T1            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T2            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T3            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T4            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
+        T1$^{\dag}$   & F           & C           & F           & C           & C           & C           & P           & C           & P           \\
+        T2            & F           & C           & F           & C           & C           & C           & P           & C           & P           \\
+        T3$^{\dag}$   & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
+        T4$^{\dag}$   & F           & C           & F           & -           & C           & C           & P           & C           & P           \\
         \bottomrule
     \end{tabular}
+    \footnotesize$^{\dag}$ Constructed example.
 \end{center}
-% \noindent\footnotesize$^{\dag}$ Constructed example.\normalsize
 
 \begin{center}
+    \paragraph{Aggregated condition profile}
     \small
     \begin{tabular}{@{}ccccccccc@{}}
+        \addlinespace
         \toprule
         C1 & C2 & C3 & C4 & C5 & C6 & C7 & C8 & C9 \\
         \midrule
-        ?  & ?  & ?  & ?  & ?  & ?  & ?  & ?  & ?  \\
+        F  & C  & F  & C  & C  & C  & P  & F  & P  \\
         \bottomrule
     \end{tabular}
 \end{center}
 
 \paragraph{Evaluation analysis}
-\textit{[To draft.]}
+Quff most closely matches the \textit{Framework} tier when the aggregated condition profile is compared against the expected signatures in Table~\ref{tab:evaluation_instrument:expected_profile}.
+The representative artefact model is a scripting-language-like program surface that accumulates quantum operations through explicit quantum blocks and gate-level primitives, for example $\texttt{H:(var q = 0u\{n\}) \{...\}}$, indexed register access $\texttt{q[i]}$ and explicit result extraction via $\texttt{measure(q)}$.
+This supports a program-first workflow while retaining overt register identity and gate-idiom initiation of superposition, so the surface does not cross into the high-level profile.
+
+Across the task suite, Quff consistently expresses algorithms as ordinary functions and control flow rather than circuit-object mutation, including higher-order use such as passing an oracle $\texttt{f}$ into $\texttt{grover(f, n)}$ and invoking it as $\texttt{f(q)}$.
+Uncomputation support is present but remains a visible programming obligation, for example the explicit inversion step $\texttt{invertF(f, q)}$ in Grover and $\texttt{invertF(qft, count)}$ in phase estimation, prevents a fully implicit clean-up story.
+Result extraction is explicit but compact, with a single builtin boundary such as $\texttt{measure(query)}$ or $\texttt{measure(count)}$, which supports a higher level rather than more circuit-plumbing-heavy pattern.
+The phase-estimation construction still forces explicit phase reasoning in the representative listing, for example the explicit $\texttt{phase(pi/4, t[0])}$ unitary and the controlled-power iteration pattern, which drives C8 failure in the aggregate.
+
+Relative to the \textit{Framework} expected profile in Table~\ref{tab:evaluation_instrument:expected_profile}, Quff’s main upward pressures are C2, C4 and C6, reflecting a programmatic surface with structured inversion and a compact measurement boundary.
+However, the tier allocation remains limited by sustained quantum-explicit discriminators, particularly C1 and C3 and by the phase-estimation requirement that keeps C8 at F in representative constructions.
 
 \subsubsection{Qutes}\label{subsubsec:system_assessments:per_system:qutes}
 Qutes is a standalone imperative quantum programming language with a static compiler frontend and scope-bounded liveness-guided automatic uncomputation~\cite{faro2025qutes,reversiblelifetime2026}.
+
 
 \begin{center}
     \small
@@ -395,28 +435,39 @@ Qutes is a standalone imperative quantum programming language with a static comp
         \toprule
         \textbf{Task} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
         \midrule
-        T1            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T2            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T3            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T4            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
+        T1            & F           & C           & F           & P           & C           & C           & P           & C           & P           \\
+        T2            & P           & P           & P           & P           & P           & P           & P           & P           & P           \\
+        T3$^{\dag}$   & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
+        T4$^{\dag}$   & F           & C           & F           & -           & C           & C           & P           & C           & P           \\
         \bottomrule
     \end{tabular}
+    \footnotesize$^{\dag}$ Constructed example.
 \end{center}
-% \noindent\footnotesize$^{\dag}$ Constructed example.\normalsize
 
 \begin{center}
+    \paragraph{Aggregated condition profile}
     \small
     \begin{tabular}{@{}ccccccccc@{}}
+        \addlinespace
         \toprule
         C1 & C2 & C3 & C4 & C5 & C6 & C7 & C8 & C9 \\
         \midrule
-        ?  & ?  & ?  & ?  & ?  & ?  & ?  & ?  & ?  \\
+        F  & C  & F  & C  & C  & C  & P  & F  & P  \\
         \bottomrule
     \end{tabular}
 \end{center}
 
 \paragraph{Evaluation analysis}
-\textit{[To draft.]}
+Qutes most closely matches the \textit{Framework} tier when the aggregated condition profile is compared against the expected signatures in Table~\ref{tab:evaluation_instrument:expected_profile}.
+The representative artefact model is a standalone language whose surface can range from explicitly quantum programs with typed qubit arrays and gate-level operations to classical-looking code that invokes quantum search implicitly.
+This yields a mixed task profile in which one representative construction (Grover) is quantum-implicit in appearance, while the remaining tasks retain explicit quantum vocabulary and resource identity.
+
+Across the task suite, T2 is the outlier: the Grover workload is expressed as a native membership test, for example $\texttt{"01" in b}$, with no visible qubits, circuit artefacts, measurement API or amplitude reasoning, and all conditions record P in that task.
+By contrast, T1 and T4 are written in explicitly quantum terms, including explicit quantum state initialisation (e.g., $\texttt{|+\rangle}$ and $\texttt{|-\rangle}$), explicit quantum types (e.g., $\texttt{qubit[]}$) and explicit gate constructs such as $\texttt{mcx}$, $\texttt{H}$ and $\texttt{CX}$.
+Result extraction is present even when it is not framed as a low-level measurement API, for example via assignments like $\texttt{bool result = q}$ and explicit $\texttt{measure(q)}$, which supports the constrained judgement on C6.
+
+Relative to the \textit{Framework} expected profile in Table~\ref{tab:evaluation_instrument:expected_profile}, Qutes is pulled upward by the existence of a task that eliminates quantum marking, qubit identity and measurement boundary concerns at the surface (T2).
+However, the tier allocation remains limited by sustained quantum-explicit discriminators in other representative tasks, particularly C1 and C3 and by the phase-estimation construction which keeps C8 at F\@.
 
 \subsubsection{Qwerty}\label{subsubsec:system_assessments:per_system:qwerty}
 Qwerty is a basis-oriented high-level quantum programming language and compiler toolchain designed to express algorithms through basis-structured primitives and compilation to hardware backends~\cite{adams2024qwerty}.
@@ -427,95 +478,80 @@ Qwerty is a basis-oriented high-level quantum programming language and compiler 
         \toprule
         \textbf{Task} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
         \midrule
-        T1            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T2            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T3            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        T4            & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
+        T1            & C           & P           & P           & P           & F           & F           & P           & C           & P           \\
+        T2            & C           & P           & P           & P           & F           & C           & P           & P           & P           \\
+        T3            & C           & C           & C           & C           & F           & C           & P           & F           & P           \\
+        T4            & C           & C           & C           & -           & F           & C           & P           & C           & P           \\
         \bottomrule
     \end{tabular}
 \end{center}
-% \noindent\footnotesize$^{\dag}$ Constructed example.\normalsize
 
 \begin{center}
+    \paragraph{Aggregated condition profile}
     \small
     \begin{tabular}{@{}ccccccccc@{}}
+        \addlinespace
         \toprule
         C1 & C2 & C3 & C4 & C5 & C6 & C7 & C8 & C9 \\
         \midrule
-        ?  & ?  & ?  & ?  & ?  & ?  & ?  & ?  & ?  \\
+        C  & C  & C  & C  & F  & F  & P  & F  & P  \\
         \bottomrule
     \end{tabular}
 \end{center}
 
 \paragraph{Evaluation analysis}
-\textit{[To draft.]}
+Qwerty most closely matches the \textit{Framework} tier when the aggregated condition profile is compared against the expected signatures in Table~\ref{tab:evaluation_instrument:expected_profile}.
+Across the task suite, Qwerty provides a programmatic, basis-oriented surface in which algorithms are expressed as Python functions composed through higher-level primitives such as basis translations and oracle lifting.
+However, the model retains explicit quantum staging and explicit observation boundaries show by F and C evaluations on C5 and C6.
+Phase-estimation still imposes phase/eigenvalue reasoning in representative constructions, which prevents a high-level classification.
 
-\subsection{Quipper and Tower reference aside}\label{subsec:system_assessments:quipper_tower_aside}
+In T1 and T2, representative code avoids circuit-object construction and instead composes classical predicates into phase oracles via \texttt{oracle.sign} and expresses interference/diffusion through basis-translation operators such as \texttt{pm**N >> std**N} and \texttt{'p'**N >> -'p'**N}.
+These canonical constructions show strong “program-first” characteristics and do not require manual uncompute steps (C4=P in T1/T2), while still requiring explicit staging via decorators.
+T4 further demonstrates that entanglement can be introduced as an explicit superposition literal (\texttt{'00' + '11'}) and then consumed as a compositional unit via a separate routine.
+The usage still proceeds inside an explicitly marked \texttt{@qpu} region and relies on explicit measurement operators to obtain classical results.
+
+T3 drives the remaining tier constraint by requiring an explicit QPE structure (controlled-power pattern plus an explicit inverse-QFT via \texttt{fourier[prec].measure}) and by demanding phase/eigenvalue reasoning for correctness.
+As a result, while Qwerty’s basis-oriented primitives substantially reduce gate-level expression burden and avoid circuit artefact manipulation, the tier assignment remains bounded by mandatory quantum marking, explicit observation boundaries and the persistence of phase reasoning in representative workloads.
+
+\subsection{Tower reference aside}\label{subsec:system_assessments:tower_aside}
 \textit{The following is an informal aside.
-Quipper and Tower were excluded from primary assessment; their outcomes do not contribute to the comparative analysis or the conclusions in Section~\ref{sec:discussion}.
+Tower was excluded from primary assessment; its outcomes do not contribute to the comparative analysis or the conclusions in Section~\ref{sec:discussion}.
 They are included as labelled reference points for contrasting system approaches and evidence limitations.}
 
-\subsubsection{Quipper}\label{subsubsec:system_assessments:reference:quipper}
-Quipper is a Haskell-embedded functional quantum programming language~\cite{green2013quipper}.
+Tower is retained as a labelled contrast because it develops a programming model for pointer-based quantum data structures and dynamic memory allocation, and it treats the constraints required for correctness under superposition as first-class language concerns.\cite{yuan2025foundationalabstractions}
+The Tower model targets programs whose state may be a superposition of configurations, so a single operation must act uniformly across that superposition.\cite{yuan2025foundationalabstractions}
+The formal development characterises three constraints that shape its data model: operations are required to be reversible, data structures are required to be history independent and each operation is required to execute in bounded time determined by classical parameters.\cite{yuan2025foundationalabstractions}
+Tower enforces reversibility through an explicit assignment and unassignment discipline, and it introduces a memory-allocation mechanism intended to preserve history independence under allocation and deallocation.\cite{yuan2025foundationalabstractions}
 
-\begin{center}
-    \small
-    \begin{tabular}{@{}lccccccccc@{}}
-        \toprule
-        \textbf{Task} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
-        \midrule
-        T1            & -           & -           & -           & -           & -           & -           & -           & -           & -           \\
-        T2            & -           & -           & -           & -           & -           & -           & -           & -           & -           \\
-        T3            & -           & -           & -           & -           & -           & -           & -           & -           & -           \\
-        T4            & -           & -           & -           & -           & -           & -           & -           & -           & -           \\
-        \bottomrule
-    \end{tabular}
-\end{center}
+Tower is excluded from the task-based assessment and it does not contribute to the tier distribution in Subsection~\ref{subsec:system_assessments:summary} or the comparative analysis in Subsection~\ref{subsec:system_assessments:comparative}.
+Under the pre-specified inclusion criteria it fails the 24-month maintenance window and it does not provide task-aligned public documentation sufficient to implement the representative task suite T1--T4 in a comparable way.
+Tower’s distinctive contribution is expressed in its data model and reversible programming discipline rather than through implementations of the selected algorithmic tasks.
+Figure~\ref{fig:pub_qpl_review:system_assessments:tower_list} provides a representative example of using lists in Tower.
 
-\begin{center}
-    \small
-    \begin{tabular}{@{}ccccccccc@{}}
-        \toprule
-        C1 & C2 & C3 & C4 & C5 & C6 & C7 & C8 & C9 \\
-        \midrule
-        -  & -  & -  & -  & -  & -  & -  & -  & -  \\
-        \bottomrule
-    \end{tabular}
-\end{center}
+\begin{figure}[t]
+    \centering
+    \begin{lstlisting}[language={},basicstyle=\ttfamily\small,frame=single]
+type list = ( uint , ptr<list>);
 
-\paragraph{Evaluation analysis}
-\textit{[To draft; explicitly note evidence limitations and that `-' indicates unassessable conditions.]}
-
-\subsubsection{Tower}\label{subsubsec:system_assessments:reference:tower}
-Tower is evaluated here only as a labelled reference point due to evidence limitations for the representative task suite~\cite{yuan2025foundationalabstractions}.
-
-\begin{center}
-    \small
-    \begin{tabular}{@{}lccccccccc@{}}
-        \toprule
-        \textbf{Task} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
-        \midrule
-        T1            & -           & -           & -           & -           & -           & -           & -           & -           & -           \\
-        T2            & -           & -           & -           & -           & -           & -           & -           & -           & -           \\
-        T3            & -           & -           & -           & -           & -           & -           & -           & -           & -           \\
-        T4            & -           & -           & -           & -           & -           & -           & -           & -           & -           \\
-        \bottomrule
-    \end{tabular}
-\end{center}
-
-\begin{center}
-    \small
-    \begin{tabular}{@{}ccccccccc@{}}
-        \toprule
-        C1 & C2 & C3 & C4 & C5 & C6 & C7 & C8 & C9 \\
-        \midrule
-        -  & -  & -  & -  & -  & -  & -  & -  & -  \\
-        \bottomrule
-    \end{tabular}
-\end{center}
-
-\paragraph{Evaluation analysis}
-\textit{[To draft; explicitly note evidence limitations and that `-' indicates unassessable conditions.]}
+fun length_n {
+    with {
+        let is_empty <- xs == null;
+    } do if is_empty {
+        let out <- acc;
+    } else with {
+        let temp <- default<list>;
+        *xs <-> temp;
+        let next <- temp.2;
+        let r <- acc + 1;
+    } do {
+        let out <- length_{n-1};
+    }
+    return out;
+}
+    \end{lstlisting}
+    \caption{Tower list type and a bounded recursive function computing list length, illustrating pointer-based data structure manipulation under an explicit reversible update discipline\cite{yuan2025foundationalabstractions}.}
+    \label{fig:pub_qpl_review:system_assessments:tower_list}
+\end{figure}
 
 \subsection{Result summary}\label{subsec:system_assessments:summary}
 Table~\ref{tab:system_assessments:system_summary} presents tier assignment and condition outcomes (C1--C9) for all eleven primary systems.
@@ -529,17 +565,17 @@ Table~\ref{tab:system_assessments:system_summary} presents tier assignment and c
         \toprule
         \textbf{System} & \textbf{Tier} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
         \midrule
-        OpenQASM~3.0    & ?             & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        QIR             & ?             & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        Q-MLIR          & ?             & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        Qiskit          & ?             & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        PennyLane       & ?             & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        Q\#             & ?             & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        Silq            & ?             & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        Qmod            & ?             & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        Quff            & ?             & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        Qutes           & ?             & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
-        Qwerty          & ?             & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           & ?           \\
+        OpenQASM~3.0    & Assembly      & F           & F           & F           & F           & F           & F           & P           & F           & F           \\
+        QIR             & IR            & F           & F           & F           & F           & F           & -           & P           & F           & F           \\
+        Q-MLIR          & IR            & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
+        Qiskit          & Framework     & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
+        PennyLane       & Framework     & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
+        Q\#             & Framework     & F           & F           & F           & C           & F           & F           & P           & F           & C           \\
+        Silq            & High-level    & F           & C           & C           & C           & C           & C           & P           & F           & P           \\
+        Qmod            & High-level    & F           & C           & C           & F           & C           & C           & P           & F           & P           \\
+        Quff            & Framework     & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
+        Qutes           & Framework     & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
+        Qwerty          & Framework     & C           & C           & C           & C           & F           & F           & P           & F           & P           \\
         \bottomrule
     \end{tabular}
 \end{table*}
