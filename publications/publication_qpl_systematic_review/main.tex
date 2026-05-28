@@ -21,13 +21,13 @@
 \maketitle
 
 \begin{abstract}
-    Productive quantum programming requires programmers to reason explicitly about qubits, gates, measurement outcomes and uncomputation obligations, even when using the highest-level systems currently available.
-    Prior taxonomy work has characterised the quantum programming landscape but has not established whether any existing system meets the requirements for a tier at which programmers write non-trivial programs without quantum-mechanical prerequisites.
-    This paper reports a systematic literature review of eleven quantum programming systems assessed against a five-axis evaluation rubric spanning assembly, intermediate representation, framework, high-level and quantum-implicit tiers.
-    The rubric operationalises quantum bias (the count of quantum-mechanical concepts required for typical tasks) alongside axis-level scores for mental model, primary artefact, safety, data model and hardware independence.
-    No assessed system occupies the quantum-implicit tier; the four lower tiers are populated and each performs its designed function.
-    A vocabulary ceiling on the mental-model axis appears across all high-level systems.
-    The highest-scoring system retains a quantum bias count of three, consisting of the quantum mechanical constraints the literature identifies as irreducible at the circuit model boundary.
+    Productive quantum programming still requires programmers to reason explicitly about qubits, circuits/gates, measurement outcomes, and uncomputation, even in the most high-level systems available today.
+    Prior taxonomy work has mapped the quantum programming landscape, but has not established whether any existing system supports a mode of programming in which developers can construct non-trivial programs without quantum-mechanical prerequisites.
+    We address this by systematically reviewing eleven quantum programming systems and positioning each one on an abstraction spectrum spanning assembly, intermediate representation, framework, high-level, and quantum-implicit systems.
+    The review uses an evidence-first evaluation instrument: for a fixed suite of representative tasks (T1–T4), we record per-system condition outcomes (C1–C9) with primary-source citations, and assign tiers by justified profile match with explicit gating constraints for quantum-implicit claims.
+    These conditions capture recurring sources of bleed-through and quantum bias—where execution- and hardware-layer obligations surface in representative workflows and make quantum-native vocabulary mandatory.
+    No assessed system occupies the quantum-implicit tier; the four lower tiers are populated and each largely performs its designed function.
+    A vocabulary ceiling on the mental-model dimension appears across all high-level systems.
     The gap is structural; developing a new quantum programming language targeting this tier is justified.
 \end{abstract}
 
