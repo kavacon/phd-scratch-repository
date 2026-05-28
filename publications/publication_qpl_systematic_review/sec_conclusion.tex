@@ -3,24 +3,25 @@ The central finding of this review is that the quantum-implicit tier is definabl
 The tier hierarchy is populated at Assembly, IR, Framework and High-level, but the tier at which programmers write non-trivial programs without quantum-mechanical prerequisites remains absent.
 This finding answers both research questions.
 No existing system meets the requirements for the quantum-implicit tier (RQ1); the gap is structural rather than incremental and a new language targeting this tier is justified (RQ2).
-The five contributions are a criterion-based tier taxonomy, a five-axis evaluation rubric with explicit score-4 entry conditions, an operationalisation of quantum bias, comparative assessments of eleven systems and empirical evidence that the quantum-implicit tier is unoccupied.
+The five contributions are a criterion-based tier taxonomy, an evidence-first evaluation instrument defined by a representative task suite (T1--T4) and condition outcomes (C1--C9) with explicit quantum-implicit gating constraints, comparative assessments of eleven systems under this instrument and empirical evidence that the quantum-implicit tier is unoccupied.
 
 \paragraph{Limitations}
-The evaluation rubric is theoretically grounded but has not been subjected to empirical validation.
-Axis weights and score thresholds are derived from the literature and should be treated as principled rather than empirically calibrated~\cite{Coblenz2021PLIERS,Myers2016PLUsabilitySIG}.
+The evaluation instrument is theoretically grounded but has not been subjected to empirical validation.
+In particular, the condition definitions and the stability of F/C/P judgements across evaluators have not been tested in controlled studies, so the instrument should be treated as principled rather than empirically calibrated~\cite{Coblenz2021PLIERS,Myers2016PLUsabilitySIG}.
 The findings reflect a snapshot of the field as of 2026-04-08; the quantum programming ecosystem evolves rapidly and systems may advance beyond their assessed state by the time of publication.
-The assessment is against theoretical abstraction requirements; practitioner evidence cited in Section~\ref{sec:background} is observational~\cite{ferreira2024qplusage} and a complementary user study would strengthen the design implications independently of the rubric.
+The assessment targets abstraction requirements and interface obligations evidenced by representative constructions; practitioner evidence cited in Section~\ref{sec:background} is observational, a complementary user study would strengthen the design implications independently of the instrument.
 The system selection criteria were pre-specified and PRISMA-compliant, but photonic computing languages and topological qubit frameworks are underrepresented; findings may not generalise fully across all quantum computing paradigms.
+Finally, the representative task suite is intentionally small and canonically grounded; some comparative patterns may be driven by what the canonical task instantiations exercise rather than what systems expose, especially for conditions whose manifestation depends on the availability and shape of primary-source evidence.
 
-\paragraph{Rubric validation}
+\paragraph{Instrument validation}
 The most immediate future work is empirical validation of the evaluation instrument.
-A documentation-only learnability study, in which participants complete T1--T5 using only public documentation for a small set of systems, would provide observable proxies for quantum bias burden~\cite{Coblenz2021PLIERS}.
-An inter-rater reliability study establishing Cohen's $\kappa$ across independent reviewers would provide a formal reliability measure for the axis scores~\cite{Myers2016PLUsabilitySIG}.
+A documentation-only learnability study, in which participants complete T1--T4 using only public documentation for a small set of systems, would provide observable proxies for required-knowledge pressure and related burden~\cite{Coblenz2021PLIERS}.
+An inter-rater reliability study establishing agreement on F/C/P outcomes across independent reviewers would provide a formal reliability measure for the condition judgements~\cite{Myers2016PLUsabilitySIG}.
 
 \paragraph{System set and task suite expansion}
 Systems excluded for failing a single inclusion criterion and systems that post-date the protocol registration are natural candidates for an expanded review.
-Domain-specific task suites covering quantum chemistry, variational algorithms and quantum networking would stress-test the rubric beyond the general T1--T5 workloads~\cite{ferreira2024qplusage}.
-The Assembly-tier boundary is also evolving; OpenQASM's progression toward intermediate representation features suggests that tier boundaries themselves may require revision as the field matures.
+Domain-specific task suites covering quantum chemistry, variational algorithms and quantum networking would stress-test the instrument beyond the general T1--T4 workloads~\cite{ferreira2024qplusage}.
+The Assembly-tier boundary is also evolving; OpenQASM's progression toward intermediate representation features suggests that tier boundaries themselves may require revision as the field matures and as task suites begin to exercise different capability surfaces.
 
 \paragraph{Formalisation directions}
 Formalising the semantics of quantum-implicit constructs is the theoretical counterpart to this empirical study.
@@ -29,5 +30,6 @@ Verified compilation patterns for quantum domains demonstrate that end-to-end co
 ZX-calculus completeness results establish a graphical framework capable of verifying any quantum circuit equivalence~\cite{zxworkingquantumscientist2020}, providing a candidate theoretical foundation for semantics-preserving compilation rewrites.
 
 \paragraph{Prototype language design}
-The design implications in Section~\ref{subsec:discussion:implications} motivate a prototype language that embodies score-4 on all five axes while retaining explicit escape hatches for optimisation and hardware-specific tuning.
-Designing, implementing and evaluating such a language against the T1--T5 task suite is the immediate next step in the research programme to which this review contributes.
+The design implications in Section~\ref{subsec:discussion:implications} motivate a prototype language that embodies the quantum-implicit tier by default while retaining explicit escape hatches for optimisation and hardware-specific tuning.
+Operationally, the prototype should satisfy the quantum-implicit gating constraints in representative constructions, in particular that the primary artefact is not a circuit/tape/IR (C2), qubit identity and lifetime are not user-visible (C3), the observation boundary is absent from the surface model (C6) and composition is first-class without circuit surgery or staging glue (C9).
+Designing, implementing and evaluating such a language against the representative task suite, under the same evidence discipline used in this review, is the immediate next step in the research programme to which this review contributes.
