@@ -92,52 +92,69 @@ A language that reaches the quantum-implicit tier requires a representational st
 The quantum-implicit tier is the central novel contribution of this review's taxonomy.
 Prior comparative surveys classified quantum programming systems by design orientation, paradigm or abstraction level, but none defined the quantum-implicit tier as a named category with explicit entry criteria~\cite{Gay2006QPLSurvey,furntratt2024higherabstractionlevels}.
 This review provides the first structured definition of the tier.
-The tier is definable in criterion terms, its requirements are derivable from the literature~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines,yuan2025foundationalabstractions} and no current system occupies it.
+The tier is definable in criterion terms, its requirements are derivable from the literature~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines,yuan2025foundationalabstractions} and no current system occupies it under the recorded outcomes.
 
 Prior taxonomy established a useful vocabulary for the field.
 The earliest systematic survey classified quantum programming languages by design paradigm: imperative, functional and formal semantic approaches~\cite{Gay2006QPLSurvey}.
 This provided a framework for describing what systems exist but did not define tier membership by programmer experience or vocabulary requirement.
-Subsequent comparative work identified fragmentation and stalled abstraction progress but did not define the quantum-implicit tier as a named, measurable category~\cite{furntratt2024higherabstractionlevels,corralesgarro2025productivityexpressiveness}.
+Subsequent comparative work identified fragmentation and stalled abstraction progress but did not define the quantum-implicit tier as a named, criteria-backed category~\cite{furntratt2024higherabstractionlevels,corralesgarro2025productivityexpressiveness}.
 What this review adds is a criterion-based definition.
-The definition is grounded in the abstraction requirements identified in Section~\ref{sec:background} and operationalised as a five-axis rubric with explicit score-4 entry conditions.
+The definition is grounded in the abstraction requirements identified in Section~\ref{sec:background} and operationalised through the task and condition instrument defined in Section~\ref{sec:evaluation_instrument}.
 
-The measurement instrument provides a secondary contribution beyond tier classification.
-The spectrum score captures within-tier quality in a way that prior taxonomy work did not.
-Systems at the same headline tier occupy measurably different positions: Q\# and Qmod record spectrum scores of~2.4 while Qiskit and PennyLane record~2.0, all four at headline~2.
-The Q\# and Qmod headline scores are not a criticism of those systems; they reveal that function-structured programming is a necessary but not sufficient condition for the high-level tier.
-The instrument provides a vocabulary for this distinction that the field's informal classification does not.
-
+The condition outcomes make the quantum-implicit tier checkable, since entry requires that the discriminator condition set is jointly satisfied in representative use rather than by isolated features.
+The same outcomes provide a structured way to discuss within-tier differentiation, since systems can relieve some programmer burdens while leaving circuit-centred artefacts, explicit qubit identity or explicit observation boundaries as mandatory obligations.
 The contribution is to identify and characterise the quantum-implicit gap, not to fill it.
-A gap that has not been defined and measured cannot be systematically closed; the definition and empirical validation here are a necessary precondition for any future language design effort targeting this tier.
+A gap that has not been defined and characterised cannot be systematically closed, the definition and empirical grounding here are a necessary precondition for any future language design effort targeting this tier.
 The design implications this finding supports are drawn in Section~\ref{subsec:discussion:implications}, and the programme of work the gap motivates is addressed in Section~\ref{sec:conclusion}.
 
+\subsection{Methodological reflections}\label{subsec:discussion:methodological_reflections}
+Section~\ref{sec:system_assessments} records Condition~C7 as \texttt{P} across Tasks~T1--T4 for OpenQASM~3.0 despite the Assembly-tier expectation in Table~\ref{tab:evaluation_instrument:expected_profile}.
+This pattern can arise when the representative task suite does not exercise a system capability even when the language exposes it.
+The canonical constructions used in Section~\ref{sec:system_assessments} do not require basis-set selection, topology-aware routing, timing control or pulse-level calibration, so the evaluation does not force engagement with the hardware-control surfaces that C7 is intended to test.
+This mismatch admits three interpretations.
+First, the canonical task suite under-exercises hardware-control obligations, and C7 therefore appears non-discriminating even for systems that materially expose such obligations.
+Second, assembly languages may have shifted the default workflow away from mandatory hardware-control engagement, and the expected profile for the Assembly tier should be revised to reflect that change.
+Third, the canonical-example sample may bias the observed pattern by selecting constructions that avoid hardware-control features even where they are available.
+Section~\ref{sec:system_assessments} should therefore be read as evidence about what the representative tasks require rather than as an exhaustive statement of what each language can express.
+
+Section~\ref{sec:system_assessments} also contains absences in the evidence record, where a condition outcome cannot be supported from the canonical sources used for representative tasks.
+These absences arise when the artefacts do not expose the relevant obligation at the programming surface, when the task does not require the capability the condition is intended to test or when the available canonical material is incomplete.
+The QIR C6 case is representative, since the available artefacts do not provide evidence that observation boundaries are expressed at the programming surface in a way that the instrument can assess.
+Absences of this kind affect comparative interpretation, since they can suppress visible differentiation between systems even when the underlying capability or obligation differs.
+The methodological implication is that cross-system patterns should be read as statements about what the representative tasks and available canonical evidence require and expose, not as exhaustive statements about the full capabilities of each language.
+
 \subsection{Design implications}\label{subsec:discussion:implications}
-The assessment findings support four design implications for a quantum-implicit programming language.
-Each is grounded in axis evidence from Section~\ref{sec:system_assessments} and makes contact with the abstract machine requirements identified in Section~\ref{sec:background}~\cite{nunez_corrales2025betterabstractmachines}.
+The condition outcomes reported in Section~\ref{sec:system_assessments} support four design implications for a quantum-implicit programming language.
+Each implication makes contact with the abstract machine requirements identified in Section~\ref{sec:background}~\cite{nunez_corrales2025betterabstractmachines}.
 
 \paragraph{Quantum data model first}
-No assessed system reaches score~4 on axis~D.
-Four systems reach score~3, providing quantum-typed data structures with generic backend representations.
-The step from score~3 to score~4 requires a data model in which quantum operations are expressed as transformations over abstract data types rather than as circuit primitives~\cite{DiMatteo2024AbstractionHierarchy}.
-The instruction set should be designed against this data representation, not the reverse.
-Languages that begin with an instruction set and add type safety afterwards cannot avoid encoding circuit vocabulary in their type signatures.
+Section~\ref{sec:system_assessments} shows that representative constructions can become more structured and compositional without changing the representational substrate the programmer must engage with.
+Several systems support function-level decomposition and reuse, but the representative programming workflow still requires authoring or manipulating a circuit, tape or IR artefact in order to express core constructions or to compose them at scale.
+This pattern is visible in the persistence of the primary-artefact condition, and it remains binding even when composition improves under Condition~C9.
+A quantum-implicit language therefore cannot be designed as a circuit system with improved modularity.
+The surface model must be built around programs over values, and circuits must be a derived compilation product rather than the primary object of authoring.
+This implication is necessary but not sufficient, since a program-first surface can still reintroduce explicit qubit identity and explicit result extraction via measurement or sampling as mandatory steps in the representative workflow.
 
 \paragraph{Computation model separation}
-Axis~C follows a step-function progression driven by successive type-theoretic advances: from untyped gate sequences to qubit-lifetime type checks to linear and affine type systems~\cite{bichsel2020silq}.
-Each tier transition on this axis was a theoretical advance, not an engineering one.
-Score~4 requires safety guarantees expressed without reference to quantum state at the type level.
-A type theory whose primitives are circuit objects cannot produce these guarantees by extension~\cite{yuan2025foundationalabstractions}.
-The computation model of a quantum-implicit language must be defined over the abstract data representation, not imposed as a constraint system on circuit-level operations.
+Section~\ref{sec:system_assessments} indicates that the discriminator conditions persist even when other aspects of the programming experience improve.
+Representative workflows continue to require the programmer to track explicit qubit identity and lifetime management, and representative workflows continue to require explicit result extraction via measurement or sampling.
+These obligations are not incidental, since they define the point where the surface language forces the execution model back into the programmer's working vocabulary.
+A quantum-implicit language therefore cannot be obtained by layering additional safety constraints or library conveniences on top of a circuit-centred computation model.
+The computation model must be defined over the same abstract data representation that the surface language exposes, and the guarantees it provides must not require the programmer to name, index or manually manage qubits in representative constructions.
+The same separation must apply to program results, since the representative workflow should not require an explicit measurement or sampling step in order to obtain a usable value.
 
 \paragraph{Measurement as system policy}
-Quff's quantum bias count of~3 identifies the empirical minimum vocabulary at headline tier~3: qubits as a distinct resource, measurement collapse and no-cloning and linearity.
-All three are irreducible at the circuit model boundary~\cite{yuan2025foundationalabstractions}.
-The closest existing evidence of progress beyond this boundary is compiler-managed uncomputation, which removes the ancilla reversal obligation from the programmer's working model~\cite{bichsel2020silq}.
-A quantum-implicit language must extend this pattern to measurement.
-Making the observation boundary a system-level policy requires a computation model in which measurement outcomes are consumed by the program structure, not returned to the programmer for explicit inspection~\cite{nunez_corrales2025betterabstractmachines}.
+Section~\ref{sec:system_assessments} indicates that explicit result extraction via measurement or sampling remains a routine step in representative workflows even when other obligations are partially relieved.
+Representative constructions therefore continue to expose an observation boundary that the programmer must cross explicitly in order to obtain usable outcomes.
+This boundary persists across tiers, and it persists even when program structuring and cleanup mechanisms improve elsewhere in the stack.
+A quantum-implicit language must treat observation as a system-level policy rather than as an operation that the programmer performs and wires into the program as part of ordinary work.
+The computation model must allow programs to consume results as ordinary values without requiring the programmer to explicitly select measurement operations, sampling strategies or observable interfaces in representative constructions.
+This shift parallels the role of compiler-managed uncomputation, since it moves a correctness obligation from the programmer's working model into the language and compiler.
 
 \paragraph{Vocabulary-free by default, expert access preserved}
-A quantum-implicit language need not eliminate quantum vocabulary entirely.
-Practitioner evidence indicates that the primary barrier for the majority of current users is the requirement to use quantum vocabulary in common-case programming, not in advanced or performance-critical paths~\cite{ferreira2024qplusage}.
-The appropriate design target is a language in which programs can be written, tested and reasoned about without quantum-mechanical prerequisites in the common case, with explicit vocabulary available for optimisation, verification and low-level access.
-This is the established approach in safe-default language design, where expert access is preserved as an opt-in rather than required as a default.
+Section~\ref{sec:system_assessments} indicates that required-knowledge pressure remains concentrated in specific task families rather than declining uniformly with improved program structure.
+Representative constructions therefore still force many programmers to adopt amplitude, phase and interference vocabulary as part of ordinary correctness work, particularly in phase estimation.
+This pattern persists even in systems that reduce other burdens, and it is consistent with the persistence of explicit qubit identity and explicit result extraction via measurement or sampling in representative workflows.
+A quantum-implicit language should therefore be designed so that the common-case programming path does not require quantum-mechanical prerequisites.
+The design target is a safe-default surface in which programs can be written, tested and reasoned about without quantum vocabulary, and in which expert mechanisms are preserved as explicit opt-ins for optimisation, verification and low-level access.
+Practitioner evidence supports this prioritisation, since the dominant barrier for many current users is the requirement to use quantum vocabulary in common-case programming rather than the absence of low-level escape hatches~\cite{ferreira2024qplusage}.
