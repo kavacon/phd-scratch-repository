@@ -3,28 +3,30 @@ Effective abstraction in programming systems requires more than ergonomic improv
 Two complementary forms of abstraction are relevant to evaluating quantum programming systems.
 \textit{Functional abstraction} describes hierarchical layers with distinct implementation roles; it governs how a compilation stack is organised and how complexity is distributed across layers.
 \textit{Conceptual abstraction} describes the breadth and generality of the concepts a programmer must command to use a layer productively; it governs whether the programmer's mental model is aligned with the problem domain or with the machine.
-Classical programming systems have achieved both: the von Neumann model provided a conceptual foundation whose mental model aligned with human problem-solving idioms, enabling progressive language development from assembly through structured, object-oriented and functional paradigms without requiring programmers to descend the compilation stack~\cite{abelson1996sicp, nunez_corrales2025betterabstractmachines}.
+Classical programming systems have achieved both.
+The von Neumann model provided a conceptual foundation whose mental model aligned with human problem-solving idioms, enabling progressive language development from assembly through structured, object-oriented and functional paradigms without requiring programmers to descend the compilation stack~\cite{abelson1996sicp, nunez_corrales2025betterabstractmachines}.
 Quantum computing has made measurable progress at the functional level; the conceptual level remains unaddressed.
 An abstraction hierarchy for quantum computing following the same \textbf{Programming}, \textbf{Execution} and \textbf{Hardware} layers as classical systems has been formally established~\cite{DiMatteo2024AbstractionHierarchy}.
 Systematic analysis demonstrates consistent bleed-through between these layers: programming-layer systems require execution-layer and hardware-layer vocabulary as mandatory programmer-facing constructs~\cite{DiMatteo2024AbstractionHierarchy}.
-The classical abstraction contracts that underpin productive programming; copying a value, inspecting its state, branching on its content; are physically constrained in the quantum domain.
-Values cannot be freely copied, inspected or branched upon without violating the no-cloning theorem and related quantum mechanical constraints~\cite{yuan2025foundationalabstractions}.
+Free value copying, stateful inspection and conditional branching are the classical abstraction contracts that underpin productive programming.
+Each is physically constrained in the quantum domain by the no-cloning theorem and related quantum mechanical constraints~\cite{yuan2025foundationalabstractions}.
 
 The quantum programming language landscape spans four families, each occupying a different role in the compilation stack.
 Assembly languages such as OpenQASM~\cite{cross2022openqasm3} provide portable, hardware-agnostic circuit specifications; their programmer-facing vocabulary is the execution model by design.
-Intermediate representations such as QIR and Q-MLIR~\cite{qiralliance_spec, McCaskey2021MLIRDialectQASM} provide machine-independent substrates for compiler analysis and optimisation; they target toolchain authors rather than application programmers and their abstraction boundary does not propagate upward to the programmer's experience.
+Intermediate representations such as QIR and Q-MLIR~\cite{qiralliance_spec, McCaskey2021MLIRDialectQASM} provide machine-independent substrates for compiler analysis and optimisation; they target toolchain authors rather than application programmers.
+Their abstraction boundary does not propagate upward to the programmer's experience.
 Frameworks such as Qiskit~\cite{aleksandrowicz2019qiskit} and PennyLane~\cite{bergholm2018pennylane} meet programmers in familiar classical environments, reducing ergonomic barriers without changing the required mental model.
-High-level languages including Silq~\cite{bichsel2020silq}, Q#~\cite{MicrosoftQSharpOverview}, Qmod~\cite{vax2025qmodexpressivehighlevelquantum}, Quff~\cite{wright2024quff} and Qutes~\cite{faro2025qutes} represent the furthest progress toward conceptual abstraction in the current landscape.
+High-level languages including Silq~\cite{bichsel2020silq}, Q\#~\cite{MicrosoftQSharpOverview}, Qmod~\cite{vax2025qmodexpressivehighlevelquantum}, Quff~\cite{wright2024quff} and Qutes~\cite{faro2025qutes} represent the furthest progress toward conceptual abstraction in the current landscape.
 Each makes a principled contribution: Silq introduces compiler-managed uncomputation inferred from type annotations; Quff provides runtime function inversion; Qutes introduces scope-bounded uncomputation semantics.
 These are genuine advances in functional abstraction at specific, principled points.
 The programmer-facing surface model remains quantum-explicit in each case.
 
-The below table assesses three advanced high-level languages against four criteria governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}.
+The following assessment evaluates three advanced high-level languages against four criteria governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}.
 Each records at least one violation.
 
 \begin{tabular}{p{3.2cm} p{3.5cm} p{3.5cm} p{3.5cm}}
     \toprule
-    \textbf{Criterion} & \textbf{Silq} & \textbf{Quff} & \textbf{Qutes} \\midrule
+    \textbf{Criterion} & \textbf{Silq} & \textbf{Quff} & \textbf{Qutes} \\\midrule
     \textbf{Symbolic denotational syntax.}
     No circuit elements required to reason about program effects on state.
     & \texttt{qfree}, \texttt{const}, \texttt{lifted} and \texttt{mfree} annotations encode circuit-execution semantics as mandatory surface syntax. Both require circuit-model knowledge to apply correctly.
@@ -49,21 +51,26 @@ Each records at least one violation.
 \end{tabular}
 \vspace{2em}
 
-The violations are consistent across the three most advanced high-level languages in the reviewed literature, confirming that the ceiling is a property of the existing design space rather than a shortcoming of any single system.
-Empirical evidence corroborates this finding: a survey of 251 active quantum programmers found that 83\% hold at least five years of classical programming experience, yet quantum vocabulary remains the primary reported barrier to productive use across all frameworks and languages~\cite{ferreira2024qplusage}.
+A survey of 251 active quantum programmers found that 83\% hold at least five years of classical programming experience, yet quantum vocabulary remains the primary-reported barrier to productive use across all frameworks and languages~\cite{ferreira2024qplusage}.
+The violations recorded above are consistent across the three most advanced high-level languages in the reviewed literature, confirming that this ceiling is a property of the existing design space rather than a shortcoming of any single system.
 Two failure modes account for this pattern structurally~\cite{yuan2025foundationalabstractions}.
-\textit{Representation exposure} manifests wherever an interface exposes qubit types or requires annotations such as \texttt{const}, \texttt{qfree} or \texttt{Adjoint}; quantum state cannot be copied or inspected without disturbing the computation, so no module boundary at which quantum and classical code meet can be made quantum-opaque.
-\textit{Semantic mismatch} is visible in the type restrictions documented across the high-level family; annotation requirements that make safe uncomputation, inversion and controlled-operation synthesis possible are surface evidence of where classically valid operations have no general quantum equivalent.
+\textit{Representation exposure} manifests wherever an interface exposes qubit types or requires annotations such as \texttt{const}, \texttt{qfree} or \texttt{Adjoint}.
+Quantum state cannot be copied or inspected without disturbing the computation, so no module boundary at which quantum and classical code meet can be made quantum-opaque.
+\textit{Semantic mismatch} is visible in the type restrictions documented across the high-level family.
+Annotation requirements that make safe uncomputation, inversion and controlled-operation synthesis possible are surface evidence of where classically valid operations have no general quantum equivalent.
 The No-Embedding Theorem establishes the structural basis for both failure modes: general quantum control flow cannot be faithfully embedded into a circuit model without reference to circuit primitives~\cite{yuan2025foundationalabstractions}.
-The field's own abstract machine analysis confirms that no quantum abstract machine candidate satisfies the criteria for symbolic reasoning about operations without reference to circuit primitives, and no production language is built on a substrate that meets those conditions~\cite{nunez_corrales2025betterabstractmachines}.
+The field's own abstract machine analysis confirms that no quantum abstract machine candidate satisfies the criteria for symbolic reasoning about operations without reference to circuit primitives.
+No production language is built on a substrate that meets those conditions~\cite{nunez_corrales2025betterabstractmachines}.
 
 The completed literature review sections provide a grounded account of abstraction theory in computation and a detailed analysis of the current state of quantum programming systems.
 Both contribute directly to the evidential basis for the first planned publication, a systematic survey of quantum programming systems.
 Additional sections covering quantum programming paradigms, compilation pipelines and language design theory are planned; these will provide the theoretical grounding required as the language specification, formal theory and compiler artefacts are developed.
 
 No existing quantum programming language provides a programming model separated from the quantum substrate.
-Achieving that separation requires a language whose abstraction model eliminates bleed-through between the programming layer and the execution and hardware layers, whose surface model is representation-independent and whose conceptual foundations are designed around quantum-mechanical constraints rather than classical abstractions adapted to accommodate them.
-Classical abstraction models and attempts to extend them to quantum computation are physically constrained by the properties of quantum mechanics; the No-Embedding Theorem establishes that this constraint is structural rather than contingent~\cite{yuan2025foundationalabstractions}.
+Achieving that separation requires a language whose abstraction model eliminates bleed-through between the programming layer and the execution and hardware layers.
+Its surface model must be representation-independent and its conceptual foundations must be designed around quantum-mechanical constraints rather than classical abstractions adapted to accommodate them.
+The No-Embedding Theorem establishes that this constraint is structural rather than contingent~\cite{yuan2025foundationalabstractions}.
+Classical abstraction models and attempts to extend them to quantum computation cannot resolve it.
 A quantum programming language that addresses this gap must satisfy eight requirements:
 
 \begin{enumerate}

@@ -1,25 +1,19 @@
 \section{Work plan}\label{sec:pre_confirmation:work_plan}
 The progress to date empirically establishes that no existing quantum programming system meets the criteria for the quantum-implicit tier.
-The work of the coming three years is to demonstrate that the tier is formally inhabitable by introducing a language that is specified, proven type-safe and compiled to execute on gate-based quantum hardware.
+The work of the coming three years will demonstrate that the tier is formally inhabitable by introducing a language that is specified, proven type-safe and compiled to execute on gate-based quantum hardware.
 
 The empirical case for the quantum-implicit tier has been established by the systematic review; the language design work proceeds from that foundation.
 Future milestones will include the language specification, formal type system proofs and the compiler.
 The language specification is the necessary first deliverable: syntax, semantics and built-in operators must be formally defined before the type system can be proven sound.
 The progress and preservation proofs that follow establish semantic preservation across the compilation pipeline, providing the theoretical foundation on which the correctness of the compiler depends.
 
-To achieve these outcomes, a three-year plan has been created which details the required high-level milestones.
-Each milestone relates to either a publication draft or release or a literature review and education objective.
-
-The remainder of this section splits the discussion of work between the publication plan over the next three years and the non-publication milestones.
-Milestones are presented both as high-level annual goals and a detailed account comprising the aims for the rest of the first year.
-
 \subsection{Publication plan}\label{subsec:pre_confirmation:work_plan:publication_plan}
 The research programme is structured across four publications, each addressing a distinct phase of the argument required to answer the CRQ.
-The first publication, the systematic review, is completed in Year 1 and is the necessary precondition for all subsequent work.
+The first publication, the systematic review, is complete by mid-2026 and is the necessary precondition for all subsequent work.
 Publication 1 establishes the empirical case for the quantum-implicit tier and defines the requirements the language design must satisfy.
-The language specification follows as the highest priority planned work, targeting a draft in Year 2.
-The formal theory publication depends on the specification being settled and is planned for Year 2 with Year 3 as an acceptable fallback.
-The compiler publication targets Year 3 and depends on the semantic preservation guarantees established by the formal theory.
+The language specification follows as the highest priority planned work, targeting a draft in the 2027--2028 period.
+The formal theory publication depends on the specification being settled and is planned for the 2027--2028 period with 2028--2029 as an acceptable fallback.
+The compiler publication targets the 2028--2029 period and depends on the semantic preservation guarantees established by the formal theory.
 If required due to time constraints, the formal theory and compiler may be developed concurrently, though the plan assumes sequential delivery.
 
 \vspace{2em}
@@ -42,20 +36,22 @@ If required due to time constraints, the formal theory and compiler may be devel
 \vspace{2em}
 
 The publication sequence is formally constrained rather than merely ordered.
-The systematic review, completed by mid-2026, defines the requirements the language specification must satisfy; the design decisions of the language are grounded in the empirical evidence it provides.
+The systematic review, completed by mid-2026, defines the requirements the language specification must satisfy.
+The design decisions of the language are grounded in the empirical evidence it provides.
 The language specification is the highest priority planned work, targeting a draft in the 2027--2028 period.
 The formal theory publication depends on the specification being settled; progress and preservation cannot be proven for a language that is not yet defined.
 The compiler publication targets the 2028--2029 period; the proven type system provides the correctness guarantees the compilation pipeline depends on.
 
 The language specification work includes content that may warrant a separate publication.
-A quantum-implicit language must define how quantum operations, specifically superposition, entanglement, measurement and uncomputation, are expressed as language-level constructs without exposing their quantum-mechanical implementation to the programmer.
+A quantum-implicit language must define how quantum operations are expressed as language-level constructs without exposing their quantum-mechanical implementation to the programmer: superposition, entanglement, measurement and uncomputation each require a formal account at the language level.
 This operations model addresses a discrete and well-scoped problem: how the compiler boundary between classical intent and quantum realisation is formally defined at the language level.
 That problem is self-contained enough to constitute a standalone contribution to the programming language design literature if the material develops sufficient depth and novelty in its own right.
 The decision will be made once the language specification draft is sufficiently developed to assess scope and length.
 If the threshold is not met, the operations model will be incorporated directly into the language specification publication without loss to either the research programme or the formal claims of the thesis.
 
 \subsection{Milestones and timelines}\label{subsec:pre_confirmation:work_plan:milestones}
-The milestones of the research programme are presented at two levels of granularity: the three-year candidature arc and a detailed breakdown of the tasks remaining in the 2026--2027 period, which constitute the immediate preparation required before language specification work can begin in earnest.
+The milestones of the research programme are presented at two levels of granularity.
+The three-year candidature arc and a detailed breakdown of the tasks remaining in the 2026--2027 period constitute the immediate preparation required before language specification work can begin in earnest.
 The three-year arc is organised around three publication phases, each dependent on the one preceding it.
 The 2026--2027 period has the dual obligation of completing the literature review and submitting the systematic review publication.
 It also includes building the domain knowledge the language specification requires.
@@ -93,7 +89,9 @@ Preparing for the confirmation report and the language specification groundwork 
 The remainder of the 2026--2027 period is detailed below.
 Given the proximity of these milestones to the pre-confirmation meeting, the tasks listed represent committed near-term objectives rather than indicative planning.
 The period serves a dual purpose: completing the theoretical grounding required to write the language specification and fulfilling the institutional obligations of the first year of candidature.
-The literature review work on quantum operations, compilation pipelines and language design theory directly informs the vocabulary and scope of the language specification; the quantum operations catalogue and control flow selection tasks translate that theoretical grounding into concrete design inputs.
+The literature review work on quantum operations, compilation pipelines and language design theory directly informs the vocabulary and scope of the language specification.
+The quantum operations catalogue and control flow selection tasks translate that theoretical grounding into concrete design inputs.
+These are not separate streams but mutually reinforcing activities where insights from the literature directly shape the catalogue and vice versa.
 Confirmation preparation runs concurrently with this work from January 2027, drawing on the completed literature review and the systematic review publication as its primary evidence base.
 
 \vspace{2em}
@@ -132,17 +130,16 @@ Confirmation preparation runs concurrently with this work from January 2027, dra
 The milestones of the 2026--2027 period are structured to reflect the candidate's working approach to research development.
 Theoretical grounding precedes design: the literature review sections on quantum operations, compilation pipelines and language design theory are completed before the language specification work begins.
 The design decisions of the specification will be informed by a comprehensive understanding of the field rather than assumptions carried forward from the systematic review.
-Preparatory research tasks, the quantum operations catalogue and control flow selection, run concurrently with the literature review to convert theoretical understanding into concrete design inputs; these are not separate streams but mutually reinforcing activities where insights from the literature directly shape the catalogue and vice versa.
+Preparatory research tasks, the quantum operations catalogue and control flow selection, run concurrently with the literature review to convert theoretical understanding into concrete design inputs.
+These are not separate streams but mutually reinforcing activities where insights from the literature directly shape the catalogue and vice versa.
 Publication planning for the language specification is completed in this period before any writing begins, scoping the contribution and identifying the design decisions that must be resolved before a draft can proceed.
-The confirmation written report and seminar draw directly on the completed literature review and the systematic review publication, meaning the institutional obligation is met through the research work itself rather than requiring a separate preparation effort.
-By the end of March 2027 the research programme will have a published empirical foundation, a completed theoretical grounding across the relevant literature, concrete design inputs for the language specification and a scoped publication plan.
+The confirmation written report and seminar draw directly on the completed literature review and the systematic review publication.
+
+By the end of March 2027 the research programme will have a published empirical foundation and a completed theoretical grounding across the relevant literature.
+Concrete design inputs for the language specification and a scoped publication plan will also be in place.
 The language specification work beginning in April 2027 proceeds from a position of deliberate and documented preparation rather than exploratory groundwork.
 
-The current plans leave open questions for the specific structure of the years to come.
-To maintain the momentum of the research, task completion will be managed by recurring planning rituals and refinement.
-These rituals have been trialled and refined over the period of candidature leading to this report.
-Each year the candidate will conduct annual planning to split milestones into actionable work streams with regular refinement of the tasks required in each.
-To remain up to date with the latest changes in the field, a fortnightly literature scan using AI-assisted discovery tools will be completed.
-The scan will identify articles relevant to work already completed as well as upcoming work based on the structured task breakdown.
-The presented governance plan is intended to maintain accountability for the completion of the research milestones and ensure the relevance of their outcomes.
-At any time the candidate will be able to provide a report indicating specific progress using these governance policies.
+The research programme is governed by a structured set of recurring planning and monitoring practices.
+Annual planning at the start of each candidature year translates high-level milestones into actionable work streams, with quarterly refinement of near-term tasks as the research develops.
+A fortnightly literature scan using AI-assisted discovery tools maintains currency with the field, identifying work relevant to both completed sections and forthcoming research phases.
+These practices ensure that progress against milestones remains visible and that the research remains responsive to developments in the quantum programming language literature.

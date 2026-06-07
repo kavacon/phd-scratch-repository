@@ -5,31 +5,30 @@ Despite genuine progress in the development of high-level quantum programming la
 Programmers must declare qubits, select gate sequences and reason about circuit structure regardless of the problem domain.
 These quantum-mechanical obligations are pre-requisites to writing correct programs, not incidental concerns that can be deferred to the compiler.
 Prescriptive circuit definitions, or thin approximations of them, constrain compilers to transcription rather than generation, preventing optimisation at the level of programmer intent.
-Current quantum hardware is characterised by coherence constraints that bound the circuit depth at which correct results are produced~\cite{nielsen2000quantum}; compiler-managed circuit generation from higher-level semantic instructions would directly addresses this bound.
+Current quantum hardware is characterised by coherence constraints that bound the circuit depth at which correct results are produced~\cite{nielsen2000quantum}; compiler-managed circuit generation from higher-level semantic instructions would directly address this bound.
 
-High-level quantum programming languages have made consistent progress in reducing the vocabulary burden at specific, principled points.
-Each retains quantum-mechanical concepts as a mandatory part of the general-case programming model.
-
+No existing high-level QPL eliminates quantum-mechanical vocabulary from the general-case programming model; each retains it as a mandatory obligation even where targeted progress has been made.
 \textbf{Silq}~\cite{bichsel2020silq} introduced automatic safe uncomputation inferred from type annotations, removing a class of resource management obligation entirely.
-\texttt{qfree}, \texttt{const} and \texttt{lifted} annotations remain mandatory surface syntax encoding circuit-execution semantics that require circuit-model knowledge to apply correctly, and numeric types carry explicit qubit counts via \texttt{uint[n]}, coupling every data declaration to a physical resource quantity.
-
+\texttt{qfree}, \texttt{const} and \texttt{lifted} annotations remain mandatory surface syntax encoding circuit-execution semantics that require circuit-model knowledge to apply correctly.
+Numeric types carry explicit qubit counts via \texttt{uint[n]}, coupling every data declaration to a physical resource quantity.
 \textbf{Quff}~\cite{wright2024quff} introduced runtime function inversion, removing the need to write the inverse of a function explicitly.
 Explicit bit-width specification remains required for all quantum types and phase notation and qubit-level operations remain at the programming surface.
-
 \textbf{Qutes}~\cite{faro2025qutes} introduced scope-bounded uncomputation semantics and a \texttt{ref} keyword approximating quantum-agnostic pass-by-reference.
 Outside the built-in operation set, explicit gate instructions remain mandatory and the classical and quantum contexts remain syntactically distinguished and programmer-managed rather than compiler-inferred.
 
-The progress of these high-level languages is in their ability to abstract recurring circuit generation obligations.
-None represents a paradigmatic shift in the programming model.
-The classical abstraction contracts that govern how programmers reason about data are physically constrained in the quantum domain; values cannot be freely copied, inspected or branched upon without violating the underlying physics~\cite{yuan2025foundationalabstractions}.
-A quantum-implicit language is one whose surface model carries zero quantum bias; the programmer describes algorithmic intent using computational abstractions, the compiler is responsible for inferring the quantum realisation~\cite{nunez_corrales2025betterabstractmachines}.
+These advances are functional abstractions within the circuit model, not a paradigmatic shift in the programming model.
+The classical abstraction contracts that govern how programmers reason about data are physically constrained in the quantum domain.
+Values cannot be freely copied, inspected or branched upon without violating the underlying physics~\cite{yuan2025foundationalabstractions}.
+A quantum-implicit language is one whose surface model carries zero quantum bias.
+The programmer describes algorithmic intent using computational abstractions; the compiler is responsible for inferring the quantum realisation~\cite{nunez_corrales2025betterabstractmachines}.
 A quantum-implicit language does not expose the circuit model as a programmer obligation; writing quantum-implicit programs requires only algorithmic and computational reasoning.
 Concerns such as quantum gates, phase rotations and measurement are pushed to the compiler.
 No existing quantum programming language occupies this tier.
 
 This thesis proposes to demonstrate that the quantum-implicit tier is formally achievable by constructing and evaluating a complete instantiation of it.
 Three integrated artefacts constitute the planned research contribution.
-The \textit{language specification} will define the syntax, operational semantics and type system of a quantum-implicit programming language, establishing that representative quantum algorithms can be expressed without quantum-mechanical vocabulary.
+The \textit{language specification} will define the syntax, operational semantics and type system of a quantum-implicit programming language.
+It will establish that representative quantum algorithms can be expressed without quantum-mechanical vocabulary.
 The \textit{formal theoretical basis} will prove type safety for the core language, establishing progress and preservation, and semantic preservation for the compilation pipeline.
 The \textit{compiler} will demonstrate end-to-end executability, translating programs in the quantum-implicit language to gate-based quantum hardware for execution on current NISQ devices.
 Together these artefacts will constitute a formal demonstration that the quantum-implicit tier is inhabitable.
@@ -37,7 +36,7 @@ Together these artefacts will constitute a formal demonstration that the quantum
 This thesis addresses the following central research question:
 
 \begin{quote}
-\textit{\textbf{CRQ: }Can a quantum-implicit programming language, whose surface model is agnostic of the underlying physical quantum substrate, be formally designed, proven correct and compiled to execute on gate-based quantum hardware?}
+    \textit{\textbf{CRQ: }Can a quantum-implicit programming language, whose surface model is agnostic of the underlying physical quantum substrate, be formally designed, proven correct and compiled to execute on gate-based quantum hardware?}
 \end{quote}
 
 The CRQ is decomposed into three subsidiary research questions addressing the formal specification of the language, the type safety of the core source language and the semantic preservation of the compilation pipeline.
