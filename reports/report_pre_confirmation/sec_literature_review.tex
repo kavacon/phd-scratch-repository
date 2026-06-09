@@ -21,44 +21,61 @@ Each makes a principled contribution: Silq introduces compiler-managed uncomputa
 These are genuine advances in functional abstraction at specific, principled points.
 The programmer-facing surface model remains quantum-explicit in each case.
 
-The following assessment evaluates three advanced high-level languages against four criteria governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}.
+The following assessment evaluates representative advanced quantum programming systems against four criteria governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}.
 Each records at least one violation.
 
-\begin{tabular}{p{3.2cm} p{3.5cm} p{3.5cm} p{3.5cm}}
+\begin{longtable}{p{1.8cm} p{3.3cm} p{3.3cm} p{3.3cm} p{3.3cm}}
     \toprule
-    \textbf{Criterion} & \textbf{Silq} & \textbf{Quff} & \textbf{Qutes} \\\midrule
-    \textbf{Symbolic denotational syntax.}
-    No circuit elements required to reason about program effects on state.
+    \textbf{System}
+    & \textbf{Symbolic denotational syntax.}
+    & \textbf{Representation-independent data types.}
+    & \textbf{Classical-quantum regularity.}
+    & \textbf{Intrinsic ensemble semantics.} \\
+    \midrule
+    \endhead
+
+    & \textit{No circuit elements required to reason about program effects on state.}
+    & \textit{No reference to circuit elements in data types.}
+    & \textit{Classical and quantum instructions coexist at the same level.}
+    & \textit{Shot count elided; distribution types well-defined at the language level.} \\     \midrule
+
+
+    \textbf{Silq}~\cite{bichsel2020silq}
     & \texttt{qfree}, \texttt{const}, \texttt{lifted} and \texttt{mfree} annotations encode circuit-execution semantics as mandatory surface syntax. Both require circuit-model knowledge to apply correctly.
-    & Runtime function inversion (\texttt{invertF}) is a circuit-level surface concept. Phase notation and explicit qubit operations remain at the programming surface.
-    & \texttt{ref} advances toward quantum-agnostic pass-by-reference. Explicit gate instructions (\texttt{hadamard}, \texttt{mcp}, \texttt{swap}) are still required for algorithms outside the built-in set. \\ \addlinespace
-    \textbf{Representation-independent data types.}
-    No reference to circuit elements in data types.
     & \texttt{uint[n]} hard-codes qubit count \texttt{n} into every numeric type. Every declaration couples data representation to a physical resource quantity.
-    & Explicit bit-width specification is required for all quantum types. The programmer must declare and manage qubit count for each variable.
-    & Quantum register types carry explicit size or qubit-level structure for operations outside the built-in set. \\ \addlinespace
-    \textbf{Classical-quantum regularity.}
-    Classical and quantum instructions coexist at the same level.
     & The \texttt{!} annotation mandates a programmer-visible stratification between classical and quantum values, with different rules for control flow and function application.
+    & Explicit \texttt{measure} is required to obtain classical output. Shot management is external to the language. \\ \addlinespace
+
+    \textbf{Quff}~\cite{wright2024quff}
+    & Runtime function inversion (\texttt{invertF}) is a circuit-level surface concept. Phase notation and explicit qubit operations remain at the programming surface.
+    & Explicit bit-width specification is required for all quantum types. The programmer must declare and manage qubit count for each variable.
     & Distinct quantum and classical type families are required. Programmers must reason about which operations are valid in each context.
-    & Classical and quantum contexts remain syntactically distinguished. The classical/quantum boundary is programmer-managed rather than compiler-inferred. \\ \addlinespace
-    \textbf{Intrinsic ensemble semantics.}
-    Shot count elided; distribution types well-defined at the language level.
-    & Explicit \texttt{measure} is required to obtain classical output. Shot management is external to the language.
-    & Measurement must be explicitly inserted by the programmer. Shot count for statistical reliability is managed outside the language.
-    & Scope-bounded uncomputation handles one class of quantum-to-classical transition. General measurement and shot management remain explicit. \\
+    & Measurement must be explicitly inserted by the programmer. Shot count for statistical reliability is managed outside the language. \\ \addlinespace
+
+    \textbf{Qutes}~\cite{faro2025qutes}
+    & \texttt{ref} advances toward quantum-agnostic pass-by-reference. Explicit gate instructions (\texttt{hadamard}, \texttt{mcp}, \texttt{swap}) are still required for algorithms outside the built-in set.
+    & Quantum register types carry explicit size or qubit-level structure for operations outside the built-in set.
+    & Classical and quantum contexts remain syntactically distinguished. The classical/quantum boundary is programmer-managed rather than compiler-inferred.
+    & Scope-bounded uncomputation handles one class of quantum-to-classical transition. General measurement and shot management remain explicit. \\ \addlinespace
+
+    \textbf{Tower}~\cite{yuan2025foundationalabstractions}
+    & Data structure operations (push, pop, insert) require no circuit-element reasoning. \texttt{assign}/\texttt{unassign} sequencing and \texttt{with-do} constructs are mandatory surface syntax for any stateful operation, encoding reversibility obligations absent from classical programming.
+    & Data structure types (list, stack, queue, set, string) hide internal pointer layout and memory representation from the programmer. Integer widths are bounded by hardware word size, a constraint with classical analogues.
+    & The system operates entirely in superposition with no programmer-visible classical/quantum type stratification. \texttt{assign}/\texttt{unassign} sequencing is a quantum-specific surface obligation with no classical analogue.
+    & Measurement and shot management are external to the language. Distribution types are not language-level concepts. \\
     \bottomrule
-\end{tabular}
+\end{longtable}
 \vspace{2em}
 
 A survey of 251 active quantum programmers found that 83\% hold at least five years of classical programming experience, yet quantum vocabulary remains the primary-reported barrier to productive use across all frameworks and languages~\cite{ferreira2024qplusage}.
-The violations recorded above are consistent across the three most advanced high-level languages in the reviewed literature, confirming that this ceiling is a property of the existing design space rather than a shortcoming of any single system.
+Violations are consistent across advanced quantum programming systems, including the system that advances furthest toward data structure abstraction operating in superposition, confirming that this ceiling is a structural property of the existing design space.
 Two failure modes account for this pattern structurally~\cite{yuan2025foundationalabstractions}.
 \textit{Representation exposure} manifests wherever an interface exposes qubit types or requires annotations such as \texttt{const}, \texttt{qfree} or \texttt{Adjoint}.
 Quantum state cannot be copied or inspected without disturbing the computation, so no module boundary at which quantum and classical code meet can be made quantum-opaque.
 \textit{Semantic mismatch} is visible in the type restrictions documented across the high-level family.
 Annotation requirements that make safe uncomputation, inversion and controlled-operation synthesis possible are surface evidence of where classically valid operations have no general quantum equivalent.
-The No-Embedding Theorem establishes the structural basis for both failure modes: general quantum control flow cannot be faithfully embedded into a circuit model without reference to circuit primitives~\cite{yuan2025foundationalabstractions}.
+The No-Embedding Theorem establishes that classical control flow cannot be realised in superposition because it cannot be made injective~\cite{yuan2025foundationalabstractions}.
+It is not possible to lift classical abstractions into superposition and form a complete quantum language, new paradigms and new protocols are required.
 The field's own abstract machine analysis confirms that no quantum abstract machine candidate satisfies the criteria for symbolic reasoning about operations without reference to circuit primitives.
 No production language is built on a substrate that meets those conditions~\cite{nunez_corrales2025betterabstractmachines}.
 
