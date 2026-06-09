@@ -1,7 +1,7 @@
 \section{Introduction}\label{sec:pre_confirmation:introduction}
 Quantum computing hardware has matured to the point where non-trivial algorithms can be compiled and executed on real devices.
 The programming models through which engineers interact with this hardware remain inaccessible to the classical software engineers who would most benefit from them.
-Despite genuine progress in the development of high-level quantum programming languages (QPL), no existing QPL has achieved separation between the programmer-facing surface model and the underlying quantum substrate.
+Despite genuine progress in the development of high-level quantum programming languages (QPL), no existing QPL has achieved full separation between the programmer-facing surface model and the underlying quantum substrate.
 Programmers must declare qubits, select gate sequences and reason about circuit structure regardless of the problem domain.
 These quantum-mechanical obligations are pre-requisites to writing correct programs, not incidental concerns that can be deferred to the compiler.
 Prescriptive circuit definitions, or thin approximations of them, constrain compilers to transcription rather than generation, preventing optimisation at the level of programmer intent.
@@ -19,11 +19,20 @@ Outside the built-in operation set, explicit gate instructions remain mandatory 
 These advances are functional abstractions within the circuit model, not a paradigmatic shift in the programming model.
 The classical abstraction contracts that govern how programmers reason about data are physically constrained in the quantum domain.
 Values cannot be freely copied, inspected or branched upon without violating the underlying physics~\cite{yuan2025foundationalabstractions}.
+
+Recent work introduces a data structure framework and control machine model that advances substrate-agnosticism at the data layer~\cite{yuan2025foundationalabstractions}.
+\textbf{Tower} presents a classical-facing data structure API, including sets, lists, queues, stacks and strings, whose operations execute entirely in superposition without exposing qubit-level implementation to the programmer.
+The accompanying control machine model removes circuit primitives from the programming surface at the ISA level.
+These contributions advance furthest among existing systems toward a programming surface that does not require quantum-mechanical vocabulary for data operations.
+Tower's design goal is to run classical programs correctly in superposition, achieving quantum speedup on classical algorithmic structures, rather than to allow quantum-computational intent to be expressed without quantum-mechanical vocabulary.
+Three classes of programming-surface obligation remain: reversibility must be managed explicitly through \texttt{assign} and \texttt{unassign} sequencing; uncomputation requires programmer-managed \texttt{with-do} constructs; and recursive bounds must be specified as explicit classical parameters.
+The system provides no mechanism for expressing quantum-computational primitives, including superposition semantics, distribution types and amplitude amplification, without quantum-mechanical vocabulary.
+
 A quantum-implicit language is one whose surface model carries zero quantum bias.
 The programmer describes algorithmic intent using computational abstractions; the compiler is responsible for inferring the quantum realisation~\cite{nunez_corrales2025betterabstractmachines}.
 A quantum-implicit language does not expose the circuit model as a programmer obligation; writing quantum-implicit programs requires only algorithmic and computational reasoning.
 Concerns such as quantum gates, phase rotations and measurement are pushed to the compiler.
-No existing quantum programming language occupies this tier.
+No existing system achieves full separation of the programming surface from the quantum substrate for the general case of quantum-computational programming.
 
 This thesis proposes to demonstrate that the quantum-implicit tier is formally achievable by constructing and evaluating a complete instantiation of it.
 Three integrated artefacts constitute the planned research contribution.
