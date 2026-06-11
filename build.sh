@@ -60,43 +60,29 @@ echo "Source:  $SOURCE_DIR"
 echo "Build:   $BUILD_DIR"
 echo ""
 
-# Compile from the source directory so all relative paths in .tex files
-# resolve correctly. Auxiliary files land alongside main.tex, then the
-# final PDF is copied into build/.
-OLD_DIR="$PWD"
 cd "$SOURCE_DIR"
 
-# Clear Biber cache to avoid stale/corrupted PAR cache issues
-echo "--- clear biber cache ---"
-rm -rf "$(biber --cache 2>/dev/null)"
+PDFLATEX="pdflatex -interaction=nonstopmode -output-directory=$BUILD_DIR"
 
-echo "--- pdflatex (1/4) ---"
-export BIBINPUTS="$REPO_ROOT/bib:"
-pdflatex -interaction=nonstopmode main.tex > /tmp/build-latex.log 2>&1
+echo "--- pdflatex (1/3) ---"
+$PDFLATEX main.tex
 
 echo "--- $BIB_BACKEND ---"
 if [ "$BIB_BACKEND" = "biber" ]; then
-    biber main 2>&1 | tee /tmp/build-biber.log
-    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    BIBINPUTS="$REPO_ROOT" biber --input-directory="$BUILD_DIR" --output-directory="$BUILD_DIR" "$BUILD_DIR/main"
+    if [ $? -ne 0 ]; then
         echo "ERROR: Biber failed"
-        cat /tmp/build-biber.log
         exit 1
     fi
 else
-    bibtex -terse main
+    bibtex -terse "$BUILD_DIR/main"
 fi
 
-echo "--- pdflatex (2/4) ---"
-pdflatex -interaction=nonstopmode main.tex > /tmp/build-latex.log 2>&1
+echo "--- pdflatex (2/3) ---"
+$PDFLATEX main.tex
 
-echo "--- pdflatex (3/4) ---"
-pdflatex -interaction=nonstopmode main.tex > /tmp/build-latex.log 2>&1
-
-# Move final PDF to build/ and clean auxiliary files from source dir
-mv -f main.pdf "$BUILD_DIR/"
-find "$SOURCE_DIR" -maxdepth 1 -type f \( -name "*.aux" -o -name "*.bcf" -o -name "*.bbl" -o -name "*.blg" -o -name "*.run.xml" -o -name "*.out" -o -name "*.toc" -o -name "*.log" -o -name "*.fls" -o -name "*.fdb_latexmk" -o -name "*.synctex.gz" \) -delete
-
-cd "$OLD_DIR"
+echo "--- pdflatex (3/3) ---"
+$PDFLATEX main.tex
 
 echo ""
 echo "=== Done: $BUILD_DIR/main.pdf ==="
