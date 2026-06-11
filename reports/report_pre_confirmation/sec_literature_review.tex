@@ -24,6 +24,11 @@ The programmer-facing surface model remains quantum-explicit in each case.
 The following assessment evaluates representative advanced quantum programming systems against four criteria governing the programming layer~\cite{nunez_corrales2025betterabstractmachines}.
 Each records at least one violation.
 
+\paragraph{Symbolic denotational syntax} no circuit elements required to reason about program effects on the state.
+\paragraph{Representation-independent data types} no reference to circuit elements in data types.
+\paragraph{Classical-quantum regularity} classical and quantum instructions coexist at the same level.
+\paragraph{Intrinsic ensemble semantics} shot count elided; distribution types are well-defined at the language level.
+
 \begin{longtable}{p{1.8cm} p{3.3cm} p{3.3cm} p{3.3cm} p{3.3cm}}
     \toprule
     \textbf{System}
@@ -33,12 +38,6 @@ Each records at least one violation.
     & \textbf{Intrinsic ensemble semantics.} \\
     \midrule
     \endhead
-
-    & \textit{No circuit elements required to reason about program effects on state.}
-    & \textit{No reference to circuit elements in data types.}
-    & \textit{Classical and quantum instructions coexist at the same level.}
-    & \textit{Shot count elided; distribution types well-defined at the language level.} \\     \midrule
-
 
     \textbf{Silq}~\cite{bichsel2020silq}
     & \texttt{qfree}, \texttt{const}, \texttt{lifted} and \texttt{mfree} annotations encode circuit-execution semantics as mandatory surface syntax. Both require circuit-model knowledge to apply correctly.
