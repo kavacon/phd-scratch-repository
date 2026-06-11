@@ -2,14 +2,13 @@
 The progress to date empirically establishes that no existing quantum programming system meets the criteria for the quantum-implicit tier.
 The work of the coming three years will demonstrate that the tier is formally inhabitable by introducing a language that is specified, proven type-safe and compiled to execute on gate-based quantum hardware.
 
-The empirical case for the quantum-implicit tier has been established by the systematic review; the language design work proceeds from that foundation.
 Future milestones will include the language specification, formal type system proofs and the compiler.
 The language specification is the necessary first deliverable: syntax, semantics and built-in operators must be formally defined before the type system can be proven sound.
 The progress and preservation proofs that follow establish semantic preservation across the compilation pipeline, providing the theoretical foundation on which the correctness of the compiler depends.
 
 \subsection{Publication plan}\label{subsec:pre_confirmation:work_plan:publication_plan}
 The research programme is structured across four publications, each addressing a distinct phase of the argument required to answer the CRQ.
-The first publication, the systematic review, is complete by mid-2026 and is the necessary precondition for all subsequent work.
+The first publication, the systematic review, is drafted and targeting submission by mid-2026, it is the necessary precondition for all subsequent work.
 Publication 1 establishes the empirical case for the quantum-implicit tier and defines the requirements the language design must satisfy.
 The language specification follows as the highest priority planned work, targeting a draft in the 2027--2028 period.
 The formal theory publication depends on the specification being settled and is planned for the 2027--2028 period with 2028--2029 as an acceptable fallback.
@@ -18,24 +17,24 @@ If required due to time constraints, the formal theory and compiler may be devel
 
 \vspace{2em}
 \begin{threeparttable}
-    \begin{tabularx}{\textwidth}{@{}p{2cm}XXlX@{}}
+    \begin{tabularx}{\textwidth}{@{}XXlX@{}}
         \toprule
-        \textbf{Publication} & \textbf{Focus}                        & \textbf{Research question} & \textbf{Target year} & \textbf{Status}    \\
+        \textbf{Publication}                        & \textbf{Research question} & \textbf{Target year} & \textbf{Status}    \\
         \midrule
-        1\tnote{*}           & Quantum programming systematic review & CRQ (motivation)           & Aug 2026             & Pending submission \\ \addlinespace
-        2                    & Language specification                & SRQ1, CRQ                  & 2027--2028           & Planned            \\ \addlinespace
-        3                    & Type system and formal theory         & SRQ2, SRQ3                 & 2027--2028           & Planned            \\ \addlinespace
-        4                    & Compiler                              & SRQ3, CRQ                  & 2028--2029           & Planned            \\
+        (1) Quantum programming systematic review & CRQ (motivation)\tnote{*}           & Aug 2026             & Pending submission \\ \addlinespace
+        (2) Language specification                & SRQ1, CRQ                  & 2027--2028           & Planned            \\ \addlinespace
+        (3) Type system and formal theory         & SRQ2, SRQ3                 & 2027--2028           & Planned            \\ \addlinespace
+        (4) Compiler                              & SRQ3, CRQ                  & 2028--2029           & Planned            \\
         \bottomrule
     \end{tabularx}
     \begin{tablenotes}
         \footnotesize
-        \item[*] Targeting submission to the Journal Quantum August 2026.
+        \item[*] Targeting submission to the Journal of Systems and Software August 2026.
     \end{tablenotes}
 \end{threeparttable}
 \vspace{2em}
 
-The publication sequence is formally constrained rather than merely ordered.
+The publication sequence is constrained by pre-requisite completions for later publications.
 The systematic review, completed by mid-2026, defines the requirements the language specification must satisfy.
 The design decisions of the language are grounded in the empirical evidence it provides.
 The language specification is the highest priority planned work, targeting a draft in the 2027--2028 period.
@@ -51,7 +50,8 @@ If the threshold is not met, the operations model will be incorporated directly 
 
 \subsection{Milestones and timelines}\label{subsec:pre_confirmation:work_plan:milestones}
 The milestones of the research programme are presented at two levels of granularity.
-The three-year candidature arc and a detailed breakdown of the tasks remaining in the 2026--2027 period constitute the immediate preparation required before language specification work can begin in earnest.
+The three-year candidature arc and a detailed breakdown of the tasks remaining in the 2026--2027 period.
+The detailed breakdown represents the immediate preparation required before language specification work can begin.
 The three-year arc is organised around three publication phases, each dependent on the one preceding it.
 The 2026--2027 period has the dual obligation of completing the literature review and submitting the systematic review publication.
 It also includes building the domain knowledge the language specification requires.

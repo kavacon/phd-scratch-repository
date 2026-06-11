@@ -1,11 +1,12 @@
 \section{Introduction}\label{sec:pre_confirmation:introduction}
 Quantum computing hardware has matured to the point where non-trivial algorithms can be compiled and executed on real devices.
-The programming models through which engineers interact with this hardware remain inaccessible to the classical software engineers who would most benefit from them.
+The programming models through which engineers interact with this hardware remain inaccessible to most engineers without prior knowledge of quantum mechanics.
 Despite genuine progress in the development of high-level quantum programming languages (QPL), no existing QPL has achieved full separation between the programmer-facing surface model and the underlying quantum substrate.
 Programmers must declare qubits, select gate sequences and reason about circuit structure regardless of the problem domain.
 These quantum-mechanical obligations are pre-requisites to writing correct programs, not incidental concerns that can be deferred to the compiler.
 Prescriptive circuit definitions, or thin approximations of them, constrain compilers to transcription rather than generation, preventing optimisation at the level of programmer intent.
-Current quantum hardware is characterised by coherence constraints that bound the circuit depth at which correct results are produced~\cite{nielsen2000quantum}; compiler-managed circuit generation from higher-level semantic instructions would directly address this bound.
+Current quantum hardware is characterised by coherence constraints that bound the circuit depth at which correct results are produced~\cite{nielsen2000quantum}.
+Compiler-managed circuit generation from higher-level semantic instructions would enable more efficient circuits within these bounds.
 
 No existing high-level QPL eliminates quantum-mechanical vocabulary from the general-case programming model; each retains it as a mandatory obligation even where targeted progress has been made.
 \textbf{Silq}~\cite{bichsel2020silq} introduced automatic safe uncomputation inferred from type annotations, removing a class of resource management obligation entirely.
