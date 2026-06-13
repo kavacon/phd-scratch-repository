@@ -78,12 +78,12 @@ Top-level:
         - `sec_{section_slug}.tex` (individual sections)
     - `publication_language_design/`
     - `publication_compilation_dynamic_static/`
+    - `publication_qpl_systematic_review/`
 - `reports/` (Thesis reports and reviews)
     - `report_pre_confirmation/`
         - `main.tex` (standalone report build entrypoint, self-contained)
     - `report_confirmation/`
 - `figures/`
-- `tables/`
 - `bib/references.bib`
 
 ## Paper-as-chapter rule (for the included-publication chapters)
@@ -141,10 +141,18 @@ All LaTeX documents (thesis, publications, reports) should use the shared preamb
 
 Each document's `main.tex` should input these files using relative paths, then specify the bibliography resource directly:
 
+For publications and reports (two levels deep, e.g. `publications/publication_foo/main.tex`):
 ```latex
 \input{../../preamble/packages}
 \input{../../preamble/macros}
 \input{../../preamble/bibliography}
+```
+
+For the thesis (`thesis/main.tex`, one level deep):
+```latex
+\input{../preamble/packages}
+\input{../preamble/macros}
+\input{../preamble/bibliography}
 ```
 
 Then use `\printbibliography` (not `\bibliography{}`) in the document body.
@@ -213,12 +221,12 @@ Run `./build.sh` without arguments to see all available targets.
 
 3. Runs `pdflatex` → `biber` → `pdflatex` → `pdflatex` (standard LaTeX + biblatex workflow)
 
-4. Moves the final `main.pdf` to `SOURCE_DIR/build/` and cleans auxiliary files
+4. Writes the final `main.pdf` to `SOURCE_DIR/build/` (via `pdflatex -output-directory`); auxiliary files (`*.aux`, `*.log`, `*.bbl`, etc.) remain in the build directory and are not cleaned up
 
 ### Bibliography backend detection
 
 The script detects whether to use `bibtex` or `biber` by checking for biblatex commands in the `main.tex` file:
-- If `\addbibresource` or `\printbibliography` is found → uses `biber`
+- If `\addbibresource`, `\printbibliography` or `preamble/bibliography` is found → uses `biber`
 - Otherwise → uses `bibtex`
 
 ## Chapter folder template
