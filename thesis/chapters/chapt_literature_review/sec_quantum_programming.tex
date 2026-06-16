@@ -1,4 +1,4 @@
-\section{Quantum Programming}\label{sec:lit_rev:quantum_programming}
+\section{Quantum programming}\label{sec:lit_rev:quantum_programming}
 
 The mathematical and physical foundations of quantum computation are assumed throughout; qubits, gates and measurement are established in Chapter~\ref{ch:introduction} and are not revisited here.
 
@@ -7,7 +7,7 @@ It surveys the abstract models of quantum computation, the programming paradigms
 Although the surveyed models are computationally equivalent, programming systems privilege the circuit model almost without exception; the reasons for that dominance and its consequences for language design form a core part of the analysis in this section.
 The section is concerned with models of computation and programming paradigms, not with compilation pipelines and intermediate representations; those are examined in Section~\ref{sec:lit_rev:compilation}.
 
-\subsection{Models of Quantum Computation}\label{subsec:lit_rev:quantum_programming:models_of_computation}
+\subsection{Models of quantum computation}\label{subsec:lit_rev:quantum_programming:models_of_computation}
 
 Quantum computation can be described through three families of abstract machine models, each addressing a different question about the nature of computation.
 Computation-definition models, including the quantum Turing machine and the quantum lambda calculus, provide formal accounts of what quantum computation is~\cite{nunez_corrales2025betterabstractmachines,wang2023qrasp}.
@@ -37,6 +37,7 @@ Table~\ref{tab:lit_rev:quantum_programming:execution_model_descriptions} describ
 
 \begin{figure}[htbp]
     \centering
+    % TODO: Add ADQC to the caption and diagram
 % ===========================================================================
 % F2 -- Mechanism detail per execution model. Four panels (a)-(d).
 % Placement: Beat 5. Companion to the comparison table (T3).
@@ -94,7 +95,7 @@ The quantum Turing machine is the canonical model of this kind, generalising the
 Its evolution is required to be unitary.
 Where a probabilistic Turing machine keeps its move probabilities summing to one, the quantum machine must evolve so that the squared amplitudes across all configurations continue to sum to one.
 This ensures the machine is in a physically realisable state at every step and guaranteeing that measurement yields a genuine outcome~\cite{bernstein1997quantum}.
-Reversibility follows from this requirement rather than being imposed separately, and definite outcomes arise only when the final superposition is measured~\cite{bernstein1997quantum}.
+Reversibility follows from this requirement rather than being imposed separately and definite outcomes arise only when the final superposition is measured~\cite{bernstein1997quantum}.
 The quantum lambda calculus reaches an equivalent account through a higher-order, type-theoretic route, characterising quantum computation in terms of functions rather than machine configurations~\cite{nunez_corrales2025betterabstractmachines}.
 
 Well-formedness in these models is a global semantic property rather than a syntactic one.
@@ -153,7 +154,7 @@ The structural commitments of these models become visible where control itself i
 The quantum control machine replaces the classical instruction cycle with one in which fetching, executing and retiring each instruction are unitary operations over quantum control registers, the program counter among them~\cite{yuan2025foundationalabstractions}.
 A classical conditional jump overwrites the program counter and discards which branch was taken, an operation that is not injective and so cannot be realised as a unitary~\cite{yuan2025foundationalabstractions}.
 In superposition this irreversibility entangles the control state with the data and cancels the interference the computation depends on, so a direct lift of classical control flow is physically impossible rather than merely inefficient~\cite{yuan2025foundationalabstractions}.
-Realisable control flow must therefore be injective, retaining enough history to stay reversible, and synchronised, so that every branch of a superposition reaches the same program point at the same step; bounded loops are the only quantum loops these conditions admit~\cite{yuan2025foundationalabstractions}.
+Realisable control flow must therefore be injective, retaining enough history to stay reversible and synchronised, so that every branch of a superposition reaches the same program point at the same step; bounded loops are the only quantum loops these conditions admit~\cite{yuan2025foundationalabstractions}.
 The unitarity discipline fixed by the computation-definition models thus propagates upward into the instruction set, governing which control constructs an execution model may even offer.
 
 The criteria for a productive quantum abstract machine were established in the assessment of abstraction in Section~\ref{sec:lit_rev:abstraction}, where the conclusion was that no existing machine satisfies the full set and that the requirements for a symbolic instruction architecture are the principal gaps~\cite{nunez_corrales2025betterabstractmachines}.
@@ -162,24 +163,25 @@ The criteria apply unevenly, since several of them presuppose a model that alrea
 The computation-definition models fix what a computation is and provide no instruction set, so the demand for a stable and hardware-independent architecture falls on the instruction-execution family rather than on them.
 The quantum random access and stored-program machines in that family are judged to fail the requirement that machine state be finite and addressable in advance,on the grounds that they assume unbounded registers~\cite{nunez_corrales2025betterabstractmachines}.
 This judgement is too strong.
-A stored-program machine occupies only finitely many registers at any step, and a time-constructible program can compute its own resource bound from its input with certainty, fixing that bound before it runs~\cite{wang2023qrasp}.
+A stored-program machine occupies only finitely many registers at any step and a time-constructible program can compute its own resource bound from its input with certainty, fixing that bound before it runs~\cite{wang2023qrasp}.
 An unbounded register file is in any case the same idealisation made by the classical random access machine, which the same criteria hold up as a model of effective abstraction~\cite{nunez_corrales2025betterabstractmachines}.
 The requirement that excludes the quantum machines on this basis is better read as a demand for addressable and decomposable state, which the stored-program machine provides.
 
 A second criterion, that instructions be symbolic rather than tied to circuit elements, is met only in part.
 The control and memory instructions of these machines, among them load, store, branch and arithmetic, abstract over their realisation much as an addition instruction stands apart from any particular adder~\cite{wang2023qrasp}.
 Their quantum instructions do not.
-An instruction to apply a Hadamard or Pauli operator names a gate of the circuit model, and its meaning is the amplitude transformation that gate performs rather than a higher account of the operation being carried out~\cite{nunez_corrales2025betterabstractmachines}.
-The separation between instruction symbol and circuit element that the classical instructions achieve is absent for the quantum ones, and this, rather than any wholesale dependence on circuits, is what keeps the models reasoning in circuit terms~\cite{nunez_corrales2025betterabstractmachines}.
+An instruction to apply a Hadamard or Pauli operator names a gate of the circuit model and its meaning is the amplitude transformation that gate performs rather than a higher account of the operation being carried out~\cite{nunez_corrales2025betterabstractmachines}.
+The separation between instruction symbol and circuit element that the classical instructions achieve is absent for the quantum ones and this, rather than any wholesale dependence on circuits, is what keeps the models reasoning in circuit terms~\cite{nunez_corrales2025betterabstractmachines}.
 
-The criteria also separate classical control flow from quantum and hybrid control flow, and requiring a single model to provide both exposes a genuine difference between the families.
+The criteria also separate classical control flow from quantum and hybrid control flow and requiring a single model to provide both exposes a genuine difference between the families.
 The quantum Turing machine has no native control construct.
-A fixed transition rule drives its evolution, and the only choice exercised over the computation is the external decision of when to measure~\cite{bernstein1997quantum}.
+A fixed transition rule drives its evolution and the only choice exercised over the computation is the external decision of when to measure~\cite{bernstein1997quantum}.
 Its control is classical only by omission, residing outside the quantum state rather than being expressed within the machine.
 The quantum control machine takes the opposite approach, placing the program counter and a branch register into the quantum state so that branching itself can occur in superposition~\cite{yuan2025foundationalabstractions}.
 This does not make its control non-classical.
 The machine runs a classical instruction cycle and admits only loops whose length is fixed in advance.
-It requires that the separate branches of a superposition be brought back into agreement before the program ends, so that the control registers hold a single definite value at termination and the running time does not depend on any quantum variable~\cite{yuan2025foundationalabstractions}.
+It requires that the separate branches of a superposition be brought back into agreement before the program ends.
+This ensures the control registers hold a single definite value at termination and the running time does not depend on any quantum variable~\cite{yuan2025foundationalabstractions}.
 This last condition, termed synchronisation, is what allows superposed control to remain classically well-behaved at the points where the program begins and ends~\cite{yuan2025foundationalabstractions}.
 Quantum control flow is therefore layered on a classical control structure rather than replacing it.
 The model that comes closest to providing both forms of control does so not by preferring one to the other but by running quantum control within a classical scaffold.
@@ -190,7 +192,7 @@ The circuit model composes a computation from elementary gates~\cite{yao1993circ
 The adiabatic model holds the answer in the ground state of a slowly varying Hamiltonian~\cite{aharonov2007adiabatic} and the quantum walk model encodes it in the dynamics of a walker over a graph~\cite{childs2009quantumwalk}.
 Each simulates and is simulated by the circuit model within polynomial bounds, so all four characterise the same class of efficiently solvable problems.
 Equivalence of this kind settles the question of power; it leaves untouched the question of representation, of how readily a model lets a computation be expressed and reasoned about.
-The models are equivalent in power and differ only in how each realises sequencing, the role played by time, and it is this difference that governs how readily each can be expressed, as set out in Table~\ref{tab:lit_rev:quantum_programming:execution_models}.
+The models are equivalent in power and differ only in how each realises sequencing, the role played by time and it is this difference that governs how readily each can be expressed, as set out in Table~\ref{tab:lit_rev:quantum_programming:execution_models}.
 
 \begin{table}[htbp]
     \centering
@@ -201,7 +203,7 @@ The models are equivalent in power and differ only in how each realises sequenci
         \toprule
         \textbf{Model} & \textbf{Sequencing realised by} & \textbf{Representational trade-off} \\
         \midrule
-        \textbf{Circuit} & An explicit sequence of gates fixes the order of operations & It is the direct baseline, with gates mapping straight onto operations, but it is  strictly sequential, so circuit depth and gate count grow at least linearly with the computation. \\
+        \textbf{Circuit} & An explicit sequence of gates fixes the order of operations & It is the direct baseline, with gates mapping straight onto operations, but it is strictly sequential, so circuit depth and gate count grow at least linearly with the computation. \\
         \textbf{Measurement-based (MBQC)} & The order of the adaptive measurements fixes the order of operations & Entanglement is prepared in advance and only one class of operation is required, but the corrections this introduces propagate across the pre-entangled resource state and must be tracked non-locally by classical feed-forward. \\
         \textbf{Adiabatic} & A spatial clock register stands in for the passage of time & A spectral gap suppresses leakage from the ground state and protects the computation, but correctness becomes a global property of that gap, which narrows polynomially as the computation lengthens and slows the evolution. \\
         \textbf{Quantum walk} & Traversal from a start vertex to a terminal vertex fixes the order of operations & The graph is low-degree and unweighted, but the computation is carried in global interference and each traversal succeeds only probabilistically, so it must be repeated until success. \\
@@ -222,3 +224,228 @@ Quantum computation has instead adopted the circuit model as its default surface
 A contingent coincidence between one model and the structure of sequential composition thereby hardens into the assumption that time is a gate sequence.
 That assumption ascends into intermediate representations and compilers and forces the other models to be implemented as conversions from circuits rather than from their own principles~\cite{aharonov2007adiabatic}.
 The models of computation settle what can be computed without settling how a computation should be expressed to the programmer, which is the work of a programming paradigm rather than a computation model.
+
+\subsection{Programming paradigms}\label{subsec:lit_rev:quantum_programming:programming_paradigms}
+
+Section~\ref{subsec:lit_rev:quantum_programming:models_of_computation} compared the models of computation by what each takes a computation to be; the paradigms surveyed here differ instead in how they relate control flow to quantum data.
+That relationship fixes whether control stays a classical scaffold issuing operations from outside the quantum state or is itself drawn into superposition alongside the data it governs.
+The circuit model remains the common substrate beneath either choice, so the difference lies not in what is ultimately run but in how that circuit is built, controlled and executed on the underlying hardware.
+Where control sits governs what a language can express, how much of the quantum machinery the programmer manages by hand and how the cost of a program must be reasoned about.
+Table~\ref{tab:lit_rev:quantum_programming:control_paradigms} illustrates how these parameters are exhibited in both quantum and classical control paradigms.
+The remainder of the section examines the paradigms in the context of control, weighing the expressiveness of each against their physical and programmatic tradeoffs.
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabularx}{\textwidth}{@{}lXX@{}}
+        \toprule
+        & \textbf{Classical control} & \textbf{Quantum control} \\
+        \midrule
+        Branches on
+        & Measured outcomes only, so a superposition must be collapsed first, through feed-forward or a dynamic circuit
+        & Quantum data left in superposition, through reversible branching on orthogonal or basis-typed cases \\
+        \addlinespace
+        Programmer manages
+        & State preparation and gates, with uncomputation by hand unless a discipline automates it
+        & The same and additionally the orthogonality and purity or basis structure of each branch \\
+        \addlinespace
+        Cost reasoned about as
+        & Repeated executions for sampling and the latency of each measure-and-resume round-trip
+        & Every branch evaluated, so running time sums rather than maxes, with loops padded to a fixed classical bound \\
+        \bottomrule
+    \end{tabularx}
+    \caption{The two control paradigms across three axes: what control branches on, what the programmer manages by hand and how a program's cost must be reasoned about.}
+    \label{tab:lit_rev:quantum_programming:control_paradigms}
+\end{table}
+
+
+The dominant paradigm confines superposition to the data and keeps control flow classical, a division the foundational semantics for this paradigm capture in the phrase \textit{quantum data, classical control}~\cite{selinger2004towards}.
+The restriction falls on control flow, not on operations: a qubit in superposition may still act as the control of a gate such as \texttt{CNOT}, which applies a fixed unitary unconditionally, but no program turns the choice of which statement executes next into a quantum value~\cite{selinger2004towards}.
+The hardware picture beneath it, the quantum random access machine of Section~\ref{subsec:lit_rev:quantum_programming:models_of_computation}, pairs a classical controller with a quantum co-processor that it prepares, transforms and measures, returning only classical outcomes to the controlling program~\cite{knill1996pseudocode, wang2023qrasp}.
+Its hold comes from inheriting classical reasoning intact: established control constructs, type systems and program-structuring intuitions carry over unchanged and the canonical algorithms, Shor, Grover and the quantum Fourier transform, already take the form of classical orchestration around quantum subroutines~\cite{selinger2004towards}.
+Within this paradigm languages still differ in programming style, functional or imperative, a difference easily mistaken for what lets a language enforce no-cloning statically rather than checking it at run time.
+What determines this is whether the type system treats qubits as linear resources: where a qubit can be aliased under more than one name a compiler cannot decide statically that two names denote distinct qubits, so no-cloning falls to run-time checks, whereas a linear discipline that forbids duplication settles distinctness in the types~\cite{selinger2004towards}.
+Programming style is therefore incidental to the guarantee, which follows from resource discipline and not from functional or imperative form.
+An imperative, high-level design reaches the same static guarantees: \textbf{Silq} enforces them through a linear discipline for consumable values and a non-linear one for constants, marking classically describable functions \texttt{qfree} and read-only inputs \texttt{const}~\cite{bichsel2020silq}.
+On the same discipline Silq uncomputes temporary values automatically, removing a class of manual ancilla bookkeeping the paradigm would otherwise leave to the programmer~\cite{bichsel2020silq}.
+The limit on what this paradigm can express follows from the same division.
+
+A program cannot branch on a quantum value while it stays in superposition, because reading that value to settle the branch measures it and collapses the state the branch was meant to depend on~\cite{selinger2004towards}.
+A mid-circuit measurement yields a classical bit and later quantum operations may be conditioned on that bit by classical feed-forward, an arrangement standardised in OpenQASM 3 and run on hardware as a dynamic circuit~\cite{cross2022openqasm3}.
+The same mechanism underlies the measurement-based model of Section~\ref{subsec:lit_rev:quantum_programming:models_of_computation}, where measuring qubits and feeding the outcomes forward selects the operations that follow.
+Control in this paradigm therefore reacts to quantum data once that data is made classical and the round-trip from quantum register to classical decision and back carries its own cost in latency and measured-state fidelity~\cite{dynamicbench2026}.
+The programmer still prepares states and applies gates directly and absent a discipline such as Silq's must clear temporary values by hand~\cite{bichsel2020silq}.
+
+The opposing paradigm draws control flow itself into superposition, letting a program branch on quantum data without measuring it first.
+A foundational analysis of this paradigm, the quantum control machine (QCM), establishes the conditions any such construct must meet~\cite{yuan2025foundationalabstractions}.
+Quantum operations must be reversible, so a control construct can never discard the record of how it reached a given point.
+A classical conditional jump does exactly that, overwriting which branch was taken and two branches that arrived at the same state would interfere to a cancelled, unmeasurable result if lifted directly into superposition~\cite{yuan2025foundationalabstractions}.
+A realisable quantum control construct must therefore keep its branches distinguishable and bring them back into step before measurement, so that the control bookkeeping can be removed without disturbing the data~\cite{yuan2025foundationalabstractions}.
+Figure~\ref{fig:lit_rev:quantum_programming:reversible_vs_classical_control} provides a comparison of how control functions in quantum and classical settings.
+
+\begin{figure}[htbp]
+    \centering
+    % =====================================================================
+    % TODO (figure to be drawn later): contrast classical control flow with
+    % reversible quantum control, showing WHY a classical conditional cannot be
+    % lifted into superposition. Source of the constraints:
+    % \cite{yuan2025foundationalabstractions} (QCM).
+    %
+    % Suggested layout: three panels, left to right.
+    %
+    % Panel (a) "Classical conditional":
+    %   - Branch point on a classical bit b; two paths B0, B1 with distinct
+    %     intermediate states.
+    %   - The paths MERGE into one continuation; the program counter converges to
+    %     the same next instruction regardless of branch.
+    %   - Annotate: many-to-one / non-injective, "which branch" is overwritten,
+    %     hence irreversible (and perfectly fine classically).
+    %
+    % Panel (b) "Naive lift to superposition (fails)":
+    %   - Same merge when b is a qubit in superposition; two paths reach the SAME
+    %     state, amplitudes meeting at the merge.
+    %   - Annotate the failure: merging histories is non-injective so it is not
+    %     unitary; coinciding paths can interfere destructively (norm
+    %     cancellation). Retaining the history instead (Landauer) entangles it
+    %     with the data and cannot be cleared before measurement.
+    %
+    % Panel (c) "Reversible quantum control":
+    %   - Branches stay DISTINGUISHABLE throughout (injective histories, drawn as
+    %     separate non-merging rails).
+    %   - They are brought back into step (synchronised) before measurement.
+    %   - The control record is then uncomputed / cleared, leaving the data
+    %     undisturbed, hence reversible and measurable.
+    %
+    % Visual cues: distinct marker for the program-counter / history register;
+    % show it overwritten in (a)/(b) and cleanly cleared in (c). Keep notation
+    % consistent with Subsection
+    % \ref{subsec:lit_rev:quantum_programming:programming_paradigms}.
+    % =====================================================================
+    \fbox{\parbox[c][0.32\textheight][c]{0.9\textwidth}{\centering\itshape
+    Placeholder --- figure to be drawn. See TODO in source for the
+    classical-merge versus reversible-control panels.}}
+    \caption{A classical conditional merges branch histories irreversibly, whereas a realisable quantum control construct keeps branches distinguishable so the control record can be cleared without disturbing the data.}    \label{fig:lit_rev:quantum_programming:reversible_vs_classical_control}
+\end{figure}
+
+\textbf{Qunity} pursues this by unifying classical and quantum control within one language~\cite{mints2025qunity}.
+It answers these requirements with a family of control constructs, \texttt{ctrl}, \texttt{match} and \texttt{pmatch}, that differ in what they demand of their branches and whether they stay reversible~\cite{mints2025qunity}.
+\texttt{pmatch} accepts only cases that are orthogonal and pure, that is, perfectly distinguishable from one another and free of residual entanglement, which lets it discard the branch not taken automatically~\cite{mints2025qunity}.
+\texttt{ctrl} permits cases that may leave intermediate values behind, so the programmer must state how those values are erased~\cite{mints2025qunity}.
+\texttt{match} treats its cases as classical and gives up reversibility~\cite{mints2025qunity}.
+Selecting among these constructs requires the programmer to reason about whether the relevant expressions are orthogonal and pure, which are properties of the underlying quantum representation rather than of the intended program logic~\cite{mints2025qunity}.
+The language compiles to OpenQASM 3 and runs on hardware, so its constructs are realisable; what they do not remove is the programmer's need to reason at the level of qubits and circuits to apply them correctly~\cite{mints2025qunity}.
+A second design, \textbf{Lambda-SX}, enlarges what can serve as classical control data by recording in its type system the measurement basis in which a value is known~\cite{diazcaro2025lambdasx}.
+A value guaranteed to lie in a known basis gives a definite outcome when measured in that basis, so it can be copied and used to drive branching as though it were classical, without breaching no-cloning~\cite{diazcaro2025lambdasx}.
+The system is an early proof of concept, restricted to first-order functions, confined to single-qubit bases and silent on entanglement~\cite{diazcaro2025lambdasx}.
+The QCM analysis also bears on how the cost of a program must be reasoned about, not only on what the program can express~\cite{yuan2025foundationalabstractions}.
+A loop must run for a number of iterations fixed in advance to stay reversible, since a bound that depended on a quantum value would have no definite count until measured~\cite{yuan2025foundationalabstractions}.
+Where the natural bound is a quantum value the loop must therefore commit to a fixed classical count, padding the shorter cases with idle steps so that every branch finishes together~\cite{yuan2025foundationalabstractions}.
+A conditional carries a related cost, since the hardware evaluates every branch rather than only the one selected, so the running time of a branch adds to the others rather than replacing them~\cite{yuan2025foundationalabstractions}.
+Both designs move control into the quantum domain, yet both still work qubit by qubit~\cite{mints2025qunity, diazcaro2025lambdasx}.
+Each asks the programmer to manage representational detail, orthogonality and purity in Qunity and basis structure in Lambda-SX, so the expressiveness this paradigm adds comes at the cost of abstracting quantum-specific constraints~\cite{mints2025qunity, diazcaro2025lambdasx}.
+
+In routine use, quantum programming keeps control flow classical.
+A survey of usage finds Qiskit, Cirq and Q\# the most widely used systems, each expressing quantum computation as circuits directed from a classical program rather than drawing control into superposition~\cite{ferreira2024qplusage}.
+The designs that branch on quantum data remain research prototypes by comparison, demonstrated rather than adopted~\cite{mints2025qunity, diazcaro2025lambdasx}.
+They are more expressive in principle, admitting decisions that depend on a quantum state without measuring it first, but they still require the programmer to reason about the underlying representation and carry the execution costs the QCM analysis sets out~\cite{yuan2025foundationalabstractions}.
+Classical control forgoes those decisions, since a branch on a quantum value must measure it and collapse the superposition and takes in exchange the established reasoning of classical programming~\cite{selinger2004towards}.
+Practice therefore keeps to a classical program directing quantum subroutines, the arrangement that demands the least new reasoning of the programmer, while quantum control stays confined to languages not yet in general use~\cite{ferreira2024qplusage}.
+
+\subsection{Model-invariant constraints}\label{subsec:lit_rev:quantum_programming:model_invariant_constraints}
+The models of computation surveyed in Subsection~\ref{subsec:lit_rev:quantum_programming:models_of_computation} and the programming paradigms surveyed in Subsection~\ref{subsec:lit_rev:quantum_programming:programming_paradigms} differ in what they treat as the structure of a program.
+They are nonetheless constrained by the same physical requirement that state evolution be reversible and norm-preserving rather than many-to-one~\cite{yuan2025foundationalabstractions}.
+This requirement makes several moves that are benign in classical programming semantically active in quantum programs.
+A classical program discards temporary values, merges control-flow paths and treats reads as passive observations without changing the meaning of the remaining state.
+In quantum programs, discarding an intermediate register can change measurement outcomes if that register remains entangled with the rest of the computation~\cite{bichsel2020silq}.
+Discarding is therefore correct only after the intermediate state has been uncomputed~\cite{bichsel2020silq}.
+A similar constraint applies to control flow.
+Classical control constructs overwrite the program counter and merge multiple histories into a single continuation.
+When control itself is lifted into superposition, this history erasure is not a benign implementation detail~\cite{yuan2025foundationalabstractions}.
+A non-injective transition semantics cannot be realised as a unitary evolution without retaining history and that history can remain entangled with the data~\cite{yuan2025foundationalabstractions}.
+An analogous constraint appears in coherent memory access.
+In a quantum random access memory model, a read is implemented as a reversible controlled operation, so read and write are not cleanly separable primitives~\cite{jaques2025qram}.
+A unit-cost oracle assumption for memory access can therefore hide forced costs and constraints~\cite{jaques2025qram}.
+These constraints recur across systems because they follow from physical realisability rather than from a chosen execution model or programming style~\cite{yuan2025foundationalabstractions}.
+
+Uncomputation is the clearest instance of a model-invariant constraint on abstraction.
+A temporary register cannot in general be treated as disposable state, since it can remain entangled with the data that is later measured.
+If a program discards such a register without uncomputing it, the discarded subsystem remains correlated with the retained subsystem.
+The joint state is no longer separable as a tensor product of an output state and a fixed ancilla state.
+Uncomputation is therefore not an implementation detail of a compiler backend.
+It is a semantic obligation that a programming system must discharge either by requiring explicit clean-up constructs or by enforcing conditions under which intermediate state can be dropped safely~\cite{bichsel2020silq}.
+
+A second recurring constraint is injectivity of state transitions.
+Classical control flow relies on many-to-one updates, since a conditional jump overwrites the program counter and merges multiple execution histories into a single continuation.
+When the program counter is lifted into superposition, a non-injective control transition cannot be realised as a unitary evolution~\cite{yuan2025foundationalabstractions}.
+Retaining full history information restores injectivity by construction, but the formal analysis shows that the retained history can become entangled with the data.
+The joint state cannot be rewritten as a tensor product in which the history can be discarded before measurement~\cite{yuan2025foundationalabstractions}.
+Injectivity therefore functions as a constraint on which control abstractions are even definable, not merely on how efficiently they can be implemented~\cite{yuan2025foundationalabstractions}.
+
+The same requirement for representation to be independent of construction history reappears in quantum data structures.
+If the same logical value can occupy multiple physical configurations that depend on the sequence of updates, then computations that create the value by different routes need not interfere predictably~\cite{yuan2025foundationalabstractions}.
+Tower enforces history independence at the level of memory management by preparing allocator state in a superposition over representations, so that allocation and deallocation act uniformly over many configurations rather than selecting a single history-dependent one~\cite{yuan2025foundationalabstractions}.
+
+Control flow imposes an additional constraint on time.
+If the number of loop iterations depends on a quantum value, then the control record becomes branch-dependent and remains correlated with the data unless the execution is forced to rejoin at a common program point~\cite{yuan2025foundationalabstractions}.
+Synchronisation provides this rejoining condition and explains why quantum control models restrict iteration to classically bounded loops, typically realised by padding shorter branches to a fixed bound~\cite{yuan2025foundationalabstractions}.
+
+The quantum random access memory model treats a coherent lookup as a primitive operation in an abstract machine model, in the same way that a classical RAM read is treated as one step.
+This places a cost boundary (the unit cost oracle) around address selection and retrieval and proceeds as if those costs can be ignored.
+
+In a quantum setting if a value is read by measurement, the superposition is collapsed and the value becomes classical.
+If it is read coherently, the value must be copied into an output register by a unitary controlled operation, creating correlations between the address, the output and the access mechanism~\cite{jaques2025qram}.
+Reading behaves as a \textit{destructive read} in the sense that access leaves behind additional correlations that must be accounted for.
+Read and write are not cleanly separable primitives in the coherent access model~\cite{jaques2025qram}.
+
+Coherent access does not support the classical intuition that only the addressed location is involved.
+If the address may be in superposition, the access mechanism must behave consistently across all addresses without revealing which address was used, otherwise information about the address leaks into the mechanism and coherence is lost~\cite{jaques2025qram}.
+The access couples the program to properties of the memory mechanism that grow with the size of the table.
+Scaling coherent access forces either per-query work that grows with the size of the memory, or hardware whose component error must shrink as the memory grows to keep the overall access coherent~\cite{jaques2025qram}.
+A unit-cost oracle model hides this scaling obligation while still relying on it.
+Refining the model towards a physically plausible access mechanism therefore changes the cost semantics the program depended on~\cite{jaques2025qram}.
+
+The control-flow results supply a worked case of how a physical constraint becomes a programmer-facing obligation.
+Classical control abstractions implicitly rely on history erasure, since they merge multiple execution paths into a single continuation by overwriting the program counter~\cite{yuan2025foundationalabstractions}.
+When control itself is placed into superposition, this erasure is no longer an internal implementation detail that can be corrected by a compiler.
+It becomes a semantic property of the abstraction, since any control construct that merges histories without retaining recoverable information has a non-injective transition semantics and therefore cannot be realised by unitary evolution~\cite{yuan2025foundationalabstractions}.
+
+Injectivity is therefore not merely a theorem about conditional jumps.
+It is a design rule for control abstractions: the abstraction must preserve enough information that the control state can be reversed and any information it introduces must remain recoverable until it has been safely cleared~\cite{yuan2025foundationalabstractions}.
+A Landauer-style embedding restores injectivity by retaining history, but it also illustrates the second obligation that injectivity alone does not settle~\cite{yuan2025foundationalabstractions}.
+The retained history is part of the quantum state and it can become entangled with the data state.
+A language, therefore, cannot offer control constructs that generate arbitrary control history and then promise to remove it later.
+The abstraction must be structured so that the control record is guaranteed to become disposable at a well-defined point~\cite{yuan2025foundationalabstractions}.
+
+Synchronisation is the condition that makes this disposability possible~\cite{yuan2025foundationalabstractions}.
+A synchronised construct ensures that every branch of a superposed execution reaches the same program point at the same step, so that the control registers can be cleared without leaving them correlated with the data~\cite{yuan2025foundationalabstractions}.
+Iteration cannot be expressed as an unbounded while-loop whose bound depends on a quantum value, since such a loop would halt at branch-dependent times and leave a branch-dependent control record~\cite{yuan2025foundationalabstractions}.
+Quantum control models therefore require a classical bound on iteration and must ensure that all branches execute to that bound, either by padding with no-ops or by an equivalent synchronising discipline~\cite{yuan2025foundationalabstractions}.
+These conditions introduce a cognitive obligation that classical structured programming does not impose.
+The programmer must reason not only about which computation is performed, but about what control information is preserved, when it becomes separable from the data and how it can be cleared without changing observable behaviour.
+
+Silq, Tower and Qunity respond to the same obligation by relocating programmer obligations, rather than eliminating them.
+Each system enforces a discipline that makes uncomputation and clean resource disposal possible, but they place the proof burden in different parts of the programming model.
+
+Silq makes uncomputation an ambient guarantee by restricting when intermediate values may be discarded and by distinguishing classically describable values from superpositions~\cite{bichsel2020silq}.
+The programmer must maintain an explicit mental partition between values that behave like classical data and values that may be in superposition, since only the former can be freely copied, stored and used to justify later clean-up~\cite{bichsel2020silq}.
+The same obligation appears in function design.
+A programmer must anticipate whether an input will be treated as read-only or consumed and must choose annotations that make the information needed for safe uncomputation available when the temporary value is released~\cite{bichsel2020silq}.
+This is a cognitive burden because it requires reasoning about future reversibility at the point of writing ordinary-looking expressions, rather than at an explicit clean-up boundary.
+
+Tower takes the opposite approach and exposes the clean-up actions directly as part of the operational story of the language.
+Reversibility is enforced by explicitly distinguishing assignment from unassignment and by using swaps to control where information resides~\cite{yuan2025foundationalabstractions}.
+Intermediate artefacts must be returned to a known form by explicit programmer action, rather than being assumed reclaimable by the language or compiler~\cite{yuan2025foundationalabstractions}.
+This makes correctness sensitive to bookkeeping errors, such as needing to track where a value currently points to unassign it after pointer mutation.
+
+Qunity places the burden on the structure of control itself by providing multiple control operators with distinct side conditions, including an explicitly orthogonality-constrained pattern matching form~\cite{mints2025qunity}.
+A programmer must select between control forms whose preconditions differ, rather than relying on a single uniform branching construct~\cite{mints2025qunity}.
+This shifts the work from writing explicit clean-up code towards ensuring that a chosen control abstraction is admissible for the values being branched over.
+It also makes control-flow expressiveness depend on semantic properties of states, rather than only on program structure.
+
+The constraints in this subsection are not independent quirks of quantum mechanics.
+They arise when a classical abstraction assumes that information can be forgotten.
+Unitarity turns that assumption into an explicit obligation.
+
+Each route improves correctness and can make certain costs legible.
+However, measured against the working definition of abstraction in Section~\ref{sec:lit_rev:abstraction}, they do not yet constitute an ideal conceptual tier for programmers.
+They relocate information-flow obligations, but they also keep those obligations inside the programmer’s working set as pervasive typing decisions, explicit reversals or semantic side conditions.
+The remaining burden therefore appears structural rather than incidental and the design task becomes to concentrate it into a small number of stable, local concepts rather than distributing it across ordinary programming decisions.
