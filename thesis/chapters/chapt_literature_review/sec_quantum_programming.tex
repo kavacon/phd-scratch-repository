@@ -338,3 +338,130 @@ Each route improves correctness and can make certain costs legible.
 However, measured against the working definition of abstraction in Section~\ref{sec:lit_rev:abstraction}, they do not yet constitute an ideal conceptual tier for programmers.
 They relocate information-flow obligations, but they also keep those obligations inside the programmer’s working set as pervasive typing decisions, explicit reversals or semantic side conditions.
 The remaining burden therefore appears structural rather than incidental and the design task becomes to concentrate it into a small number of stable, local concepts rather than distributing it across ordinary programming decisions.
+
+\subsection{The structure of the design space}\label{subsec:lit_rev:quantum_programming:design_space}
+The preceding subsections distinguish quantum programming systems along three layers.
+Models of computation differ in what is taken to constitute a well-formed program and how execution is realised.
+Programming paradigms differ in how control flow relates to quantum data.
+Across those differences, reversibility and norm preservation impose recurrent constraints that become programmer-facing obligations.
+These obligations persist when the execution model or programming paradigm changes, since they follow from physical realisability rather than representational choice.
+
+Control paradigms vary in whether program control remains a classical scaffold or is placed into superposition alongside the data it governs.
+In the classical-control paradigm, classical control selects the next step of the program, so branching decisions can depend only on classical information such as measured outcomes.
+Quantum data can steer unitary evolution coherently through controlled operations, so quantum values may influence which transformation is applied without collapsing the state.
+In the quantum-control paradigm, the selection of control flow itself becomes a quantum value, so a program can branch on quantum data without first reducing it to a classical outcome.
+This increases expressiveness, but admissible control constructs are constrained by reversibility and physical constraints, which introduces additional side conditions and execution obligations.
+
+Representation varies in which execution model is treated as the default surface for expressing computation.
+Even where alternative execution models are computationally equivalent, circuit structure aligns directly with sequential composition, so circuits become the common representational baseline against which other models are defined and into which they are translated.
+This default hardens into an assumption that time is a gate sequence, shaping not only how programs are written but also how intermediate forms and tooling describe and exchange programs.
+
+Obligation discipline varies in where the recurrent unitarity obligations are discharged.
+A system can enforce obligations through static discipline, making reversibility and safe disposal of intermediate state a property of well-typed programs, or it can expose explicit constructs that require programmers to perform clean-up actions directly.
+A third position relies on semantic side conditions, making the use of otherwise-familiar constructs depend on state properties such as orthogonality, purity or basis knowledge.
+These choices do not remove the obligations established in Subsection~\ref{subsec:lit_rev:quantum_programming:model_invariant_constraints} they determine whether the proof burden is carried by types, by representation or by admissibility checks that must be maintained by the programmer.
+
+Quantum bleed-through varies in how strongly quantum-mechanical constraints and representational detail intrude into ordinary programming decisions.
+Where bleed-through is high, apparently local choices force reasoning about qubits, bases, orthogonality conditions, explicit reversal steps or cost-model caveats that couple a program’s meaning to properties of its physical realisation.
+Where bleed-through is reduced, more of that reasoning is concentrated into stable, local concepts, but the constraints still reappear at boundaries where information must be discarded, control paths must rejoin or a cost abstraction encloses an inherently coherent mechanism.
+
+The dimensions above separate into constraints forced by physical realisability and choices that relocate those constraints.
+The forced constraints are those that follow from reversible, norm-preserving evolution and therefore survive any change of control paradigm or representation.
+Intermediate state cannot be treated as disposable unless it is made separable from the output, so uncomputation functions as a semantic obligation rather than a backend optimisation.
+Control abstractions cannot merge histories irreversibly when control is placed into superposition, since non-injective transition semantics do not lift to unitary evolution without retaining recoverable history.
+Retaining history information restores reversibility, but it can also entangle control records with data, so the control trace must be structured so it becomes removable at a well-defined point.
+Synchronisation provides that condition by requiring that superposed branches rejoin at the same program point at the same step, so that control state can be separated from data state before termination.
+This constrains iteration and makes branch-dependent halting structurally unavailable.
+
+The chosen dimensions determine where these obligations appear and who is required to reason about them.
+A language may keep control classical and accept measurement as the boundary at which branching is permitted, or it may admit quantum control and instead require reversibility-preserving, synchronised control constructs.
+A language may adopt the circuit model as an explicit surface, or it may abstract over it while still depending on circuits as the default translation form used to define and exchange computations.
+A language may concentrate obligation discipline in static guarantees, shifting proof burden into types and annotations, or it may expose explicit clean-up actions, or it may make familiar constructs contingent on semantic side conditions.
+A language may reduce quantum bleed-through by discharging representational obligations below the surface, but the overall system must still ensure that information is preserved, separated or removed in a way that does not change observable behaviour.
+
+Tables~\ref{tab:lit_rev:quantum_programming:design_space_map_ctrl_rep} and~\ref{tab:lit_rev:quantum_programming:design_space_map_obl_bleed} separate the map into two paired views.
+The first groups control paradigm with representation, since these choices jointly determine how computation is expressed and driven.
+The second groups obligation discipline with quantum bleed-through, since these choices determine where the model-invariant constraints are discharged and how directly they intrude into ordinary programming decisions.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Control paradigm and representation across execution models and programming paradigms.}
+    \label{tab:lit_rev:quantum_programming:design_space_map_ctrl_rep}
+    \footnotesize
+    \begin{tabularx}{\textwidth}{@{}p{2.0cm}XX@{}}
+		\toprule
+        \textbf{Model or paradigm} & \textbf{Control paradigm} & \textbf{Representation} \\
+        \midrule
+        \textbf{Circuit model} & Classical control around a fixed circuit & Circuit is explicit and directly manipulated \\
+        \addlinespace
+        \textbf{Classical control, quantum data} & Classical control & Circuit remains the default translation form, though it may be partially abstracted \\
+        \addlinespace
+        \textbf{Quantum control} & Quantum control & Circuit is a realisation rather than the organising surface \\
+        \addlinespace
+        \textbf{Measurement-based (MBQC)} & Classical control via adaptive measurement outcomes & Computation is encoded in a resource state and measurement pattern, but universality is typically established by reproducing circuits \\
+        \addlinespace
+        \textbf{Adiabatic} & Classical control over an analogue evolution schedule & Computation is encoded into an interpolating Hamiltonian rather than an explicit gate sequence \\
+        \addlinespace
+        \textbf{Quantum walk} & No explicit control during evolution & Computation is encoded in a graph and its dynamics rather than an explicit instruction sequence \\
+        \addlinespace
+        \textbf{Quantum cellular automata (QCA)} & No global controller; uniform local rule & Computation is encoded in an initial configuration under a fixed update rule \\
+        \addlinespace
+        \textbf{Ancilla-driven (ADQC)} & Classical control mediated by a driving ancilla & Computation is encoded as couplings between ancilla and register with measurement-driven updates \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Obligation discipline and quantum bleed-through across execution models and programming paradigms.}
+    \label{tab:lit_rev:quantum_programming:design_space_map_obl_bleed}
+    \footnotesize
+    \begin{tabularx}{\textwidth}{@{}p{2.0cm}XX@{}}
+		\toprule
+        \textbf{Model or paradigm} & \textbf{Obligation discipline} & \textbf{Quantum bleed-through} \\
+        \midrule
+        \textbf{Circuit model} & Weak by default; clean-up and reversibility obligations are typically managed manually & High, since gates and registers are the unit of composition \\
+        \addlinespace
+        \textbf{Classical control, quantum data} & Obligations can be concentrated into static disciplines that constrain copying and disposal of intermediate state & Reduced locally by language constructs, but reappears where intermediate state is discarded or measurement mediates control \\
+        \addlinespace
+        \textbf{Quantum control} & Obligations are expressed as admissibility conditions on control constructs and by constraints that enforce reversibility and synchronisation & High, since control constructs expose semantic side conditions that depend on state structure \\
+        \addlinespace
+        \textbf{Measurement-based (MBQC)} & Obligations are carried by global correction structure and by the requirement that classical feed-forward maintain coherence of the intended computation & High, since non-local correction structure and measurement dependency intrude into representation \\
+        \addlinespace
+        \textbf{Adiabatic} & Correctness obligations shift towards global conditions on the evolution, rather than local gate-level well-formedness & High, since reasoning depends on global properties that do not decompose into local program fragments \\
+        \addlinespace
+        \textbf{Quantum walk} & Obligations move into how a graph encodes a desired transformation and into conditions under which composition behaves predictably & High, since success conditions and composition constraints depend on global interference behaviour \\
+        \addlinespace
+        \textbf{Quantum cellular automata (QCA)} & Obligations are enforced by construction through admissible rules and update structure rather than by per-step commands & Low at the rule level, but reappears where addressing and routing must be encoded into state \\
+        \addlinespace
+        \textbf{Ancilla-driven (ADQC)} & Obligations are shaped by the constraint that the register is acted on only indirectly, concentrating clean-up into the ancilla protocol & Unclear in general; indirect control reduces some surface operations but still couples representation to measurement and correction structure \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Control and representation correlate, since models that encode computation as an operator sequence naturally align with classical orchestration, while models that encode computation into a resource state, a Hamiltonian or a fixed update rule relocate what functions as the primary program object.
+Obligation discipline and quantum bleed-through also correlate, since obligations discharged through explicit constructs or semantic side conditions typically require the programmer to track representational detail more directly than obligations enforced below the surface.
+
+The map places the models and paradigms where their commitments force programmer-facing structure.
+The circuit model coincides with sequential composition, so it remains the default representational baseline even when alternative models are treated as equivalent in power.
+The absence of mature language-level treatments for non-circuit execution models leaves their rows comparatively under-specified in programmer-facing terms, even where the underlying models are well developed.
+That absence is consistent with circuit dominance, since models whose programs are graphs, Hamiltonians or lattice configurations are typically presented as compilation targets rather than as primary programming surfaces.
+
+Some dimensions in Tables~\ref{tab:lit_rev:quantum_programming:design_space_map_ctrl_rep} and~\ref{tab:lit_rev:quantum_programming:design_space_map_obl_bleed} have clear classical analogues.
+Control paradigm resembles the classical separation between pure computation and its orchestration, even where modern systems blur that separation through effects and interaction.
+Obligation discipline also has classical precedents, since type systems and ownership disciplines relocate memory safety and resource management obligations between the programmer and the compiler.
+Representation also has classical analogues, since functional and imperative paradigms privilege different primary descriptions of computation, expression evaluation versus state update, even when they compile to similar targets.
+The analogy is limited, since these paradigms typically share a common execution substrate and differ mainly in surface structure and reasoning principles.
+Quantum execution models differ at the level of what constitutes a well-formed program, so representation choices couple more directly to execution structure.
+The measurement-based model makes this coupling explicit by shifting the program from an operator sequence to a resource state and a measurement pattern, so the representational choice changes which objects function as the basic units of composition.
+
+The remaining structure is specific to quantum computation.
+The forced constraints arise from the need to preserve information under reversible evolution, so ordinary abstraction moves that rely on discarding state or merging histories acquire semantic consequences.
+Relocating these constraints below the surface can reduce quantum bleed-through, but it does so by shifting obligations into compilation invariants, runtime protocols or verification conditions rather than by eliminating them.
+
+On that basis the language-family survey in Section~\ref{sec:lit_rev:qpl} evaluates systems by a stable set of questions.
+What does the programmer have to know to write correct programs.
+Which representation is taken as the default surface, and how directly does it expose circuits and qubits.
+How are measurement and control expressed, and where is the boundary between classical and quantum control.
+Which obligations are discharged statically, and which are left as explicit actions or side conditions.
+Where does quantum bleed-through appear, and what parts of it are concentrated below the surface rather than exposed in routine programming decisions.
