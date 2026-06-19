@@ -161,7 +161,7 @@ The layers of a compiler chain can be described as in Table~\ref{tab:lit_rev:abs
     \centering
     \caption{General layers of a compilation chain including domain-specific simplification for high-level user interaction, demonstrates the cognitive simplification and distance from machine representations influence layering.}
     \label{tab:lit_rev:abstraction:compiler_layers}
-    \begin{tabular}{@{}llp{8cm}@{}}
+    \begin{tabularx}{\textwidth}{@{}llX@{}}
         \toprule
         \textbf{Layer} & \textbf{Level} & \textbf{Primary Purpose}                                                             \\ \midrule
         Domain         & Highest        & Hiding programming paradigms; providing domain-specific syntax (e.g., SQL, ML DSLs). \\
@@ -169,7 +169,7 @@ The layers of a compiler chain can be described as in Table~\ref{tab:lit_rev:abs
         Intermediate   & Middle         & Machine-independent optimization and canonical representation (IR).                  \\
         Assembly       & Low            & Mapping logic to specific hardware instructions and registers.                       \\
         Binary         & Lowest         & Execution on physical hardware.                                                      \\ \bottomrule
-    \end{tabular}
+    \end{tabularx}
 \end{table}
 
 The success of classical compiler chains is not accidental; it is grounded in the choice of abstract machine that underlies them.
@@ -222,7 +222,7 @@ Table~\ref{tab:lit_rev:abstraction:assessing_sql_compiler_chain} applies these c
     \centering
     \caption{Assessment of the SQL compiler chain based on effective abstraction criteria.}
     \label{tab:lit_rev:abstraction:assessing_sql_compiler_chain}
-    \begin{tabular}{@{}lp{10cm}@{}}
+    \begin{tabularx}{\textwidth}{@{}lX@{}}
         \toprule
         \textbf{Criterion}    & \textbf{SQL Implementation Evidence}                                                      \\ \midrule
         Information Hiding    & Users interact with relations/tables; physical storage and indexing are hidden.           \\
@@ -230,7 +230,7 @@ Table~\ref{tab:lit_rev:abstraction:assessing_sql_compiler_chain} applies these c
         Reasoning Improvement & Non-programmers can query complex datasets without understanding B-trees or buffer pools. \\
         Formal Definition     & Relational algebra provides a formal, guaranteed basis for procedures.                    \\
         Reduced Complexity    & High-level syntax reduces the cognitive load compared to manual data retrieval loops.     \\ \bottomrule
-    \end{tabular}
+    \end{tabularx}
 \end{table}
 
 Understanding what an abstraction is and how to assess it provides an insight into why abstraction exists and its role in simplifying complex systems.
@@ -319,13 +319,13 @@ An abstraction hierarchy for quantum computing has been suggested following the 
     \centering
     \caption{The suggested abstraction hierarchy for quantum computing consisting of three primary layers~\cite{DiMatteo2024AbstractionHierarchy}.}
     \label{tab:lit_rev:abstraction:quantum_hierarchy}
-    \begin{tabular}{@{}ll@{}}
+    \begin{tabularx}{\textwidth}{@{}lX@{}}
         \toprule
         \textbf{Hierarchy Layer} & \textbf{Primary Purpose}                                   \\ \midrule
         Programming              & Expressing algorithm and intent using high-level concepts. \\
         Execution                & Translation to gate-level instructions and circuits.       \\
         Hardware                 & Physical implementation and pulse sequences.               \\ \bottomrule
-    \end{tabular}
+    \end{tabularx}
 \end{table}
 
 Abstract machines like the von Neumann random access memory (RAM) were critical in the successful development of productive classical systems.
@@ -335,39 +335,42 @@ No systematic verification about the suitability of these machines as foundation
 While all candidate systems are universal there is no consensus about what other features are required for productivity.
 Criteria to assess their suitability has been suggested building on what makes classical abstract machines successful and what is required in general for productive programming with fifteen criteria established as shown in Table~\ref{tab:lit_rev:abstraction:qam_criteria}~\cite{nunez_corrales2025betterabstractmachines}.
 
-\begin{longtable}{p{3.cm}p{4.0cm}p{7.0cm}}
+\begin{table}
     \caption{Grouped criteria for assessing quantum abstract machines (QAMs), grouped by the role each criterion plays in supporting abstraction adapted from~\cite{nunez_corrales2025betterabstractmachines}.}
-    \label{tab:lit_rev:abstraction:qam_criteria}\\
+    \label{tab:lit_rev:abstraction:qam_criteria}
 
-    \toprule
-    \textbf{Abstraction role} & \textbf{Criteria} & \textbf{What this group ensures} \\ \midrule
+    \footnotesize
+    \begin{tabularx}{\textwidth}{p{3.cm}p{3.cm}X}
+        \toprule
+        \textbf{Abstraction role} & \textbf{Criteria} & \textbf{What this group ensures} \\ \midrule
 
-    \textbf{Expressive foundation (computational scope)}
-    & \parbox[t]{\linewidth}{(1) Turing completeness}
-    & The QAM provides a universal baseline: it can express/simulate the class of computations needed without requiring ad-hoc extensions, so higher-level abstractions do not “outgrow” the machine model. \\
-    \addlinespace
+        \textbf{Expressive foundation (computational scope)}
+        & (1) Turing completeness
+        & The QAM provides a universal baseline: it can express/simulate the class of computations needed without requiring ad-hoc extensions, so higher-level abstractions do not “outgrow” the machine model. \\
+        \addlinespace
 
-    \textbf{Symbolic state model (what the machine exposes as manipulable)}
-    & \parbox[t]{\linewidth}{(2) Finite symbolic state\\(12) Resource constructible functions}
-    & The machine state is addressable and bounded in a way that can be represented symbolically (supporting abstraction over storage/registers), and it supports reasoning about resource usage (time/space) in machine-level but hardware-independent units. \\
-    \addlinespace
+        \textbf{Symbolic state model (what the machine exposes as manipulable)}
+        & (2) Finite symbolic state\newline(12) Resource constructible functions
+        & The machine state is addressable and bounded in a way that can be represented symbolically (supporting abstraction over storage/registers), and it supports reasoning about resource usage (time/space) in machine-level but hardware-independent units. \\
+        \addlinespace
 
-    \textbf{Programmer-facing interface (meaning of symbols vs hardware detail)}
-    & \parbox[t]{\linewidth}{(3) Symbolic denotational syntax\\(4) Representation-independent data types\\(6) Verifiable formal content\\(9) Degeneracy of implementation}
-    & The “contract” of the QAM is defined at the level of symbols, types, and formal semantics rather than circuit micro-details: programmers can reason about effects without hardware simulation; definitions remain valid across implementations and do not rely on non-physical assumptions. \\
-    \addlinespace
+        \textbf{Programmer-facing interface (meaning of symbols vs hardware detail)}
+        & (3) Symbolic denotational syntax\newline(4) Representation-independent data types\newline(6) Verifiable formal content\newline(9) Degeneracy of implementation
+        & The “contract” of the QAM is defined at the level of symbols, types, and formal semantics rather than circuit micro-details: programmers can reason about effects without hardware simulation; definitions remain valid across implementations and do not rely on non-physical assumptions. \\
+        \addlinespace
 
-    \textbf{Instruction-level stability and execution discipline (how programs are run)}
-    & \parbox[t]{\linewidth}{(5) Stable instruction set architecture\\(7) Compact instruction representation\\(13) Standard instruction cycle}
-    & Abstraction can be built on a stable, finite instruction vocabulary with predictable execution structure: the instruction interface is learnable, portable across hardware backends, and mechanizable (supporting toolchains, compilers, and analysis). \\
-    \addlinespace
+        \textbf{Instruction-level stability and execution discipline (how programs are run)}
+        & (5) Stable instruction set architecture\newline(7) Compact instruction representation\newline(13) Standard instruction cycle
+        & Abstraction can be built on a stable, finite instruction vocabulary with predictable execution structure: the instruction interface is learnable, portable across hardware backends, and mechanizable (supporting toolchains, compilers, and analysis). \\
+        \addlinespace
 
-    \textbf{Composition, control and data modalities (how abstraction scales to programs)}
-    & \parbox[t]{\linewidth}{(8) Classical-quantum regularity\\(10) Predictable procedural composability\\(11) Intrinsic ensemble semantics\\(14) Classical control flow\\(15) Quantum/hybrid control flow}
-    & The QAM supports scalable programming abstractions: procedures compose predictably; classical/quantum instructions coexist at one conceptual level; ensemble/distribution outputs are first-class; and both classical and quantum/hybrid control patterns can be expressed succinctly. \\
+        \textbf{Composition, control and data modalities (how abstraction scales to programs)}
+        & (8) Classical-quantum regularity\newline(10) Predictable procedural composability\newline(11) Intrinsic ensemble semantics\newline(14) Classical control flow\newline(15) Quantum/hybrid control flow
+        & The QAM supports scalable programming abstractions: procedures compose predictably; classical/quantum instructions coexist at one conceptual level; ensemble/distribution outputs are first-class; and both classical and quantum/hybrid control patterns can be expressed succinctly. \\
 
-    \bottomrule
-\end{longtable}
+        \bottomrule
+    \end{tabularx}
+\end{table}
 
 Quantum computing systems have made and continue to make progress towards higher levels of productive abstraction.
 That progress has focused on improving the functional abstractions within the conceptual circuit model, providing easier ways to produce and describe quantum circuits; this represents an improvement to the operational surface of the circuit model rather than to its conceptual foundations.

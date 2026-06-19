@@ -37,49 +37,6 @@ Table~\ref{tab:lit_rev:quantum_programming:execution_model_descriptions} describ
 
 \begin{figure}[htbp]
     \centering
-    % TODO: Add ADQC to the caption and diagram
-% ===========================================================================
-% F2 -- Mechanism detail per execution model. Four panels (a)-(d).
-% Placement: Beat 5. Companion to the comparison table (T3).
-%
-% ----- intended drawing -----------------------------------------------------
-% (a) Circuit -- ordered unitary gates on wires, time runs left to right
-%
-%     |0> --[H]--*--------[M]
-%                |
-%     |0> -------(+)--[H]-[M]
-%        (control-dot on top wire, target (+) on bottom; M = measurement)
-%
-% (b) Measurement-based -- a 2-row lattice of qubits joined into a
-%     pre-entangled resource state; qubits measured left to right
-%
-%     o -- o -- o -- o
-%     |    |    |    |
-%     o -- o -- o -- o
-%        ==> measurement sweep (order 1,2,3,4 ...)
-%
-% (c) Adiabatic -- two energy levels vs interpolation parameter s in [0,1];
-%     an avoided crossing near s ~ 0.5 marks the minimum spectral gap
-%
-%     E |  \                    /   E1(s)  (dashed, upper branch)
-%       |   \__              __/
-%       |      \____ Dmin ___/        <-- minimum gap at the avoided crossing
-%       |      ____/      \____
-%       |  ___/                \___   E0(s)  (solid, lower branch)
-%       +----------------------------- s
-%       0                            1
-%     (annotate the vertical gap between branches as \Delta_{min})
-%
-% (d) Quantum walk -- scattering widget on a graph; a walker enters on an
-%     input rail, scatters through the gadget, leaves on an output rail
-%
-%     input rail >--o--o--[ WIDGET subgraph ]--o--o--> output rail
-%                              (effects the gate)
-%     arrow shows traversal direction = the order in which the computation runs
-%
-% NOTE on (d): redraw the scattering-gate gadget from childs2009quantumwalk
-%   (source figure is in the childs note); do NOT invent its topology.
-% ---------------------------------------------------------------------------
     \includegraphics[width=\textwidth]{../figures/fig-lit_rev-quantum_programming-model_mechanisms}
     \caption{The mechanism each execution model uses to carry a computation: (a) the circuit composes ordered unitary gates (b) the measurement-based model drives adaptive measurements across a pre-entangled resource state (c) the adiabatic model relies on the minimum spectral gap that bounds its evolution (b) the quantum walk routes a walker through a scattering widget.}
     \label{fig:lit_rev:quantum_programming:model_mechanisms}
@@ -114,40 +71,9 @@ Figure~\ref{fig:lit_rev:quantum_programming:instruction_execution} demonstrates 
 
 \begin{figure}[htbp]
     \centering
-% ===========================================================================
-% F4 -- Instruction-execution architecture and the fetch--execute cycle.
-% Placement: Beat 3 (instruction-execution family: QRAM, QRASP, QRM, QCM).
-% Intent: a classical control layer sits between a stored program and the
-%   quantum register; measurement results return to the classical state and
-%   select the next instruction (the "classical scaffold" of the prose).
-%
-% ----- intended drawing -----------------------------------------------------
-% (a) Architecture
-%
-%     [Program counter] ---- address ----> [Instruction memory]
-%            ^                                      |
-%            |                                  instruction
-%          branch                                  v
-%            |                                  [ Decoder ]
-%            |                                      |
-%            |                                   gate / op
-%            |                                      v
-%     [Classical registers] <-- measurement -- [Quantum register]
-%
-% (b) Fetch--execute cycle (clockwise loop)
-%
-%        Fetch  ----------->  Decode
-%          ^                     |
-%          |                     v
-%        Measure/update  <----  Execute
-%
-% Notes: solid arrows = data/control flow; the branch arrow closes the loop
-%   from classical registers back to the program counter; shade the quantum
-%   register box to distinguish it from classical components.
-% ---------------------------------------------------------------------------
-    \includegraphics[width=\textwidth]{../figures/fig-lit_rev-quantum_programming-instruction_execution}
-    \caption{A diagram displaying the use of a classical control register for program execution in models such as QRAM and QRASP.}
-    \label{fig:lit_rev:quantum_programming:instruction_execution}=
+    \includegraphics[width=0.85\textwidth]{../figures/fig-lit_rev-quantum_programming-instruction_execution}
+    \caption{A diagram displaying the use of a classical control register for program execution in models such as QRAM and QRASP with incrementing program counter (PC) and instruction decoding.}
+    \label{fig:lit_rev:quantum_programming:instruction_execution}
 \end{figure}
 
 The structural commitments of these models become visible where control itself is made quantum rather than left to a classical controller.
@@ -199,7 +125,7 @@ The models are equivalent in power and differ only in how each realises sequenci
     \caption{Comparison of execution models by what realises the order of its operations, the trade-off between the physical advantage it offers and the complexity this imposes on representation.}
     \label{tab:lit_rev:quantum_programming:execution_models}
     \footnotesize
-    \begin{tabularx}{\textwidth}{@{}lXX@{}}
+    \begin{tabularx}{\textwidth}{@{}p{2.0cm}XX@{}}
         \toprule
         \textbf{Model} & \textbf{Sequencing realised by} & \textbf{Representational trade-off} \\
         \midrule
@@ -236,7 +162,7 @@ The remainder of the section examines the paradigms in the context of control, w
 
 \begin{table}[htbp]
     \centering
-    \begin{tabularx}{\textwidth}{@{}lXX@{}}
+    \begin{tabularx}{\textwidth}{@{}p{2.5cm}XX@{}}
         \toprule
         & \textbf{Classical control} & \textbf{Quantum control} \\
         \midrule
@@ -284,46 +210,9 @@ Figure~\ref{fig:lit_rev:quantum_programming:reversible_vs_classical_control} pro
 
 \begin{figure}[htbp]
     \centering
-    % =====================================================================
-    % TODO (figure to be drawn later): contrast classical control flow with
-    % reversible quantum control, showing WHY a classical conditional cannot be
-    % lifted into superposition. Source of the constraints:
-    % \cite{yuan2025foundationalabstractions} (QCM).
-    %
-    % Suggested layout: three panels, left to right.
-    %
-    % Panel (a) "Classical conditional":
-    %   - Branch point on a classical bit b; two paths B0, B1 with distinct
-    %     intermediate states.
-    %   - The paths MERGE into one continuation; the program counter converges to
-    %     the same next instruction regardless of branch.
-    %   - Annotate: many-to-one / non-injective, "which branch" is overwritten,
-    %     hence irreversible (and perfectly fine classically).
-    %
-    % Panel (b) "Naive lift to superposition (fails)":
-    %   - Same merge when b is a qubit in superposition; two paths reach the SAME
-    %     state, amplitudes meeting at the merge.
-    %   - Annotate the failure: merging histories is non-injective so it is not
-    %     unitary; coinciding paths can interfere destructively (norm
-    %     cancellation). Retaining the history instead (Landauer) entangles it
-    %     with the data and cannot be cleared before measurement.
-    %
-    % Panel (c) "Reversible quantum control":
-    %   - Branches stay DISTINGUISHABLE throughout (injective histories, drawn as
-    %     separate non-merging rails).
-    %   - They are brought back into step (synchronised) before measurement.
-    %   - The control record is then uncomputed / cleared, leaving the data
-    %     undisturbed, hence reversible and measurable.
-    %
-    % Visual cues: distinct marker for the program-counter / history register;
-    % show it overwritten in (a)/(b) and cleanly cleared in (c). Keep notation
-    % consistent with Subsection
-    % \ref{subsec:lit_rev:quantum_programming:programming_paradigms}.
-    % =====================================================================
-    \fbox{\parbox[c][0.32\textheight][c]{0.9\textwidth}{\centering\itshape
-    Placeholder --- figure to be drawn. See TODO in source for the
-    classical-merge versus reversible-control panels.}}
-    \caption{A classical conditional merges branch histories irreversibly, whereas a realisable quantum control construct keeps branches distinguishable so the control record can be cleared without disturbing the data.}    \label{fig:lit_rev:quantum_programming:reversible_vs_classical_control}
+    \includegraphics[width=0.85\linewidth]{../figures/fig-lit_rev-quantum_programming-reversible_vs_classical_control}
+    \caption{A classical conditional merges branch histories irreversibly, whereas a realisable quantum control construct keeps branches distinguishable so the control record can be cleared without disturbing the data.}
+    \label{fig:lit_rev:quantum_programming:reversible_vs_classical_control}
 \end{figure}
 
 \textbf{Qunity} pursues this by unifying classical and quantum control within one language~\cite{mints2025qunity}.
