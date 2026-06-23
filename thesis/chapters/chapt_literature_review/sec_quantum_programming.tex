@@ -224,7 +224,16 @@ A conditional carries a related cost, since the hardware evaluates every branch 
 Both designs move control into the quantum domain, yet both still work qubit by qubit~\cite{mints2025qunity, diazcaro2025lambdasx}.
 Each asks the programmer to manage representational detail, orthogonality and purity in Qunity and basis structure in Lambda-SX, so the expressiveness this paradigm adds comes at the cost of abstracting quantum-specific constraints~\cite{mints2025qunity, diazcaro2025lambdasx}.
 
-In routine use, quantum programming keeps control flow classical.
+A more recent design combines classical and quantum control within a single calculus, rather than committing a program to one paradigm or the other~\cite{dave2025combining}.
+It does so through a modality that embeds the reversible, pure quantum-control fragment, in which branching stays in superposition, within a larger mixed-state setting where measurement has occurred and control proceeds on classical outcomes~\cite{dave2025combining}.
+Measurement provides the only irreversible operation and joins the two fragments~\cite{dave2025combining}.
+A program transforms entangled state under quantum control; the classical outcome of a measurement then drives ordinary branching~\cite{dave2025combining}.
+Programs that interleave the two, such as teleportation with its measurement-dependent corrections, are expressible within a single language as a result~\cite{dave2025combining}.
+The boundary between the paradigms is made explicit in the type system, so the programmer takes on that boundary in exchange for static guarantees that each fragment is used in keeping with its discipline~\cite{dave2025combining}.
+The system is total by construction and admits no general recursion; it is presented as a semantics rather than an implemented language with a compilation path~\cite{dave2025combining}.
+Reconciling the two paradigms within one calculus provides an avenue to avoid choosing between them and demonstrates formally the required guarantees to do so.
+Like the quantum-control languages above, however, the design remains a research artefact rather than a system in routine use; in routine use, quantum programming keeps control flow classical.
+
 A survey of usage finds Qiskit, Cirq and Q\# the most widely used systems, each expressing quantum computation as circuits directed from a classical program rather than drawing control into superposition~\cite{ferreira2024qplusage}.
 The designs that branch on quantum data remain research prototypes by comparison, demonstrated rather than adopted~\cite{mints2025qunity, diazcaro2025lambdasx}.
 They are more expressive in principle, admitting decisions that depend on a quantum state without measuring it first, but they still require the programmer to reason about the underlying representation and carry the execution costs the QCM analysis sets out~\cite{yuan2025foundationalabstractions}.
@@ -331,6 +340,10 @@ This constrains iteration and makes branch-dependent halting structurally unavai
 
 The chosen dimensions determine where these obligations appear and who is required to reason about them.
 A language may keep control classical and accept measurement as the boundary at which branching is permitted, or it may admit quantum control and instead require reversibility-preserving, synchronised control constructs.
+These positions are not confined to separate languages.
+A single calculus can embed reversible quantum control into a measured, mixed-state environment, so that classical and quantum control coexist under one type discipline rather than fixing a program to either.
+Control in this sense forms a conscious design choice rather than being forced.
+
 A language may adopt the circuit model as an explicit surface, or it may abstract over it while still depending on circuits as the default translation form used to define and exchange computations.
 A language may concentrate obligation discipline in static guarantees, shifting proof burden into types and annotations, or it may expose explicit clean-up actions, or it may make familiar constructs contingent on semantic side conditions.
 A language may reduce quantum bleed-through by discharging representational obligations below the surface, but the overall system must still ensure that information is preserved, separated or removed in a way that does not change observable behaviour.
