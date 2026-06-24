@@ -3,18 +3,20 @@
 Work to date spans three areas: a foundational survey publication, the thesis literature review and the supporting research infrastructure.
 The survey has progressed furthest and represents the first of a set of publications as described in Section~\ref{subsec:pre_confirmation:work_plan:publication_plan}.
 
-The survey uses on a pre-registered systematic review protocol~\cite{kavadias2026qplSurveyProtocol} that follows established evidence-based software engineering guidelines and the PRISMA 2020 reporting standard.
-A search strategy is defined, a literature cutoff of April 2026 and inclusion and exclusion criteria fixed in advance, all of which can be found in registered supplementary materials~\cite{kavadias2026qplSurveySupplementary}.
+The survey follows a pre-registered systematic review protocol~\cite{kavadias2026qplSurveyProtocol} aligned with established evidence-based software engineering guidelines and the PRISMA 2020 reporting standard.
+The protocol fixes a search strategy, a literature cutoff of April 2026 and the inclusion and exclusion criteria in advance, all of which are recorded in registered supplementary materials~\cite{kavadias2026qplSurveySupplementary}.
 A PICOC frame (population, intervention, comparison, outcome, context) and two review questions set the scope and the criteria identify eleven quantum programming systems for detailed analysis.
 The protocol and its supplementary materials have been deposited on Figshare with citable DOIs, and the thesis supervisors have been engaged as secondary reviewers to corroborate selection and assessment.
-A complete first draft has been produced, running to roughly 18{,}167 words across nine sections.
-Its analysis applies an objective feature-comparison framework: nine capability conditions are assessed as pass, constrained or fail for each system across four representative programming tasks, with every rating grounded in concrete code-level evidence.
+Its analysis applies an feature-comparison framework: nine capability conditions are assessed as pass, constrained or fail for each system across four representative programming tasks, with every rating grounded in concrete code-level evidence.
 The framework characterises each abstraction tier on observable features rather than subjective judgement, and it defines the quantum-implicit tier as one without explicit quantum mechanical knowledge required for productive programming.
-The findings of the survey indicate no system sufficiently implements quantum-implicitness which provides the motivation and success criteria for the system the thesis will develop.
-A preprint is being finalised for submission to arXiv and submission to a venue in August 2026, the current venue candidate is \textit{The Journal of Systems and Software}.
+The survey finds that no system meets the conditions for the quantum-implicit tier.
+This result provides the motivation and success criteria for the system the thesis will develop.
+Submission to a venue is planned for August 2026.
+The current venue candidate is \textit{The Journal of Systems and Software}, although conferences for early 2027 are also under consideration.
 The venue selection is subject to change.
 
-The thesis literature review has been built in parallel and is organised around abstraction as its narrative connection, each section is framed and connected through a discussion of abstraction in quantum computing.
+The thesis literature review has been built in parallel and is organised around abstraction as its narrative thread.
+Each section is framed through a discussion of abstraction in quantum computing.
 Three out of a planned eight sections have been completed spanning abstraction, quantum programming paradigms and quantum programming languages.
 The abstraction section defines the review's notion of abstraction, separates functional from conceptual abstraction and develops the quantum bias construct: the observation that current systems expose quantum-mechanical vocabulary as a mandatory rather than incidental part of the programming model.
 It also establishes the formal instruments reused later in the chapter, namely a set of good-abstract-machine criteria and the foundational results on which classical abstraction contracts break in the quantum setting.
@@ -24,7 +26,7 @@ Their equivalence at the level of efficient bounded-error computation is used to
 That analysis provides commentary on the need for higher level abstractions to support better portability for different abstract machine or hardware models.
 It then surveys the programming-model paradigms, from classical control over quantum data through control flow in superposition to the hybrid-by-default reality of current practice.
 The section converges on semantic pressures that recur across languages: linearity and no-cloning, the measurement-collapse boundary, entanglement, uncomputation as a semantic obligation and phase sensitivity.
-An additional limitation that classical branching and loops cannot be run over data in superposition without corrupting the result is shown to be physically inescapable.
+A further limitation is physically inescapable: classical branching and loops cannot be run over data in superposition without corrupting the result.
 Unlike qubits and gates, it cannot be hidden behind the quantum-implicit surface, so the thesis language design and its correctness proofs must enforce the limit directly rather than abstract it away.
 Identifying it during the literature review means the design phase begins with the constraint already mapped rather than failing to account for it.
 
@@ -33,10 +35,12 @@ Each family is read against three dimensions: abstraction level, the quantum kno
 The analysis converges on a single finding: no family reaches the quantum-agnostic tier the field itself identifies as the target, because the programmer's mental model remains quantum-explicit in every case, expressed in qubits, gates and measurement.
 This usability ceiling is the gap the thesis addresses, and it is what a quantum-implicit language, whose surface model is agnostic of the underlying quantum substrate, is designed to cross.
 
-The remaining four sections, which include from language-level quantum operations, execution models, compilation techniques and language design, are planned across the remainder of the first year; additional sections or synthesis if required are scheduled as a confirmation-stage input rather than a pre-confirmation deliverable.
+The remaining four sections, covering language-level quantum operations, execution models, compilation techniques and language design, are planned across the remainder of the first year; additional sections or synthesis if required are scheduled as a confirmation-stage input rather than a pre-confirmation deliverable.
 
 Supporting research infrastructure has been established.
-Thesis, publication and progress report sources are maintained as \LaTeX{} in a version-controlled repository and compiled through Overleaf and reading notes, citation metadata and artefacts are organised in a structured Notion workspace.
+Thesis, publication and progress report sources are maintained as \LaTeX{} in a version-controlled repository and compiled through Overleaf.
+Reading notes, citation metadata and artefacts are organised in a structured Notion workspace.
 A task tracker records work items against milestones and feeds a weekly status-reporting routine maintained since March 2026.
-Planning has itself been a significant output: a three-year candidature plan and a month-by-month plan for the first year have been produced, sequencing the publication programme alongside the literature review see Section~\ref{sec:pre_confirmation:work_plan}.
-Supervisory arrangements have been formalised through a signed candidature agreement, supervision is coordinated through minuted meetings and a dedicated project Slack channel for asynchronous communication.
+A three-year candidature plan and a month-by-month plan for the first year have been produced, sequencing the publication programme alongside the literature review see Section~\ref{sec:pre_confirmation:work_plan}.
+Supervisory arrangements have been formalised through a signed candidature agreement.
+Supervision is coordinated through minuted meetings and a dedicated project Slack channel for asynchronous communication.
