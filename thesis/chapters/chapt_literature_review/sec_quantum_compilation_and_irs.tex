@@ -1,0 +1,54 @@
+\section{Quantum compilation and intermediate representations}\label{sec:lit_rev:compilation}
+
+Whatever abstractions a quantum programming language offers at its surface, the computation it describes must ultimately be delivered to hardware in an executable form.
+This section surveys the compilation stacks that perform that delivery: the shape of their pipelines and the intermediate representations they pass through, the optimisation and resource management performed along the way and the extent to which their transformations can be verified.
+The survey ascends the stack, from executable formats through circuit-level optimisation to source-level intent, asking at each level what can be achieved there and what information is missing to go further.
+
+\subsection{Compilation pipelines}\label{subsec:lit_rev:compilation:pipelines}
+Compilation pipelines are not specific to quantum programming.
+A classical compiler lowers source code through intermediate representations so that transformations independent of the machine are separated from translation specific to it, and a shared representation spares each new language a full compiler for every target.
+Quantum stacks adopt the same arrangement, lowering a high-level language through one or more intermediate representations into an executable format consumed by a runtime or hardware controller~\cite{irreview2024}.
+Qiskit is a familiar example: a Python framework in which a program constructs a circuit and emits it as OpenQASM~\cite{aleksandrowicz2019qiskit}, a format designed as a hardware-agnostic description of quantum circuits~\cite{cross2017openqasm}.
+Emission into such a format does not end compilation.
+The emitted circuit may still contain gates the device does not physically implement and refer to qubits by name rather than by location, so decomposition into the native gate set is still required.
+Placement of each named qubit onto a physical one under the device's connectivity constraints and realisation of gates as timed control pulses all remain to be performed downstream~\cite{cross2022openqasm3}.
+A fully unitary circuit leaves every compilation decision available ahead of execution; hybrid programs remove this guarantee.
+A program that measures mid-circuit and feeds the outcome forward into the operations that follow moves part of the pipeline's work into the run itself, so an executable format serving hybrid programs must carry classical control flow alongside gates~\cite{cross2022openqasm3}.
+
+A format in one of these chains can play two roles.
+It serves as a terminal target when compilation ends with it and the emitted artefact passes to a runtime unchanged, and as an intermediate representation when further lowering consumes it.
+Which role a format plays is fixed by the surrounding stack rather than by anything in the format itself.
+OpenQASM is a prolific circuit description language and intermediate representation that takes each role in different pipelines~\cite{cross2022openqasm3}.
+Its own specification frames the language both ways, as a description of circuits and as an intermediate representation for compilation~\cite{cross2022openqasm3}.
+Recent work on CUDA-Q, a kernel-based programming platform for hybrid quantum-classical computing, treats OpenQASM 3 as an intermediate representation precisely because the format is so widely emitted, ingesting existing programs so they can be compiled onward through its own toolchain~\cite{kulkarni2026openqasm3cudaq}.
+The OpenQASM source is parsed into an abstract syntax tree, rebuilt as CUDA-Q kernels and lowered through the compiler framework MLIR into QIR, a quantum extension of the classical LLVM intermediate representation, before any backend is reached~\cite{kulkarni2026openqasm3cudaq}.
+Figure~\ref{fig:lit_rev:compilation:openqasm_ambiguity} draws this pipeline alongside the Qiskit stack of the opening paragraphs, in which compilation instead ends at OpenQASM~\cite{aleksandrowicz2019qiskit}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{../figures/fig-lit_rev-compilation-openqasm_ambiguity}
+    \caption{OpenQASM is shown as the terminal target of the Qiskit pipeline and as the ingested intermediate representation opening the CUDA-Q lowering chain.}
+    \label{fig:lit_rev:compilation:openqasm_ambiguity}
+\end{figure}
+
+In both roles the format performs well, and for the same reasons.
+A flat sequence of gates over declared registers is concrete, portable across vendors and close to what hardware executes, which is all a terminal target must be~\cite{cross2017openqasm}.
+The same flatness serves an intermediate representation provided the analyses asked of it are circuit-shaped; gate sequences admit rewriting, mapping and scheduling directly, which is why lowering pipelines accept them as input~\cite{kulkarni2026openqasm3cudaq}.
+What the format bounds is the level of that analysis, because the abstractions that produced the gates were erased at emission.
+The boundary is visible even in verified compilation.
+VOQC, a machine-checked circuit optimiser, proves that every rewrite it performs preserves the meaning of the gate sequence it receives.
+VOQC's guarantees are stated over circuits alone and cannot say whether that sequence realises what the source program intended~\cite{hietala2023voqc}.
+A stage below OpenQASM can therefore establish properties of the physical execution but cannot check them against an intent it never saw.
+This is a trade rather than a defect.
+The format admits the analyses that made it a good target and forecloses the ones that need what emission erased, and the cost of that division to verifying compilation is returned to later in the section.
+
+Whichever role a format plays in these pipelines, what it describes is a circuit.
+The circuit model is one of several execution models equivalent up to polynomial overhead, as established in Section~\ref{subsec:lit_rev:quantum_programming:models_of_computation}, yet it is the de facto standard for describing quantum computation.
+The prevalence of the circuit model is visible in known quantum intermediate representations; OpenQASM describes circuits by design~\cite{cross2017openqasm}, QIR fixes rules for gates, registers and measurements, and the quantum MLIR dialect that lowers into it defines its operations as register allocation, qubit addressing and gate application~\cite{McCaskey2021MLIRDialectQASM}.
+The standard holds because a single circuit-shaped interchange lets any frontend reach any backend, and because gate sequences admit rewrite and equivalence rules simple enough to state and to check mechanically, as VOQC's proofs demonstrate~\cite{hietala2023voqc}.
+The same standardisation makes emulation the cost of choosing hardware that realises another execution model; the program is lowered to a circuit as usual and the circuit is translated onto the native model at the final step, so every transformation along the way acts on the emulated circuit rather than on the execution model the machine implements.
+The cost lies not in the translation, which equivalence guarantees, but in the optimisations it forecloses.
+The same semantic choices in a source program may optimise differently on different execution models, optimising them as a gate sequence no longer describes the intent from which a native realisation could be derived.
+In adiabatic computation, an execution model that encodes a computation as the lowest-energy state of a physical system, an emulated gate sequence runs in a time set by the system's spectral gap rather than by its operation count~\cite{aharonov2007adiabatic}.
+The gap depends only on the length of the sequence and not on what it computes, so a compiler holding the circuit alone can improve the run only by shortening it~\cite{aharonov2007adiabatic}.
+For these processes, optimisation may be better served by a different intermediate representation that encodes computational intent.
