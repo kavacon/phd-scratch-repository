@@ -52,3 +52,53 @@ The same semantic choices in a source program may optimise differently on differ
 In adiabatic computation, an execution model that encodes a computation as the lowest-energy state of a physical system, an emulated gate sequence runs in a time set by the system's spectral gap rather than by its operation count~\cite{aharonov2007adiabatic}.
 The gap depends only on the length of the sequence and not on what it computes, so a compiler holding the circuit alone can improve the run only by shortening it~\cite{aharonov2007adiabatic}.
 For these processes, optimisation may be better served by a different intermediate representation that encodes computational intent.
+
+\subsection{Circuit optimisation}\label{subsec:lit_rev:compilation:optimisation}
+Circuit optimisation rewrites a circuit into an equivalent one that demands less of the hardware executing it.
+A quantum processor holds its qubits for a limited time before interaction with the environment degrades them, so a computation must finish inside that decoherence window and every gate it applies is a further opportunity for error.
+Shallower circuits fit inside the window and smaller ones accumulate less error, making gate count and circuit depth the base objectives of optimisation.
+Fault-tolerant execution shifts the pressure rather than removing it; T gates, whose error-corrected implementation carries a heavy overhead, are costly enough that their count is treated as a resource in its own right~\cite{reducingtcount2019}.
+The ZX-calculus is a graphical language that represents a quantum computation as a diagram of connected nodes~\cite{kissinger2019graphtheoreticzx}.
+Every circuit converts directly into a ZX diagram, but the calculus is strictly larger than the circuits it contains; its diagrams can be deformed arbitrarily and can pass through intermediate states that no circuit describes~\cite{kissinger2019graphtheoreticzx}.
+Figure~\ref{fig:lit_rev:compilation:zx_vs_circuit} contrasts the two representations, showing a circuit alongside the ZX diagram describing the same computation.
+That extra space is what makes the calculus effective for simplification; deforming the diagram through states no circuit describes reaches structure that gate-level rewriting cannot~\cite{kissinger2019graphtheoreticzx}.
+A general ZX diagram has no guaranteed conversion back into a circuit, so during simplification an invariant called focused gFlow is maintained.
+Focused gFlow is a record of the direction in which information flows through the diagram and guarantees that a circuit can be extracted~\cite{kissinger2019graphtheoreticzx}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{../figures/fig-lit_rev-compilation-zx_vs_circuit}
+    \caption{A quantum circuit and the ZX diagram describing the same computation. Every circuit converts directly into a diagram, while the calculus also admits deformations and intermediate states that no circuit describes.}
+    \label{fig:lit_rev:compilation:zx_vs_circuit}
+\end{figure}
+
+ZX simplification simplifies the diagram as a whole, a similar approach can be used to achieve targeted T-count reduction~\cite{reducingtcount2019}.
+The phases contributed by T gates can be replaced with variables and the diagram simplified symbolically, so that simplification reveals which phases can combine even when their gates sit far apart in the circuit~\cite{reducingtcount2019}.
+Unlike diagram simplification the end result indicates which gates of the original circuit can be combined rather than rewriting the circuit or diagram directly.
+Circuits with the combinations applied match or improve the prior state of the art on 72\% of standard benchmarks without adding ancilla qubits~\cite{reducingtcount2019}.
+VOQC, a verified optimiser, stays inside circuit syntax instead.
+It rewrites the gate sequence directly through a library of rewrite rules, each carrying a machine-checked proof that it preserves the circuit's meaning, and achieves comparable reductions in T-count.
+VOQC demonstrates verified optimisation is possible~\cite{hietala2023voqc}.
+AQCtensor is an approximate compiler for circuits that simulate a physical system evolving in time and optimises classically against that known input structure.
+AQCtensor discards standard deep opening circuit structures construction and builds an equivalent, far shallower circuit prefix in its place~\cite{AQCtensor2024}.
+As an optimiser it is not generic but demonstrate the utility of manipulating prior semantic knowledge to achieve optimal outcomes, matching the fidelity of the construction it replaces at roughly half the depth~\cite{AQCtensor2024}.
+
+Each of these techniques, generic or specialised, receives a circuit that a programmer has already authored.
+Compilation in the general case translates a program from one abstraction to another, and what a compiler can automate is fixed by what its input abstraction makes explicit~\cite{aho2022abstractions}.
+A circuit makes explicit how a computation proceeds and nothing of what its values are for.
+Continuing to improve optimisations within that limited scope of expression is difficult.
+Exact T-count minimisation is exponential in runtime and the practical heuristics improve on it for just 6\% of standard benchmarks~\cite{reducingtcount2019}.
+Uncomputation is required wherever ancilla qubits have become entangled with a result, because discarding them unreversed corrupts the measurements that follow~\cite{bichsel2020silq}.
+It is also an optimisation opportunity, since uncomputation performed at a convenient point rather than at the site of use shortens the circuit and returns the ancilla for reuse~\cite{paradis2021unqomp}.
+Performing it automatically requires knowledge the gate sequence cannot supply, namely which qubits hold temporary values, whether the operations that produced them are classically describable and whether the inputs those operations consumed remain unchanged~\cite{paradis2021unqomp}.
+Unqomp, a procedure built to synthesise uncomputation for arbitrary circuits was able to remove 71\% of gates and 19\% of qubits on average from baseline circuit examples in Qiskit by extending it so that ancillae were declared at their allocation~\cite{paradis2021unqomp}.
+Silq, a language designed around safe uncomputation, encodes this semantic knowledge in its type system, marking functions as classically describable and their inputs as constant so that every temporary value is guaranteed uncomputable before any circuit exists~\cite{bichsel2020silq}.
+What these approaches and those of systems such as AQCtensor demonstrate is that optimisation with semantic knowledge has the capacity to improve on existing state of the art results.
+
+Gate and circuit rewrite techniques converge on closely comparable results regardless of their approach.
+Even exhaustive searches of the ZX rewrite space match known heuristic methods on 89\% of benchmarks and never improve on T-count.
+The same method improves immediately when redirected at a different objective~\cite{fischbach2025exhaustivesearchzx}.
+The equivalent performance demonstrates an upper limit to the optimisation possible with circuit-only context.
+In other problem domains improvements were possible by the inclusion of semantic knowledge outside the circuit.
+Unqomp demonstrated significant circuit depth and width reductions once ancillae were declared~\cite{paradis2021unqomp} and AQCtensor produced shallower circuits as a  compiler designed around the workload it serves~\cite{AQCtensor2024}.
+These kinds of information cannot be recovered by rewrite techniques alone and provide evidence that source expressiveness can provide optimisation gains throughout compilation.
