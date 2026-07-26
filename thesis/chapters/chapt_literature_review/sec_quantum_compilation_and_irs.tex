@@ -6,7 +6,7 @@ The survey ascends the stack, from executable formats through circuit-level opti
 
 \subsection{Compilation pipelines}\label{subsec:lit_rev:compilation:pipelines}
 Compilation pipelines are not specific to quantum programming.
-A classical compiler lowers source code through intermediate representations so that transformations independent of the machine are separated from translation specific to it, and a shared representation spares each new language a full compiler for every target.
+A classical compiler lowers source code through intermediate representations so that transformations independent of the machine are separated from translation specific to it and a shared representation spares each new language a full compiler for every target.
 Quantum stacks adopt the same arrangement, lowering a high-level language through one or more intermediate representations into an executable format consumed by a runtime or hardware controller~\cite{irreview2024}.
 Qiskit is a familiar example: a Python framework in which a program constructs a circuit and emits it as OpenQASM~\cite{aleksandrowicz2019qiskit}, a format designed as a hardware-agnostic description of quantum circuits~\cite{cross2017openqasm}.
 Emission into such a format does not end compilation.
@@ -68,7 +68,8 @@ Focused gFlow is a record of the direction in which information flows through th
 \begin{figure}
     \centering
     \includegraphics[width=\linewidth]{../figures/fig-lit_rev-compilation-zx_vs_circuit}
-    \caption{A quantum circuit and the ZX diagram describing the same computation. Every circuit converts directly into a diagram, while the calculus also admits deformations and intermediate states that no circuit describes.}
+    \caption{A quantum circuit and the ZX diagram describing the same computation.
+    Hadamard operations are represented by squares while red "spiders" represent the X basis and green represent the Z basis.}
     \label{fig:lit_rev:compilation:zx_vs_circuit}
 \end{figure}
 
@@ -80,14 +81,14 @@ VOQC, a verified optimiser, stays inside circuit syntax instead.
 It rewrites the gate sequence directly through a library of rewrite rules, each carrying a machine-checked proof that it preserves the circuit's meaning, and achieves comparable reductions in T-count.
 VOQC demonstrates verified optimisation is possible~\cite{hietala2023voqc}.
 AQCtensor is an approximate compiler for circuits that simulate a physical system evolving in time and optimises classically against that known input structure.
-AQCtensor discards standard deep opening circuit structures construction and builds an equivalent, far shallower circuit prefix in its place~\cite{AQCtensor2024}.
-As an optimiser it is not generic but demonstrate the utility of manipulating prior semantic knowledge to achieve optimal outcomes, matching the fidelity of the construction it replaces at roughly half the depth~\cite{AQCtensor2024}.
+AQCtensor discards standard, deep, initial opening circuit encodings and builds an equivalent, far shallower circuit prefix in its place~\cite{AQCtensor2024}.
+As an optimiser it is not generic but demonstrates the utility of manipulating prior semantic knowledge to achieve optimal outcomes, matching the fidelity of the construction it replaces at roughly half the depth~\cite{AQCtensor2024}.
 
 Each of these techniques, generic or specialised, receives a circuit that a programmer has already authored.
 Compilation in the general case translates a program from one abstraction to another, and what a compiler can automate is fixed by what its input abstraction makes explicit~\cite{aho2022abstractions}.
 A circuit makes explicit how a computation proceeds and nothing of what its values are for.
 Continuing to improve optimisations within that limited scope of expression is difficult.
-Exact T-count minimisation is exponential in runtime and the practical heuristics improve on it for just 6\% of standard benchmarks~\cite{reducingtcount2019}.
+Exact T-count minimisation is exponential in runtime and the use of heuristic methods improve on it for just 6\% of standard benchmarks~\cite{reducingtcount2019}.
 Uncomputation is required wherever ancilla qubits have become entangled with a result, because discarding them unreversed corrupts the measurements that follow~\cite{bichsel2020silq}.
 It is also an optimisation opportunity, since uncomputation performed at a convenient point rather than at the site of use shortens the circuit and returns the ancilla for reuse~\cite{paradis2021unqomp}.
 Performing it automatically requires knowledge the gate sequence cannot supply, namely which qubits hold temporary values, whether the operations that produced them are classically describable and whether the inputs those operations consumed remain unchanged~\cite{paradis2021unqomp}.
@@ -102,3 +103,39 @@ The equivalent performance demonstrates an upper limit to the optimisation possi
 In other problem domains improvements were possible by the inclusion of semantic knowledge outside the circuit.
 Unqomp demonstrated significant circuit depth and width reductions once ancillae were declared~\cite{paradis2021unqomp} and AQCtensor produced shallower circuits as a  compiler designed around the workload it serves~\cite{AQCtensor2024}.
 These kinds of information cannot be recovered by rewrite techniques alone and provide evidence that source expressiveness can provide optimisation gains throughout compilation.
+
+\subsection{Intent-enabled rewriting}\label{subsec:lit_rev:compilation:intent_rewriting}
+Declared ancillae and known input structure enabled improved circuit optimisations in Subsection~\ref{subsec:lit_rev:compilation:optimisation} in each case the gain had no circuit-level counterpart against which it could be measured.
+Quantum control flow supplies a case where the same optimisation objective is pursued using pre- and post-circuit emission techniques providing an opportunity for direct comparison.
+A conditional over data in superposition compiles into multi-controlled gates rather than a branch, and under error correction a gate with two or more controls decomposes into at least one T gate more than it has controls~\cite{yuan2025foundationalabstractions}.
+Nesting conditionals multiplies the controls, so the T-complexity of a program, its T-count as a function of input size, grows polynomially beyond what its idealised (non-error corrected) gate count predicts~\cite{yuan2025foundationalabstractions}.
+For example, a recursive list-length function is constant in the list size on idealised hardware and polynomial in T-complexity once error corrected; for algorithms whose advantage is itself polynomial, such as Grover's search with its quadratic speedup, an overhead of this shape consumes the advantage entirely~\cite{yuan2025foundationalabstractions}.
+
+The nesting that produces this cost is a syntactic property, present in the source program before any circuit exists.
+Spire, an optimising compiler built on the compiler of the Tower quantum programming language, enables a cost model directly over that syntax.
+The number of multi-controlled gates each construct compiles into can be calculated from the source syntax and from it, the T-complexity of the error-corrected circuit derived~\cite{yuan2025foundationalabstractions}.
+Without such a model the T-complexity of a program can only be understood by compiling it and counting gates.
+The model makes two rewrites available at the source level.
+Conditional flattening replaces nested conditionals with a single conditional guarded by a temporary conjunction of their conditions, so control qubits no longer accumulate through the nesting.
+For a program with $k$ multi-controlled gates under $n$ levels of nesting the T-complexity falls from $O(kn)$ to $O(k + n)$~\cite{yuan2025foundationalabstractions}.
+In the optimised list-length program recursion never occurs under a conditional, removing the control qubit that every layer of recursion previously inherited.
+Figure~\ref{fig:lit_rev:compilation:length_programs} contrasts the two forms of the list-length program, showing where control qubits accumulate in the nested form and how the rewritten form avoids them.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{../figures/fig-lit_rev-compilation-length_programs}
+    \caption{The list-length program with nested conditionals and its Spire-rewritten form.
+    In the nested form each layer of recursion inherits a further control qubit; the rewritten form guards each conditional with a single conjunction.}
+    \label{fig:lit_rev:compilation:length_programs}
+\end{figure}
+
+Conditional narrowing moves a conditional from around a \texttt{with}-\texttt{do} block, a construct that computes a temporary value, uses it and reverses the computation, to inside its \texttt{do} block, so the block's ancilla qubits escape the control entirely; the improvement is constant rather than asymptotic~\cite{yuan2025foundationalabstractions}.
+Both rewrites act on conditional structure that the source still expresses and the emitted gate sequence does not.
+
+Applied to recursive list-length programs, Spire's syntax-level rewrites reduce T-complexity from quadratic in the recursion depth to linear~\cite{yuan2025foundationalabstractions}.
+Six of eight circuit optimisers applied to the same programs, including verified optimisers and ZX-based simplifiers discussed in Subsection~\ref{subsec:lit_rev:compilation:optimisation}, leave the quadratic growth intact~\cite{yuan2025foundationalabstractions}.
+A post-emission optimiser must process the circuit as emitted, which for these programs has already grown quadratically in the recursion depth.
+Two of the tested optimisers are able to recover linear growth on post emission circuits however they have prohibitive resource requirements, one consuming more than 32 gigabytes of memory in the process~\cite{yuan2025foundationalabstractions}.
+The rewrites instead act before emission, so every downstream stage receives a circuit that is already linear~\cite{yuan2025foundationalabstractions}.
+When paired with Spire, circuit-level optimisation reduces the T-count of the simplified list-length program in the strongest pairings by 96.9\% and 98.1\% against the original, the latter in 1.18 seconds of compilation time~\cite{yuan2025foundationalabstractions}.
+Spire demonstrates that circuit rewriting reaches its limits at emission; what lifts that limit is conditional structure that the source expresses and emission erases, usable only by rewrites that run before the circuit exists.
