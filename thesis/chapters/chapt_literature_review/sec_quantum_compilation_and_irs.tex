@@ -101,7 +101,7 @@ Even exhaustive searches of the ZX rewrite space match known heuristic methods o
 The same method improves immediately when redirected at a different objective~\cite{fischbach2025exhaustivesearchzx}.
 The equivalent performance demonstrates an upper limit to the optimisation possible with circuit-only context.
 In other problem domains improvements were possible by the inclusion of semantic knowledge outside the circuit.
-Unqomp demonstrated significant circuit depth and width reductions once ancillae were declared~\cite{paradis2021unqomp} and AQCtensor produced shallower circuits as a  compiler designed around the workload it serves~\cite{AQCtensor2024}.
+Unqomp demonstrated significant circuit depth and width reductions once ancillae were declared~\cite{paradis2021unqomp} and AQCtensor produced shallower circuits as a compiler designed around the workload it serves~\cite{AQCtensor2024}.
 These kinds of information cannot be recovered by rewrite techniques alone and provide evidence that source expressiveness can provide optimisation gains throughout compilation.
 
 \subsection{Intent-enabled rewriting}\label{subsec:lit_rev:compilation:intent_rewriting}
@@ -120,10 +120,55 @@ Conditional flattening replaces nested conditionals with a single conditional gu
 For a program with $k$ multi-controlled gates under $n$ levels of nesting the T-complexity falls from $O(kn)$ to $O(k + n)$~\cite{yuan2025foundationalabstractions}.
 In the optimised list-length program recursion never occurs under a conditional, removing the control qubit that every layer of recursion previously inherited.
 Figure~\ref{fig:lit_rev:compilation:length_programs} contrasts the two forms of the list-length program, showing where control qubits accumulate in the nested form and how the rewritten form avoids them.
-
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\linewidth]{../figures/fig-lit_rev-compilation-length_programs}
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \textbf{Tower before syntactic rewrites~\cite{yuan2025foundationalabstractions}}
+        \begin{lstlisting}[basicstyle=\ttfamily\footnotetsize,
+            frame=single,
+            label={lst:lit_rev:compilation:length_programs:pre_opt}]
+fun length[n](xs: ptr<list>, acc: uint) {
+	with {
+		let is_empty <- xs == null;
+	} do if is_empty {
+		let out <- acc;
+	} else with {
+		let temp <- default<list>;
+		*xs <-> temp;
+		let next <- temp.2;
+		let r <- acc + 1;
+	} do {
+		let out <- length[n-1](next, r);
+	}
+	return out;
+}
+        \end{lstlisting}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.46\textwidth}
+        \centering
+        \textbf{Tower after syntactic rewrites~\cite{yuan2025foundationalabstractions}}
+        \begin{lstlisting}[basicstyle=\ttfamily\footnotesize,
+            frame=single,
+            label={lst:lit_rev:compilation:length_programs:post_opt}]
+fun length[n](xs, acc: uint, b: bool) {
+	with {
+		let is_empty <- b && xs == null;
+		let n_e <- b && xs != null;
+		let temp <- default<list>;
+		*xs <-> temp;
+		let r <- acc + 1;
+	} do {
+		if is_empty { let out <- acc; }
+		let rest <-length[n-1](next, r, n_e);
+		if n_e { out <-> rest; }
+		let rest -> 0;
+	}
+	return out;
+}
+        \end{lstlisting}
+    \end{minipage}
     \caption{The list-length program with nested conditionals and its Spire-rewritten form.
     In the nested form each layer of recursion inherits a further control qubit; the rewritten form guards each conditional with a single conjunction.}
     \label{fig:lit_rev:compilation:length_programs}
@@ -139,3 +184,91 @@ Two of the tested optimisers are able to recover linear growth on post emission 
 The rewrites instead act before emission, so every downstream stage receives a circuit that is already linear~\cite{yuan2025foundationalabstractions}.
 When paired with Spire, circuit-level optimisation reduces the T-count of the simplified list-length program in the strongest pairings by 96.9\% and 98.1\% against the original, the latter in 1.18 seconds of compilation time~\cite{yuan2025foundationalabstractions}.
 Spire demonstrates that circuit rewriting reaches its limits at emission; what lifts that limit is conditional structure that the source expresses and emission erases, usable only by rewrites that run before the circuit exists.
+
+\subsection{Resource management}\label{subsec:lit_rev:compilation:resource_management}
+Resource management has so far only been discussed through uncomputation, the clearing of temporary data and compilation processes that automatically perform it.
+Automatic uncomputation removes the need for programmers to manually manage clean-up analogous to garbage collection for classical memory.
+Section~\ref{subsec:lit_rev:quantum_programming:model_invariant_constraints} established this as an obligation of quantum programming as a temporary register entangled with the data cannot be discarded without interfering with the computation.
+A programming system must therefore discharge the clean-up of temporary circuit registers through explicit constructs or by enforcing conditions under which intermediate state can be dropped safely~\cite{bichsel2020silq}.
+Performing the process automatically requires knowledge that a circuit alone does not supply~\cite{paradis2021unqomp}.
+A compiler's resource contract, allocating qubits, reusing them and uncomputing what they held, relies on information about the program's intent, and the systems reviewed below are distinguished by where that information originates.
+
+The systems reviewed here differ in what each requires before uncomputation can be performed and in who must supply it.
+Unqomp, whose synthesis was examined in Subsection~\ref{subsec:lit_rev:compilation:optimisation}, shows how far a compiler proceeds with almost nothing.
+It synthesises uncomputation from a circuit's dependency structure alone, and the one fact it cannot infer, which qubits hold temporary values, must be declared by the programmer when each ancilla is allocated~\cite{paradis2021unqomp}.
+Silq, whose automatic uncomputation was introduced in Section~\ref{subsubsec:lit_rev:qpl:highlevel}, obtains that knowledge from its type system.
+The compiler reclaims a temporary value only where the programmer has annotated the producing function as classically describable and its inputs as unmodified, so the automation is conditional on correct annotation and a program lacking it is rejected~\cite{bichsel2020silq}.
+
+Qrisp, the Python-hosted framework of Section~\ref{subsubsec:lit_rev:qpl:frameworks}, packages the same static route behind typed quantum variables, pairing an allocation engine that manages each variable's lifetime with a decorator that synthesises uncomputation of a function's local values.
+The decorator must still be applied by a programmer who already understands that the function creates an obligation~\cite{seidel2024qrisp}.
+
+Tower, a language for pointer-based quantum data structures, raises uncomputation to a surface construct.
+Its with-do blocks reverse the computation of the with clause automatically, but the programmer must shape every use of a temporary value into that structure and, where a variable is unassigned outside it, must know exactly the value it currently holds, a discipline whose reliance on manually tracked invariants is demonstrably error prone~\cite{yuan2025foundationalabstractions}.
+
+Qunity, which compiles a unified classical and quantum control flow to OpenQASM, automates clean-up within its control constructs.
+The programmer selects the construct whose orthogonality and purity conditions a branch satisfies, and the compiler disposes of the branch not taken and deletes garbage and flag qubits it can prove measure to zero~\cite{mints2025qunity}.
+
+Quff, the dynamically typed language reviewed in Section~\ref{subsubsec:lit_rev:qpl:highlevel}, requires no marking of temporaries at all.
+Its runtime infers which values are quantum and attempts to uncompute every variable that leaves scope, exchanging typing annotations for general clean-up of all values in the manner of classical garbage collection.
+The cost of deferring the analysis is the guarantee: a value the runtime cannot reclaim surfaces as a warning and its qubits are lost to reallocation~\cite{wright2024quff}.
+The reversible lifetime semantics proposed for Qutes, the string-oriented language of Section~\ref{subsubsec:lit_rev:qpl:highlevel}, performs the equivalent analysis statically and conservatively.
+Lexical scope bounds each variable's lifetime, liveness analysis over data-dependence and entanglement graphs fixes the earliest safe reclamation point and a reference keyword marks the only distinction the programmer must express, whether a function may mutate its argument~\cite{reversiblelifetime2026}.
+Because reclamation happens at the earliest safe point rather than after the forward computation completes, uncomputation proceeds in parallel with remaining work, and the reported evidence shows the method produces shallower circuits with fewer ancillae than compute-then-uncompute scheduling~\cite{reversiblelifetime2026}.
+Table~\ref{tab:lit_rev:compilation:resource_techniques} summarises the input each system consumes, the mechanism that consumes it and who supplies it.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Resource-management techniques by the input each consumes, the mechanism that consumes it and who supplies it.}
+    \label{tab:lit_rev:compilation:resource_techniques}
+    \small
+    \begin{tabularx}{\textwidth}{@{}>{\hsize=0.18\hsize}X>{\hsize=0.28\hsize}X>{\hsize=0.32\hsize}X>{\hsize=0.22\hsize}X@{}}
+		\toprule
+        \textbf{System} & \textbf{Input consumed} & \textbf{Mechanism} & \textbf{Supplied by} \\ \midrule
+        \multicolumn{4}{@{}l}{\textit{Local, coherence-preserving}} \\
+        \addlinespace
+        Unqomp & Ancilla declarations at allocation & Uncomputation synthesis over the circuit dependency graph & Programmer \\
+        Silq & \texttt{qfree} and \texttt{const} annotations & Type-checked uncomputation before circuit generation & Programmer \\
+        Qrisp & Decorated functions over typed quantum variables & Allocation engine with uncomputation of a function's local values & Programmer \\
+        Tower & with-do structure and tracked variable values & Compiler reversal of the with clause & Programmer \\
+        Qunity & Orthogonality and purity judgements & Construct-scoped branch disposal; deletion of provably-zero qubits & Programmer \\
+        Quff & Scope exit observed at runtime & Runtime dependency tracking with garbage-collection-style uncomputation & Program structure (runtime) \\
+        Qutes lifetime semantics & Lexical scope and liveness & Static earliest-safe-point reclamation over dependence and entanglement graphs & Program structure (static) \\ \midrule
+        \multicolumn{4}{@{}l}{\textit{Global, measurement-based}} \\
+        \addlinespace
+        Qubit-reuse compilation & Causal-cone structure of the circuit & Measurement-and-reset scheduling of qubit reuse & Circuit structure \\
+        Dynamic-circuit compilation & Mid-circuit measurement and feed-forward & Width-for-depth circuit restructuring & Hardware runtime \\ \bottomrule
+    \end{tabularx}
+\end{table}
+
+These inputs, ancilla declarations, describability and constancy annotations, with-do structure, orthogonality judgements, scope and liveness, are information about the program's intent and none has a representation in the circuit.
+No system removes the obligation, because no system can: Section~\ref{subsec:lit_rev:quantum_programming:model_invariant_constraints} established that the constraint is physical.
+What distinguishes the systems is how they handle it, and the majority hand the programmer complex and error-prone requirements, annotations that must be correct, constructs that must be selected by semantic judgement, values that must be tracked by hand.
+Quff and Qutes handle it through structure and compilation, the ancilla and depth reductions reported for the lifetime semantics are evidence that this further discharge to the compiler is not only a possible design choice but an effective one.
+
+The systems above reduce a circuit's physical qubit requirements by managing logical allocation, clearing each temporary value so that its qubits can be reallocated, and their uncomputation serves computational correctness as much as economy.
+Measurement-based reuse reduces the requirement directly, returning physical qubits to the pool mid-execution, and consumes no statement of intent at all.
+Qubit-reuse compilation rests on the observation that a qubit's measurement statistics are fixed by its past causal cone, the set of gates and inputs from which influence can reach it~\cite{kissinger2022qubitreuse}.
+Once every gate in that cone has executed, nothing that remains to run can affect the qubit, so it can be measured, reset and reassigned as the input of a later operation without disturbing the computation.
+No annotation or disentanglement is required, because the fact consumed, causal completion, is one the circuit itself supplies.
+The effect is considerable: a typical 80-qubit QAOA instance compresses to 21.1 qubits on average, and such circuits have been executed on 20-qubit hardware with measurement distributions matching the uncompressed original~\cite{kissinger2022qubitreuse}.
+
+Dynamic-circuit compilation systematises the same trade as a graph problem, connecting measurement nodes to initialisation nodes in the circuit's dependency graph wherever the link preserves acyclicity.
+Dynamic compilation has been shown to change the complexity class of a circuit's qubit requirements, for instance from linear in problem size to constant~\cite{zhang2023dynamic}.
+
+A compressed circuit reproduces the measurement distribution of the original but never holds its full pre-measurement state, so it cannot be extended with further quantum operations.
+Because the reuse schedule depends on the causal structure of the whole circuit, a compressed subroutine ceases to be valid once embedded in a larger computation~\cite{kissinger2022qubitreuse}.
+Any change to the source program therefore forces recompilation of the whole.
+Gate count is preserved rather than reduced, so width compressed onto fewer physical qubits returns as depth on each of them, and compression is only worth driving as far as the target device requires~\cite{kissinger2022qubitreuse}.
+Uncomputation pays its cost differently, in the extra gates that run each inverse, and keeps what measurement-based reuse surrenders: a compute, use and uncompute block remains coherent and composes with whatever follows it.
+Where uncomputation requires intent the circuit cannot represent, measurement-based reuse requires structure that only exists once the whole circuit has been emitted, and its product is accordingly not a reusable program component but a schedule for one specific execution.
+
+The two families of technique are complements rather than alternatives, and each applies exactly where the other cannot.
+Uncomputation is available to every program, because it consumes structure and intent the source expresses, and its output composes, so it can be applied wherever temporary values arise regardless of what follows.
+Measurement-based reuse requires the finished circuit and produces a schedule for one specific execution, appropriate in the last stage of compilation onto hardware, where the task is fitting a circuit to the qubits a device actually provides~\cite{kissinger2022qubitreuse}.
+The two also assist rather than exclude one another: uncomputation returns qubits to the allocator earlier, shortening logical lifetimes, so a subsequent reuse schedule can assign more logical qubits to each physical one.
+None of the compilers reviewed combines the two, and whether uncomputing before scheduling reuse compounds their reductions is a question the literature leaves open.
+The programmer intent consumed by the uncomputation systems exists only before a circuit is emitted, and none of it survives lowering into the representations of Subsection~\ref{subsec:lit_rev:compilation:pipelines}.
+Causal completion, by contrast, exists only once emission is complete.
+A compiler that discharges the uncomputation obligation must therefore do so at the surface, in the same pre-emission territory where the rewrites of Subsection~\ref{subsec:lit_rev:compilation:intent_rewriting} found their advantage.
+Discharge before lowering brings its own demand, that the transformation be correct with respect to intent the circuit will no longer express, and Qunity demonstrates how that manifests as programmer facing obligation: to obtain automatic clean-up the programmer must first judge which construct the orthogonality and purity of their expressions permit, a semantic decision made before the compiler sees the program~\cite{mints2025qunity}.
+What a representation must preserve for such passes to be verified is the subject of Subsection~\ref{subsec:lit_rev:compilation:verification}.
