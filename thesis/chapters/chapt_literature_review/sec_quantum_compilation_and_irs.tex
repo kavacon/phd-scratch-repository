@@ -94,7 +94,7 @@ It is also an optimisation opportunity, since uncomputation performed at a conve
 Performing it automatically requires knowledge the gate sequence cannot supply, namely which qubits hold temporary values, whether the operations that produced them are classically describable and whether the inputs those operations consumed remain unchanged~\cite{paradis2021unqomp}.
 Unqomp, a procedure built to synthesise uncomputation for arbitrary circuits was able to remove 71\% of gates and 19\% of qubits on average from baseline circuit examples in Qiskit by extending it so that ancillae were declared at their allocation~\cite{paradis2021unqomp}.
 Silq, a language designed around safe uncomputation, encodes this semantic knowledge in its type system, marking functions as classically describable and their inputs as constant so that every temporary value is guaranteed uncomputable before any circuit exists~\cite{bichsel2020silq}.
-What these approaches and those of systems such as AQCtensor demonstrate is that optimisation with semantic knowledge has the capacity to improve on existing state of the art results.
+What these approaches and those of systems such as AQCtensor demonstrate is that optimisation with semantic knowledge has the capacity to improve on existing state-of-the-art results.
 
 Gate and circuit rewrite techniques converge on closely comparable results regardless of their approach.
 Even exhaustive searches of the ZX rewrite space match known heuristic methods on 89\% of benchmarks and never improve on T-count.
@@ -122,50 +122,50 @@ In the optimised list-length program recursion never occurs under a conditional,
 Figure~\ref{fig:lit_rev:compilation:length_programs} contrasts the two forms of the list-length program, showing where control qubits accumulate in the nested form and how the rewritten form avoids them.
 \begin{figure}[htbp]
     \centering
-    \begin{minipage}[t]{0.48\textwidth}
+    \begin{minipage}[t]{0.49\textwidth}
         \centering
         \textbf{Tower before syntactic rewrites~\cite{yuan2025foundationalabstractions}}
-        \begin{lstlisting}[basicstyle=\ttfamily\footnotetsize,
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
             frame=single,
             label={lst:lit_rev:compilation:length_programs:pre_opt}]
 fun length[n](xs: ptr<list>, acc: uint) {
-	with {
-		let is_empty <- xs == null;
-	} do if is_empty {
-		let out <- acc;
-	} else with {
-		let temp <- default<list>;
-		*xs <-> temp;
-		let next <- temp.2;
-		let r <- acc + 1;
-	} do {
-		let out <- length[n-1](next, r);
-	}
-	return out;
+  with {
+    let is_empty <- xs == null;
+  } do if is_empty {
+    let out <- acc;
+  } else with {
+    let temp <- default<list>;
+    *xs <-> temp;
+    let next <- temp.2;
+    let r <- acc + 1;
+  } do {
+    let out <- length[n-1](next, r);
+  }
+  return out;
 }
         \end{lstlisting}
     \end{minipage}
     \hfill
-    \begin{minipage}[t]{0.46\textwidth}
+    \begin{minipage}[t]{0.49\textwidth}
         \centering
         \textbf{Tower after syntactic rewrites~\cite{yuan2025foundationalabstractions}}
-        \begin{lstlisting}[basicstyle=\ttfamily\footnotesize,
+        \begin{lstlisting}[basicstyle=\ttfamily\scriptsize,
             frame=single,
             label={lst:lit_rev:compilation:length_programs:post_opt}]
 fun length[n](xs, acc: uint, b: bool) {
-	with {
-		let is_empty <- b && xs == null;
-		let n_e <- b && xs != null;
-		let temp <- default<list>;
-		*xs <-> temp;
-		let r <- acc + 1;
-	} do {
-		if is_empty { let out <- acc; }
-		let rest <-length[n-1](next, r, n_e);
-		if n_e { out <-> rest; }
-		let rest -> 0;
-	}
-	return out;
+  with {
+    let is_empty <- b && xs == null;
+    let n_e <- b && xs != null;
+    let temp <- default<list>;
+    *xs <-> temp;
+    let r <- acc + 1;
+  } do {
+    if is_empty { let out <- acc; }
+    let rest <-length[n-1](next, r, n_e);
+    if n_e { out <-> rest; }
+    let rest -> 0;
+  }
+  return out;
 }
         \end{lstlisting}
     \end{minipage}
@@ -272,3 +272,91 @@ Causal completion, by contrast, exists only once emission is complete.
 A compiler that discharges the uncomputation obligation must therefore do so at the surface, in the same pre-emission territory where the rewrites of Subsection~\ref{subsec:lit_rev:compilation:intent_rewriting} found their advantage.
 Discharge before lowering brings its own demand, that the transformation be correct with respect to intent the circuit will no longer express, and Qunity demonstrates how that manifests as programmer facing obligation: to obtain automatic clean-up the programmer must first judge which construct the orthogonality and purity of their expressions permit, a semantic decision made before the compiler sees the program~\cite{mints2025qunity}.
 What a representation must preserve for such passes to be verified is the subject of Subsection~\ref{subsec:lit_rev:compilation:verification}.
+
+\subsection{Verification of compilation and IR design}\label{subsec:lit_rev:compilation:verification}
+Discharging obligations to the surface language leaves open whether the transformation that discharges an obligation, and every pass that follows it, can be shown to preserve the program's meaning.
+
+A pass that rewrites pure gate sequences holds a unitary at both ends and can promise operator equality; VOQC's soundness condition takes exactly this form, defined over unitary semantics and stated only for circuits over the same gate set and dimension~\cite{hietala2023voqc}.
+A pass that introduces measurement and reset emits an artefact that is no longer a unitary and need not preserve dimension, so its strongest available promise is distributional, that no classical post-processing distinguishes the outputs and that equivalence is not a congruence: it fails under embedding in a larger quantum context~\cite{kissinger2022qubitreuse}.
+The contrast of uncomputation and reset-reuse in Subsection~\ref{subsec:lit_rev:compilation:resource_management} is also a contrast in provability, since uncomputation is unitary and keeps the stronger, compositional equivalence available, whereas a reuse schedule can be correct only distributionally and only for the single circuit from which it was derived.
+A verified claim is therefore bounded twice, by the equivalence the artefact's abstraction admits and by the scope over which that equivalence was proved.
+
+Most verified compilation results in the literature concern passes from circuit to circuit, because these are the easiest passes to verify: a circuit exists on both sides and correctness is the equivalence of the two.
+The translation from a high-level language into its first circuit is not symmetrical, and verifying it means proving the emitted circuit correct against the semantics of the source program; Figure~\ref{fig:lit_rev:compilation:verification_scope} contrasts the two problems.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{../figures/fig-lit_rev-compilation-verification_scope}
+    \caption{The two verification problems in a compilation stack.
+    A circuit-to-circuit pass has an artefact on both sides whose equivalence can be stated directly; the translation from a high-level language into its first circuit has no source-side circuit and must be proved against the semantics of the source program.}
+    \label{fig:lit_rev:compilation:verification_scope}
+\end{figure}
+
+VOQC verified optimisations defined and proved sound over SQIR, a circuit-level specification.
+VOQC can therefore verify the rewriting of SQIR but not the production of its input, a source language targeting SQIR would gain the assurance of verificaition only by proving separately that each of its constructs lowers to SQIR correctly~\cite{hietala2023voqc}.
+An obligation therefore cannot be discharged below the level at which its intent is expressed, because a rewrite cannot be proved to preserve information that its representation does not contain; this is a second, independent reason for the ceiling of Subsection~\ref{subsec:lit_rev:compilation:optimisation}.
+The converse also holds: once the initial translation is verified, the passes below it need only preserve the meaning of the circuit, which for unitary passes is a proof of the kind that already exists, so the loss of intent after emission costs verification nothing.
+The initial translation is the last point at which correctness against intent can be proved and the last at which intent-dependent optimisation can be applied, so it must be verified and efficient at once.
+QBlue, a verified compiler for Hamiltonian simulation whose source language describes physical systems rather than general computations, shows the arrangement is achievable: each compilation step carries an independent mechanised proof and the steps compose into a verified chain because types carry the program's intent through each lowering~\cite{verifiedcompiler2025qblue}.
+Verification therefore constrains compilation in both directions, an obligation must be discharged while its intent is still expressed and a verified initial translation is what permits the stages after it to operate without that intent.
+
+Table~\ref{tab:lit_rev:compilation:verified_artefacts} lists the verified artefacts reviewed in this section, what each had to make explicit before anything could be proved and where each proof stops.
+
+\begin{table}[htbp]
+    \centering
+    \small
+    \begin{tabularx}{\linewidth}{@{}lXXX@{}}
+        \toprule
+        Artefact & What it verifies & What it had to make explicit & Where the proof stops \\
+        \midrule
+        VOQC~\cite{hietala2023voqc} & Soundness of circuit optimisations as unitary equivalence & Gate set, qubit dimension, unitary semantics of every gate & Final translation to executable circuits sits outside Coq, checked by translation validation per run \\
+        QBlue~\cite{verifiedcompiler2025qblue} & Staged compilation for Hamiltonian simulation & Particle types, Hermitian structure and matrix kinds, carried in types through each lowering & Symbolic descriptions of physical systems, not general programs \\
+        VyZX~\cite{caldwell2026vyzx} & The standard ZX rewrite rule set & Wire counts in types, a matrix denotation per generator, the choice of proportional or exact equivalence & Pure fragment only, measurement-capable extensions unmechanised \\
+        \makecell{QIR \\ formalisation~\cite{qirformalization2024}} & Detection of unsafe qubit use, validation of program against IR & Semantics for allocation, release, gates and measurement, and a qubit-management model & Supplies its formal model around QIR's opaque types and deferred runtime operations \\
+        QASM-TS 2.0~\cite{openqasmts2024} & Nothing directly, enables verification of hybrid programs & A formal grammar implementation and abstract syntax tree for OpenQASM 3 & Verification itself left to downstream tooling \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Verified artefacts by what each proves, the explicitness each required and the boundary of each proof.}
+    \label{tab:lit_rev:compilation:verified_artefacts}
+\end{table}
+
+VyZX is a Coq library that verifies the standard rewrite rules of the ZX-calculus~\cite{caldwell2026vyzx}.
+It carries wire counts in its types, so ill-formed diagrams cannot be constructed, and it proves each rule once against a matrix semantics, after which equivalence proofs proceed diagrammatically~\cite{caldwell2026vyzx}.
+Some of this explicitness is demanded by the domain, since any verifier must fix an equivalence notion and must forbid copying a wire without an explicit generator.
+Some is demanded by the proof assistant instead, such as the bookkeeping that reconciles dimension-indexed types~\cite{caldwell2026vyzx}.
+Only the domain's demands carry over as requirements on a representation, since a different proof assistant would remove the rest.
+The verified rules cover only the pure fragment of the calculus, and the extensions that add measurement, mixed states and classical control remain unmechanised~\cite{zxworkingquantumscientist2020}.
+Within that fragment the verified rules also support checking an optimiser's output directly.
+Two circuits are equal exactly when the composite of one with the adjoint of the other reduces to the identity, and that composite is itself a ZX diagram~\cite{reducingtcount2019}.
+Each step of its simplification is a rule proved sound, so a reduction that reaches a bare wire is a machine-checked proof that the optimised circuit equals its original~\cite{reducingtcount2019}.
+This is the per-run validation VOQC falls back on at its own unverified boundary, here performed with checking rules that are themselves proved~\cite{hietala2023voqc}.
+The formalisation of QIR shows the cost of leaving behaviour unstated.
+QIR's qubit and result types are opaque and its quantum operations are placeholders implemented by the runtime.
+Semantics for allocation, release, gates and measurement must be supplied from outside before unsafe programs, such as those cloning a qubit or using one already released, can be detected at all~\cite{qirformalization2024}.
+OpenQASM 3 imposes the same cost, its specification defines a grammar but not the formal representation required for analysis.
+Tools such as QASM-TS 2.0 provide the missing infrastructure as parsers, built expressly to enable verification, producing an abstract syntax tree and checking that operations reference valid gates and qubits while performing no verification themselves~\cite{openqasmts2024}.
+In both cases something verification needs sits outside the specification, the semantics of the runtime operations for QIR and the formal representation of programs for OpenQASM 3.
+An intermediate representation is therefore verifiable only over the behaviour it states, and the explicitness the artefacts of Table~\ref{tab:lit_rev:compilation:verified_artefacts} were forced to add amounts to a requirements list for any representation intended to support verified compilation.
+No artefact meets that requirement beyond a pure or domain-limited fragment, so programs containing measurement, whose available correctness is already the weaker distributional kind, are precisely those for which no mechanised verification exists.
+
+QIR extends LLVM with opaque qubit and result types and declares quantum operations as external functions that the runtime implements, so a hybrid program inherits LLVM's classical optimisation machinery unchanged~\cite{qir_alliance_qir_spec_repo, unknown2024towardsqir}.
+The opacity is deliberate, since executing QIR requires only linking in implementations of the declared functions~\cite{unknown2024towardsqir}.
+It also leaves the meaning of every quantum operation in specification prose and in the runtime, so a proof about a pass over QIR has nothing in the representation to bind to.
+A qubit in QIR is a pointer value in ordinary classical dataflow, so no-cloning becomes a claim about the distinctness of pointers~\cite{unknown2024towardsqir}.
+Pointer analysis can establish that distinctness statically in many programs, but it is conservative in general, and QIR permits integer-to-pointer casts that place qubit addresses beyond any analysis~\cite{unknown2024towardsqir}.
+Linear use is therefore a property a QIR program may have but not one the representation states or checks.
+QAT, the QIR Alliance tool that adapts generic QIR to a hardware profile, rewrites dynamic qubit allocation into static addresses and restructures control flow, transformations of the kind VOQC proves sound~\cite{qir_alliance_qat_goals_assumptions, hietala2023voqc}.
+Its validation checks only that the adapted program uses an allowlisted subset of instructions, so equivalence between input and output is neither proved nor asserted~\cite{qir_alliance_qat_goals_assumptions}.
+MLIR takes the opposite position and admits quantum operations as first-class, with each dialect defining its own operations, types and lowerings~\cite{McCaskey2021MLIRDialectQASM}.
+Catalyst, the compiler core of the PennyLane framework, builds its quantum dialect on value semantics, in which every operation consumes and produces qubit values.
+Ordering and dependency are explicit in the dataflow graph and use-once discipline is structural rather than recovered by analysis~\cite{PennyLaneCatalystMLIRDialectsDocs}.
+MLIR itself now hosts machinery for stating a dialect's semantics formally and lowering them to solver queries, that machinery has proved rewrite rules correct ahead of time and exposed miscompilations in MLIR's own passes~\cite{fehr2025verificationdialects}.
+The semantic machinery has only be shown for classical dialects, the quantum dialects in use remain syntax-only, so the advantage over QIR is structural rather than proven.~\cite{fehr2025verificationdialects}.
+HUGR, a graph-based representation developed outside both ecosystems, makes the opposite trade to QIR at the type level, since its static linear typing renders a copied qubit unrepresentable~\cite{hugr2025quantumclassicalir}.
+High-level languages meanwhile compile through representations of their own design.
+Qunity lowers through a bespoke intermediate representation that exists only inside its own compiler, enforcing linear use of variables and hiding garbage and flag registers from its operators, before emitting OpenQASM~\cite{mints2025qunity}.
+The guarantees are real, but they are established over machinery no other language shares, so nothing proved about Qunity's representation serves any other stack and no shared body of verified infrastructure accumulates across the high-level languages.
+Retention of intent already appears in the survey literature among the defining requirements of an intermediate representation~\cite{irreview2024}.
+Applied to verification the requirement is the one this subsection has established, that a representation is verifiable only over the behaviour it states.
+QIR fails that test for its entire quantum fragment, HUGR and the value-semantics dialects pass it for resource discipline, and no representation yet passes it for the semantics of the operations themselves.
+The choice of representation therefore fixes in advance which correctness claims a compilation stack can ever support, and which of them are proved once for an ecosystem rather than once per language.
