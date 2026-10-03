@@ -257,7 +257,7 @@ class RenameInvariantsTestCase(unittest.TestCase):
             function f(a: int): int { a = a + 1; if a < 3 { a = a * 2; } return a; }
             x = 0;
             for j in 0 .. 10 { x = x + 1; if x == 5 { x = x + 2; } }
-            for i in 0 .. x { x = x + i; }
+            for i in 0 .. 4 { x = x + i; }
             return x;
         """)
         for statement in [program] + [s.body for s in program if hasattr(s, "params")]:

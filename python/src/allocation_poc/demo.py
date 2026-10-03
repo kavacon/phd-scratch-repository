@@ -251,7 +251,12 @@ def _describe(error: Exception) -> Dict:
     if isinstance(error, UnexpectedToken):
         if error.token.type == "$END":
             return {"message": "The program ended early. Every program, and every function, ends with a return."}
-        return {"message": f"Unexpected '{error.token}'.", "line": error.line, "column": error.column}
+        expected = set(error.expected or ())
+        if "INT" in expected and "NUMBER" not in expected:
+            message = f"Unexpected '{error.token}': loop bounds must be whole-number literals, not variables or expressions."
+        else:
+            message = f"Unexpected '{error.token}'."
+        return {"message": message, "line": error.line, "column": error.column}
     if isinstance(error, UnexpectedCharacters):
         return {"message": f"Unexpected character '{error.char}'.", "line": error.line, "column": error.column}
     return {"message": str(error)}

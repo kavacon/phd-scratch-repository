@@ -216,11 +216,11 @@ class ControlFlowTestCase(unittest.TestCase):
         self.assertEqual(({}, frozenset({"x#2"})), (else_block.reclaim_at, else_block.outputs))
 
     def test_loop_entry_values_are_merged_into_the_loop_target(self):
-        source = "function g(n: int): int { s = 0; for i in 0 .. n { s = s + i; } return s; } return g(3);"
+        source = "function g(n: int): int { s = 0; for i in 0 .. 3 { s = s + i; } return s; } return g(3);"
         self.assertEqual({}, analysis(source, "g").reclaim_at)  # s#1 enters the loop's phi, so it is not released alone
 
     def test_for_loop_body_temporaries_are_released_each_iteration(self):
-        source = "function g(n: int): int { s = 0; for i in 0 .. n { t = s + i; s = t * 2; } return s; } return g(3);"
+        source = "function g(n: int): int { s = 0; for i in 0 .. 3 { t = s + i; s = t * 2; } return s; } return g(3);"
         outer = analysis(source, "g")
         self.assertEqual({}, outer.reclaim_at)  # s#1 enters the phi, s#2 is returned
         (body,) = outer.nested[1]
@@ -230,7 +230,7 @@ class ControlFlowTestCase(unittest.TestCase):
         source = """
             function h(n: int): int {
                 a = 1; b = 2;
-                for i in 0 .. n { if a < b { t = a + i; a = t; } b = b + a; }
+                for i in 0 .. 3 { if a < b { t = a + i; a = t; } b = b + a; }
                 return a;
             }
             return h(3);

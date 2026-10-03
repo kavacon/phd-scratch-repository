@@ -45,7 +45,7 @@ class _ToGrammar(Transformer):
     return_stmt = lambda self, value: Return(value)
     unassign_stmt = lambda self, name, witness: Unassign(str(name), witness)
     expr_statement = lambda self, expr: ExprStmt(expr)
-    for_loop = lambda self, var, start, stop, body: ForLoop(str(var), start, stop, body)
+    for_loop = lambda self, var, start, stop, body: ForLoop(str(var), Number(int(start)), Number(int(stop)), body)
     if_stmt = lambda self, cond, body, orelse=(): If(cond, body, orelse)
     else_clause = lambda self, block: block
     function_call = lambda self, name, args=(): Call(str(name), args)

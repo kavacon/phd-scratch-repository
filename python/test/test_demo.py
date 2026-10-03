@@ -71,6 +71,10 @@ class PipelineTestCase(unittest.TestCase):
         self.assertEqual((1, "Unexpected ';'."), (error["line"], error["message"]))
         self.assertIn("return", run_pipeline("x = 1;", ALL)["error"]["message"])
 
+    def test_a_variable_loop_bound_explains_the_rule(self):
+        error = run_pipeline("function f(n: int): int { for i in 0 .. n { } return n; } return f(1);", ALL)["error"]
+        self.assertIn("whole-number literals", error["message"])
+
     def test_programs_that_cannot_run_are_shown_anyway(self):
         stages = run_pipeline("function f(n: int): int { return g(n); } return f(1);", ALL)["stages"]
         self.assertIn("not defined", stages[0]["run"]["error"])
@@ -78,7 +82,7 @@ class PipelineTestCase(unittest.TestCase):
         self.assertIn("step limit", run_pipeline(endless, [])["stages"][0]["run"]["error"])
 
     def test_a_loop_carried_value_that_is_not_returned_is_reported(self):
-        source = "function g(n: int): int { s = 0; for i in 0 .. n { s = s + i; } return n; } return g(3);"
+        source = "function g(n: int): int { s = 0; for i in 0 .. 3 { s = s + i; } return n; } return g(3);"
         notes = run_pipeline(source, ALL)["stages"][-1]["notes"]
         self.assertTrue(any("s#2" in note for note in notes))
 
