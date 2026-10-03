@@ -78,8 +78,8 @@ class Unassign(Node):
 @dataclass(frozen=True)
 class ForLoop(Node):
     var: str
-    start: Node
-    stop: Node  # exclusive
+    start: Node  # a Number: loop bounds are constants for now (see the TODO in grammar_v1.lark)
+    stop: Node  # a Number, exclusive
     body: Tuple[Node, ...]
     header: Tuple[Node, ...] = ()  # loop-carried Phi assignments, evaluated at the top of each iteration
 

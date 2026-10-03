@@ -105,16 +105,16 @@ return f(1);
         "id": "loop",
         "name": "A loop",
         "description": "Temporaries inside the body are released every iteration. The value carried round the loop is not released.",
-        "source": """function g(n: int): int {
-    s = 0;
-    for i in 0 .. n {
+        "source": """function g(x: int): int {
+    s = x;
+    for i in 0 .. 3 {
         t = s + i;
         s = t * 2 + 1;
     }
     return s;
 }
 
-return g(3);
+return g(1);
 """,
     },
     {

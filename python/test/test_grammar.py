@@ -62,10 +62,15 @@ class ParseTestCase(unittest.TestCase):
             stmts("if x < 1 { y = 1; } else if x > 1 { y = 2; }")
 
     def test_for_range(self):
-        [loop] = stmts("for i in 0 .. n + 1 { x = i; }")
-        self.assertEqual(("i", Number(0), BinOp("+", Variable("n"), Number(1))), (loop.var, loop.start, loop.stop))
+        [loop] = stmts("for i in 2 .. 5 { x = i; }")
+        self.assertEqual(("i", Number(2), Number(5)), (loop.var, loop.start, loop.stop))
         self.assertEqual(Number(2.5), stmts("x = 2.5;")[0].value)
-        for bad in ("for i to 3 { }", "for i in 0..3 { }"):
+        self.assertEqual(stmts("for i in 0 .. 3 { x = i; }"), stmts("for i in 0..3 { x = i; }"))  # spaces are optional
+        with self.assertRaises(UnexpectedInput):
+            stmts("for i to 3 { }")
+
+    def test_loop_bounds_must_be_integer_literals(self):
+        for bad in ("for i in 0 .. n { }", "for i in n .. 3 { }", "for i in 0 .. 1 + 2 { }", "for i in 0 .. 2.5 { }"):
             with self.assertRaises(UnexpectedInput, msg=bad):
                 stmts(bad)
 

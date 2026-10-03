@@ -153,11 +153,11 @@ class InsertionExamplesTestCase(unittest.TestCase):
         """)
 
     def test_loop_body_temporaries_are_released_every_iteration(self):
-        self.check("function g(n: int): int { s = 0; for i in 0 .. n { t = s + i; s = t * 2; } return s; } return g(3);", """
-            function g(n#0: int): int {
-                s#1 = 0;
+        self.check("function g(x: int): int { s = x; for i in 0 .. 3 { t = s + i; s = t * 2; } return s; } return g(3);", """
+            function g(x#0: int): int {
+                s#1 = x#0;
                 // header: s#2 = phi(s#1, s#3)
-                for i#1 in 0 .. n#0 {
+                for i#1 in 0 .. 3 {
                     t#1 = s#2 + i#1;
                     s#3 = t#1 * 2;
                     t#1 ~= s#2 + i#1;
@@ -168,7 +168,7 @@ class InsertionExamplesTestCase(unittest.TestCase):
         """)
 
     def test_a_value_carried_round_a_loop_is_reported_and_left_alone(self):
-        source = "function g(n: int): int { s = 0; for i in 0 .. n { s = s + i; } return n; } return g(3);"
+        source = "function g(n: int): int { s = 0; for i in 0 .. 3 { s = s + i; } return n; } return g(3);"
         _, unreleased = insert_releases(prepared(source))
         self.assertEqual(["s#2"], unreleased)
         with self.assertWarns(UserWarning):
@@ -208,11 +208,11 @@ class InsertionBehaviourTestCase(unittest.TestCase):
             }
             return f(@N@);
         """,
-        "loop with a temporary": "function g(n: int): int { s = 0; for i in 0 .. n { t = s + i; s = t * 2 + 1; } return s; } return g(@N@);",
+        "loop with a temporary": "function g(n: int): int { s = n; for i in 0 .. 3 { t = s + i; s = t * 2 + 1; } return s; } return g(@N@);",
         "if inside a loop": """
             function g(n: int): int {
-                a = 1;
-                for i in 0 .. n { if a < 20 { t = a + i; a = t * 2; } }
+                a = n;
+                for i in 0 .. 3 { if a < 20 { t = a + i; a = t * 2; } }
                 return a;
             }
             return g(@N@);

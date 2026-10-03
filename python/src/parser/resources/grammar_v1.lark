@@ -16,7 +16,10 @@ param: NAME ":" type
 
 return_type: ":" type
 
-for_loop: "for" NAME "in" expr ".." expr block  // half-open; spaces around ".." are required so "0 .. 3" is not lexed as a float
+// Loop bounds are integer literals, so every loop can be unrolled into the circuit. Half-open.
+// TODO: this assumes there is no classical controller to run a loop. Review the restriction when moving to
+//  hybrid (classical and quantum) compilation, where a bound could be a runtime value.
+for_loop: "for" NAME "in" INT ".." INT block
 
 if_stmt: "if" expr block else_clause?
 else_clause: "else" block
@@ -71,6 +74,7 @@ COMMENT: "//" /[^\n]*/
 
 %import common.CNAME -> NAME
 %import common.NUMBER
+%import common.INT
 %import common.WS
 %ignore WS
 %ignore COMMENT
