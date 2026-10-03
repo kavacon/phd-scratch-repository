@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline Explorer</title>
+<style>
+  :root {
+    --bg: #fafaf9; --panel: #ffffff; --text: #1c1917; --muted: #78716c; --border: #e7e5e4;
+    --accent: #4f46e5; --accent-soft: #eef2ff;
+    --add: #dcfce7; --add-strong: #86efac; --chg: #fef9c3; --chg-strong: #fde047;
+    --rem: #fee2e2; --rem-strong: #fca5a5; --ok: #15803d; --bad: #b91c1c;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c0a09; --panel: #1c1917; --text: #f5f5f4; --muted: #a8a29e; --border: #3a3633;
+      --accent: #a5b4fc; --accent-soft: #26244a;
+      --add: #0f2e1b; --add-strong: #16a34a; --chg: #382f06; --chg-strong: #a16207;
+      --rem: #3b1212; --rem-strong: #b91c1c; --ok: #4ade80; --bad: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 18px 24px 6px; }
+  h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+  .layout { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 20px; padding: 14px 24px 40px; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; padding: 12px 16px 32px; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .panel + .panel { margin-top: 14px; }
+  h2 { margin: 0 0 10px; font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .programs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--border); background: transparent; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .chip:hover { border-color: var(--accent); }
+  .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; min-height: 2.6em; }
+  textarea { width: 100%; min-height: 330px; resize: vertical; font: 13px/1.5 var(--mono); color: var(--text); background: var(--bg);
+             border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; tab-size: 4; }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .error { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--rem); color: var(--text); font-size: 13px; border-left: 3px solid var(--bad); }
+  .pass { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; text-align: left; width: 100%; background: transparent; }
+  .pass-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .panel-head h2 { margin: 0; }
+  main > .panel { margin-top: 18px; }
+  .pass[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .pass .box { grid-row: span 2; width: 18px; height: 18px; margin-top: 2px; border: 2px solid var(--muted); border-radius: 5px; display: grid; place-items: center; font-size: 12px; line-height: 1; }
+  .pass[aria-pressed="true"] .box { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+  .pass .name { font-weight: 600; font-size: 14px; }
+  .pass .what { grid-column: 2; color: var(--muted); font-size: 12.5px; }
+  .pass .warn { grid-column: 2; color: var(--bad); font-size: 12.5px; }
+  .tools { display: flex; gap: 8px; }
+  .tools button { border: 1px solid var(--border); background: transparent; border-radius: 8px; padding: 3px 10px; font-size: 13px; }
+  .stepper { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .step { border: 1px solid var(--border); background: var(--panel); border-radius: 10px; padding: 6px 13px; font-size: 14px; display: flex; gap: 7px; align-items: center; }
+  .step .n { color: var(--muted); font-size: 12px; }
+  .step[aria-current="step"] { background: var(--accent); border-color: var(--accent); color: var(--panel); font-weight: 600; }
+  .step[aria-current="step"] .n { color: inherit; opacity: .8; }
+  .step.failed { border-color: var(--bad); }
+  .arrow { color: var(--muted); }
+  .nav { margin-left: auto; display: flex; gap: 6px; }
+  .nav button { border: 1px solid var(--border); background: var(--panel); border-radius: 8px; width: 34px; height: 32px; }
+  .nav button:disabled { opacity: .35; cursor: default; }
+  .stage-head h3 { margin: 14px 0 2px; font-size: 18px; }
+  .stage-head p { margin: 0 0 12px; color: var(--muted); }
+  .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .panes.single { grid-template-columns: 1fr; }
+  @media (max-width: 1250px) { .panes { grid-template-columns: 1fr; } }
+  .pane { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; min-width: 0; }
+  .pane h4 { margin: 0; padding: 8px 14px; font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
+  .code { font: 13px/1.6 var(--mono); padding: 6px 0; overflow-x: auto; }
+  .line { display: grid; grid-template-columns: 38px 18px 1fr; white-space: pre; padding-right: 12px; min-width: max-content; width: 100%; }
+  .line .no { color: var(--muted); text-align: right; padding-right: 8px; user-select: none; opacity: .7; }
+  .line .gut { text-align: center; user-select: none; font-weight: 700; }
+  .line.added { background: var(--add); } .line.added .gut { color: var(--ok); }
+  .line.removed { background: var(--rem); text-decoration: line-through; text-decoration-color: var(--rem-strong); } .line.removed .gut { color: var(--bad); }
+  .line.changed { background: var(--chg); }
+  .line.changed .hl { background: var(--chg-strong); border-radius: 3px; }
+  .line.removed .hl { background: var(--rem-strong); border-radius: 3px; }
+  .empty { color: var(--muted); padding: 14px; font-size: 13px; }
+  .legend { display: flex; gap: 14px; font-size: 12.5px; color: var(--muted); margin: 10px 2px 0; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+  @media (max-width: 700px) { .metrics { grid-template-columns: 1fr; } }
+  .metric { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
+  .metric .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 650; }
+  .metric .value { font-size: 24px; font-weight: 650; letter-spacing: -0.01em; }
+  .metric .sub { font-size: 12.5px; color: var(--muted); }
+  .good { color: var(--ok); } .bad { color: var(--bad); }
+  .note { margin-top: 12px; padding: 9px 12px; border-radius: 10px; background: var(--chg); font-size: 13.5px; }
+  .note.err { background: var(--rem); border-left: 3px solid var(--bad); }
+  .stage-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--panel); margin-bottom: 12px; }
+  .seg button { border: 0; background: transparent; padding: 5px 13px; font-size: 13px; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel); font-weight: 600; }
+  .seg button:disabled { opacity: .4; cursor: not-allowed; }
+  .live-pane { display: flex; flex-direction: column; }
+  .live-wrap { overflow: auto; max-height: 560px; padding-bottom: 6px; }
+  .live-scope { padding: 4px 14px 10px; border-top: 1px solid var(--border); }
+  .live-scope:first-child { border-top: 0; }
+  .live-scope h5 { margin: 8px 0 4px; font-size: 12px; color: var(--muted); font-weight: 650; }
+  table.live { border-collapse: collapse; font-size: 12px; }
+  .live th.v { height: auto; vertical-align: bottom; padding: 0 0 5px; font: 11px var(--mono); font-weight: 500; cursor: default; }
+  .live th.v div { writing-mode: vertical-rl; transform: rotate(180deg); margin: 0 auto; white-space: nowrap; }
+  .live td.code { font: 12px var(--mono); white-space: pre; padding: 0 14px 0 2px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  .live td.code .no { color: var(--muted); display: inline-block; width: 22px; text-align: right; margin-right: 8px; }
+  .live td.cell { width: 34px; min-width: 34px; height: 26px; padding: 0; text-align: center; font: 700 12px var(--mono); position: relative; cursor: default; }
+  .live tr:nth-child(even) td.code { background: transparent; }
+  .k-temp { --c: var(--accent); } .k-output { --c: var(--ok); } .k-param { --c: var(--muted); } .k-kept { --c: var(--chg-strong); }
+  .live td.live { background: linear-gradient(var(--c), var(--c)) center / 12px 100% no-repeat; color: var(--panel); }
+  .live td.cell:not(.live) { color: var(--text); }
+  .live td.cell .mark { position: relative; text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel); color: var(--text); }
+  .live .hl { background-color: var(--accent-soft); }
+  .line.focus { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--accent-soft); }
+  .line.pointer { cursor: default; }
+  .legend .bar { display: inline-block; width: 8px; height: 13px; margin-right: 5px; vertical-align: -2px; border-radius: 2px; }
+  .muted { color: var(--muted); }
+  kbd { font: 12px var(--mono); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pipeline Explorer</h1>
+  <p>Pick a program or write your own, choose the passes, and step through what each one changes.</p>
+</header>
+<div class="layout">
+  <aside>
+    <section class="panel">
+      <h2>Programs</h2>
+      <div class="programs" id="programs"></div>
+      <p class="hint" id="program-hint"></p>
+    </section>
+    <section class="panel">
+      <h2>Source</h2>
+      <textarea id="source" spellcheck="false" aria-label="Program source"></textarea>
+      <div class="error" id="source-error" hidden></div>
+    </section>
+  </aside>
+  <main>
+    <div class="stepper" id="stepper"></div>
+    <div id="stage"></div>
+    <section class="panel" id="passes-panel">
+      <div class="panel-head">
+        <h2>Passes</h2>
+        <div class="tools"><button id="all-on">All on</button><button id="all-off">All off</button></div>
+      </div>
+      <div class="pass-grid" id="passes"></div>
+    </section>
+  </main>
+</div>
+<script>
+const $ = (selector) => document.querySelector(selector);
+function h(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (key === "class") node.className = value;
+    else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+    else if (value !== false && value != null) node.setAttribute(key, value === true ? "" : value);
+  }
+  for (const child of children.flat()) if (child != null) node.append(child);
+  return node;
+}
+
+const state = { programs: [], passes: [], enabled: new Set(), source: "", activeProgram: null, data: null, index: 0, focus: null, mode: "diff" };
+
+async function api(path, body) {
+  const response = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : undefined);
+  return response.json();
+}
+
+let timer;
+function schedule() { clearTimeout(timer); timer = setTimeout(run, 250); }
+
+async function run() {
+  state.data = await api("/api/run", { source: state.source, passes: [...state.enabled] });
+  const stages = state.data.stages || [];
+  const focused = stages.findIndex((s) => s.id === state.focus);
+  state.index = focused >= 0 ? focused : Math.min(state.index, Math.max(stages.length - 1, 0));
+  state.focus = null;
+  render();
+}
+
+function renderCode(line, number) {
+  const code = h("span", { class: "code-text" });
+  let at = 0;
+  for (const [start, end] of line.spans) {
+    if (start > at) code.append(line.text.slice(at, start));
+    code.append(h("span", { class: "hl" }, line.text.slice(start, end)));
+    at = end;
+  }
+  code.append(line.text.slice(at));
+  const gutter = { added: "+", removed: "−", changed: "~", same: "" }[line.kind];
+  const release = line.text.match(/(\S+)\s+~=/);
+  const props = { class: `line ${line.kind}`, "data-code": line.text };
+  if (release) { props.onmouseenter = () => focusName(release[1]); props.onmouseleave = clearFocus; }
+  return h("div", props, h("span", { class: "no" }, number), h("span", { class: "gut" }, gutter), code);
+}
+
+function focusName(name) {
+  clearFocus();
+  document.querySelectorAll("[data-name]").forEach((el) => { if (el.dataset.name === name) el.classList.add("hl"); });
+  document.querySelectorAll(".pane.after .line").forEach((el) => { if (el.dataset.code.includes(`${name} ~=`)) el.classList.add("focus"); });
+}
+
+function clearFocus() {
+  document.querySelectorAll(".hl[data-name]").forEach((el) => el.classList.remove("hl"));
+  document.querySelectorAll(".line.focus").forEach((el) => el.classList.remove("focus"));
+}
+
+function pane(title, lines, meta, role) {
+  const body = lines.length
+    ? h("div", { class: "code" }, lines.map((line, i) => renderCode(line, i + 1)))
+    : h("div", { class: "empty" }, "Nothing to compare against yet.");
+  return h("div", { class: `pane ${role || ""}` }, h("h4", {}, h("span", {}, title), h("span", {}, meta || "")), body);
+}
+
+function describe(c) {
+  const rows = (n) => `row ${n + 1}`;
+  if (c.kind === "param") return `${c.name}: a parameter, owned by the caller, so it is never released here.`;
+  if (c.kind === "output") return `${c.name}: returned (or passed out of the block), so it is never released here.`;
+  if (c.kind === "kept") return `${c.name}: carried round a loop, so it is not released here yet.`;
+  return `${c.name}: defined at ${rows(c.defined)}, released after ${rows(c.release_row)}.`;
+}
+
+function liveCell(c, r) {
+  const state = r >= c.start && r <= c.live_end ? "live" : "";
+  const marks = (c.defined === r ? "●" : "") + (c.release_row === r ? "×" : "");
+  return h("td", { class: `cell k-${c.kind} ${state}`, title: describe(c), "data-name": c.name,
+                   onmouseenter: () => focusName(c.name), onmouseleave: clearFocus }, marks ? h("span", { class: "mark" }, marks) : null);
+}
+
+function liveTable(scope) {
+  const head = h("tr", {}, h("th", {}), scope.columns.map((c) =>
+    h("th", { class: `v k-${c.kind}`, title: describe(c), "data-name": c.name, onmouseenter: () => focusName(c.name), onmouseleave: clearFocus }, h("div", {}, c.name))));
+  const rows = scope.rows.map((text, r) =>
+    h("tr", {}, h("td", { class: "code", title: text }, h("span", { class: "no" }, r + 1), text), scope.columns.map((c) => liveCell(c, r))));
+  return h("table", { class: "live" }, h("thead", {}, head), h("tbody", {}, rows));
+}
+
+function livePane(liveness) {
+  const scopes = liveness.scopes.filter((scope) => scope.columns.length);
+  const body = scopes.length
+    ? h("div", { class: "live-wrap" }, scopes.map((scope) =>
+        h("div", { class: "live-scope", style: `margin-left:${scope.depth * 14}px` }, h("h5", {}, scope.title), liveTable(scope))))
+    : h("div", { class: "empty" }, "Nothing to show: this program has no versions to track.");
+  return h("div", { class: "pane live-pane" }, h("h4", {}, h("span", {}, "Liveness · what the pass saw"), h("span", {}, "hover a version or a ~= line")), body);
+}
+
+function modeToggle(stage) {
+  const available = Boolean(stage.liveness);
+  const live = state.mode === "liveness" && available;
+  return h("div", { class: "seg", role: "group", "aria-label": "Left pane" },
+    h("button", { "aria-pressed": !live, onclick: () => setMode("diff") }, "Before · After"),
+    h("button", { "aria-pressed": live, disabled: !available, title: available ? "" : "Liveness is shown on the Insert releases stage", onclick: () => setMode("liveness") }, "Liveness · After"));
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  render();
+}
+
+function metric(label, value, sub, tone) {
+  return h("div", { class: "metric" }, h("div", { class: "label" }, label), h("div", { class: `value ${tone || ""}` }, value), h("div", { class: "sub" }, sub || ""));
+}
+
+function delta(now, before, unit) {
+  if (before == null || now === before) return before == null ? "" : "no change";
+  const diff = now - before;
+  return `${diff > 0 ? "+" : "−"}${Math.abs(diff)} ${unit} since the last stage`;
+}
+
+function renderMetrics(stage, previous, first) {
+  const run = stage.run;
+  if (run.error) return h("div", { class: "note err" }, `Could not run this program here: ${run.error}`);
+  const before = previous && !previous.run.error ? previous.run : null;
+  const same = first && !first.run.error ? run.value === first.run.value : true;
+  const left = run.leaked.length;
+  return h("div", { class: "metrics" },
+    metric("Result", run.value, first === stage ? "what the program returns" : same ? "same as the source" : "differs from the source!", same ? "" : "bad"),
+    metric("Registers not released", left, left ? run.leaked.join(", ") : "nothing left over when it returns", left ? "" : "good"),
+    metric("Peak registers", run.peak, delta(run.peak, before && before.peak, "register(s)") || "most held at once (a stand-in for circuit width)"),
+  );
+}
+
+function renderStage() {
+  const stages = state.data.stages;
+  const stage = stages[state.index];
+  const previous = stages[state.index - 1];
+  const showLiveness = state.mode === "liveness" && Boolean(stage.liveness);
+  const parts = [h("div", { class: "stage-top" },
+    h("div", { class: "stage-head" }, h("h3", {}, stage.name), h("p", {}, stage.summary)),
+    previous ? modeToggle(stage) : null)];
+  const s = stage.stats;
+  const meta = previous ? [s.added && `${s.added} added`, s.changed && `${s.changed} changed`, s.removed && `${s.removed} removed`].filter(Boolean).join(" · ") || "no changes" : "";
+  const left = showLiveness ? livePane(stage.liveness) : previous ? pane(`Before · ${previous.name}`, stage.before) : null;
+  parts.push(h("div", { class: left ? "panes" : "panes single" },
+    left,
+    pane(previous ? `After · ${stage.name}` : stage.name, stage.after, meta, "after"),
+  ));
+  const swatch = (colour) => h("i", { style: `background:var(${colour})` });
+  parts.push(h("div", { class: "legend" }, ...(showLiveness ? [
+    h("span", {}, "●", " defined"),
+    h("span", {}, h("i", { class: "bar", style: "background:var(--accent)" }), "live"),
+    h("span", {}, "×", " released here, no longer live"),
+    h("span", {}, h("i", { class: "bar", style: "background:var(--ok)" }), "returned"),
+    h("span", {}, h("i", { class: "bar", style: "background:var(--muted)" }), "caller-owned parameter"),
+  ] : [
+    h("span", {}, swatch("--add-strong"), "added"),
+    h("span", {}, swatch("--chg-strong"), "changed"),
+    h("span", {}, swatch("--rem-strong"), "removed"),
+    h("span", { class: "muted" }, "use ", h("kbd", {}, "←"), " ", h("kbd", {}, "→"), " to step"),
+  ])));
+  if (stage.error) parts.push(h("div", { class: "note err" }, stage.error));
+  for (const note of stage.notes) parts.push(h("div", { class: "note" }, note));
+  parts.push(renderMetrics(stage, previous, stages[0]));
+  return parts;
+}
+
+function renderStepper() {
+  const stages = state.data.stages || [];
+  const bar = $("#stepper");
+  bar.replaceChildren();
+  stages.forEach((stage, i) => {
+    if (i) bar.append(h("span", { class: "arrow" }, "→"));
+    bar.append(h("button", { class: `step${stage.error ? " failed" : ""}`, "aria-current": i === state.index ? "step" : null, onclick: () => go(i) },
+      h("span", { class: "n" }, i === 0 ? "•" : i), stage.name));
+  });
+  const prev = h("button", { "aria-label": "Previous stage", onclick: () => go(state.index - 1) }, "←");
+  const next = h("button", { "aria-label": "Next stage", onclick: () => go(state.index + 1) }, "→");
+  prev.disabled = state.index <= 0;
+  next.disabled = state.index >= stages.length - 1;
+  bar.append(h("div", { class: "nav" }, prev, next));
+}
+
+function go(index) {
+  const stages = (state.data && state.data.stages) || [];
+  if (index < 0 || index >= stages.length) return;
+  state.index = index;
+  render();
+}
+
+function render() {
+  const data = state.data;
+  const error = $("#source-error");
+  const stage = $("#stage");
+  if (data.error) {
+    const where = data.error.line ? ` (line ${data.error.line}, column ${data.error.column})` : "";
+    error.textContent = data.error.message + where;
+    error.hidden = false;
+    $("#stepper").replaceChildren();
+    stage.replaceChildren(h("div", { class: "note err" }, "Fix the program on the left to see the pipeline."));
+    return;
+  }
+  error.hidden = true;
+  renderStepper();
+  stage.replaceChildren(...renderStage());
+}
+
+function renderPrograms() {
+  $("#programs").replaceChildren(...state.programs.map((p) =>
+    h("button", { class: "chip", "aria-pressed": state.activeProgram === p.id, onclick: () => choose(p) }, p.name)));
+  const active = state.programs.find((p) => p.id === state.activeProgram);
+  $("#program-hint").textContent = active ? active.description : "Your own program. Every program and function ends with a return.";
+}
+
+function choose(program) {
+  state.activeProgram = program.id;
+  state.source = program.source;
+  $("#source").value = program.source;
+  state.index = 0;
+  state.focus = null;
+  renderPrograms();
+  run();
+}
+
+function renderPasses() {
+  const root = $("#passes");
+  root.replaceChildren(...state.passes.map((pass, i) => {
+    const on = state.enabled.has(pass.id);
+    const missing = on ? pass.requires.filter((r) => !state.enabled.has(r)).map((r) => state.passes.find((p) => p.id === r).name) : [];
+    return h("button", { class: "pass", "aria-pressed": on, onclick: () => toggle(pass.id) },
+      h("span", { class: "box" }, on ? "✓" : ""),
+      h("span", { class: "name" }, `${i + 1}. ${pass.name}`),
+      h("span", { class: "what" }, pass.summary),
+      missing.length ? h("span", { class: "warn" }, `Expects ${missing.join(" and ")} first. Without it this may fail or give wrong results.`) : null);
+  }));
+}
+
+function toggle(id) {
+  if (state.enabled.has(id)) state.enabled.delete(id); else { state.enabled.add(id); state.focus = id; }
+  renderPasses();
+  run();
+}
+
+function setAll(on) {
+  state.enabled = new Set(on ? state.passes.map((p) => p.id) : []);
+  state.index = 0;
+  renderPasses();
+  run();
+}
+
+$("#source").addEventListener("input", (event) => {
+  state.source = event.target.value;
+  state.activeProgram = null;
+  renderPrograms();
+  schedule();
+});
+$("#all-on").addEventListener("click", () => setAll(true));
+$("#all-off").addEventListener("click", () => setAll(false));
+document.addEventListener("keydown", (event) => {
+  if (event.target.tagName === "TEXTAREA" || event.metaKey || event.ctrlKey || event.altKey) return;
+  if (event.key === "ArrowRight") go(state.index + 1);
+  if (event.key === "ArrowLeft") go(state.index - 1);
+  if (event.key.toLowerCase() === "l" && state.data && state.data.stages) {
+    const stage = state.data.stages[state.index];
+    if (stage && stage.liveness) setMode(state.mode === "liveness" ? "diff" : "liveness");
+  }
+});
+
+(async function init() {
+  [state.programs, state.passes] = await Promise.all([api("/api/programs"), api("/api/passes")]);
+  state.enabled = new Set(state.passes.map((p) => p.id));
+  renderPasses();
+  choose(state.programs[0]);
+})();
+</script>
+</body>
+</html>
