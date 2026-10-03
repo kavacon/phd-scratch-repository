@@ -3,7 +3,7 @@ from typing import List, Sequence
 
 from parser.grammar import (
     Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not,
-    Number, Phi, Return, Unassign, Variable,
+    Number, Return, Unassign, Variable,
 )
 
 
@@ -22,8 +22,6 @@ def _expr(node: Node, nested: bool = False) -> str:
         return "true" if node.value else "false"
     if isinstance(node, Call):
         return f"{node.name}({', '.join(_expr(a) for a in node.args)})"
-    if isinstance(node, Phi):
-        return f"phi({', '.join(_expr(o) for o in node.operands)})"
     if isinstance(node, Not):
         return f"!{_expr(node.operand, True)}"
     text = f"{_expr(node.left, True)} {node.op} {_expr(node.right, True)}" if isinstance(node, BinOp) \
@@ -33,10 +31,6 @@ def _expr(node: Node, nested: bool = False) -> str:
 
 def _block(body: Sequence[Node], depth: int) -> List[str]:
     return [line for statement in body for line in _stmt(statement, depth)]
-
-
-def _phis(label: str, assigns: Sequence[Node], pad: str) -> List[str]:
-    return [f"{pad}// {label}: {a.name} = {_expr(a.value)}" for a in assigns]
 
 
 def _stmt(node: Node, depth: int) -> List[str]:
@@ -55,8 +49,7 @@ def _stmt(node: Node, depth: int) -> List[str]:
             lines += [f"{pad}}} else {{"] + _block(node.orelse, depth + 1)
         return lines + [f"{pad}}}"]
     if isinstance(node, ForLoop):
-        return _phis("header", node.header, pad) \
-            + [f"{pad}for {node.var} in {_expr(node.start)} .. {_expr(node.stop)} {{"] \
+        return [f"{pad}for {node.var} in {_expr(node.start)} .. {_expr(node.stop)} {{"] \
             + _block(node.body, depth + 1) + [f"{pad}}}"]
     if isinstance(node, FunctionDef):
         params = ", ".join(f"{p.name}: {p.type}" for p in node.params)

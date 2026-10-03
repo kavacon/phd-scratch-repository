@@ -1,7 +1,7 @@
 import textwrap
 import unittest
 
-from parser.grammar import Assign, ForLoop, If
+from parser.grammar import Assign, If
 from parser.parser import _parser, parse, walk
 from passes.balance import balance
 from passes.rename import RenameError, rename
@@ -141,41 +141,43 @@ class RenameExamplesTestCase(unittest.TestCase):
             return y#1;
         """)
 
-    def test_for_loop_header_and_loop_variable(self):
-        self.check("s = 0; for i in 0 .. 3 { s = s + i; } r = s; return r;", """
-            s#1 = 0;
-            // header: s#2 = phi(s#1, s#3)
-            for i#1 in 0 .. 3 {
-                s#3 = s#2 + i#1;
-            }
-            r#1 = s#2;
-            return r#1;
-        """)
-
     def test_nested_control_flow(self):
         self.check("""
             a = 1; b = 2;
-            for i in 0 .. 3 {
-                if a < b { t = a + i; a = t; } else { a = a; }
-                b = b + a;
-            }
+            if a < b { t = a + b; a = t; b = b; } else { a = a; b = b + a; }
+            if a < 5 {
+                if b < 9 { b = b + 1; } else { b = b; }
+                a = a;
+            } else { a = a + 1; b = b; }
             return a;
         """, """
             a#1 = 1;
             b#1 = 2;
-            // header: a#2 = phi(a#1, a#3)
-            // header: b#2 = phi(b#1, b#3)
-            for i#1 in 0 .. 3 {
-                if a#2 < b#2 {
-                    t#1 = a#2 + i#1;
-                    a#3 = t#1;
-                } else {
-                    a#3 = a#2;
-                }
-                b#3 = b#2 + a#3;
+            if a#1 < b#1 {
+                t#1 = a#1 + b#1;
+                a#2 = t#1;
+                b#2 = b#1;
+            } else {
+                a#2 = a#1;
+                b#2 = b#1 + a#2;
             }
-            return a#2;
+            if a#2 < 5 {
+                if b#2 < 9 {
+                    b#4 = b#2 + 1;
+                } else {
+                    b#4 = b#2;
+                }
+                a#4 = a#2;
+            } else {
+                a#4 = a#2 + 1;
+                b#4 = b#2;
+            }
+            return a#4;
         """)
+
+    def test_loops_must_be_unrolled_first(self):
+        with self.assertRaises(RenameError):
+            renamed("s = 0; for i in 0 .. 2 { s = s + i; } return s;")
 
     def test_unassign_targets_the_current_version_and_renames_its_witness(self):
         self.check("x = 1; x = x + 1; y = x * 2; x ~= y / 2; return y;", """
@@ -245,9 +247,6 @@ def paths(block):
             result = [p + [statement.name] for p in result]
         elif isinstance(statement, If):
             result = [p + q for p in result for q in paths(statement.body) + paths(statement.orelse)]
-        elif isinstance(statement, ForLoop):
-            header = [a.name for a in statement.header]
-            result = [p + header + q for p in result for q in paths(statement.body)]
     return result
 
 
@@ -273,8 +272,6 @@ class RenameInvariantsTestCase(unittest.TestCase):
             parse("x = 1; x ~= 1; y = x; return y;")
         with self.assertRaises(RenameError):
             parse("x = 1; if true { x ~= 1; } return 2;")
-        with self.assertRaises(RenameError):
-            parse("x = 1; n = 0; for i in 0 .. 2 { x ~= 1; n = n + 1; } return n;")
 
     def test_undefined_names_are_rejected(self):
         with self.assertRaises(RenameError):
@@ -346,25 +343,21 @@ class BalanceExamplesTestCase(unittest.TestCase):
         once = balance(parse("x = 1; if x < 2 { x = 5; } return x;", passes=()))
         self.assertEqual(once, balance(once))
 
-    def test_nested_ifs_and_loop_bodies_are_balanced(self):
+    def test_nested_ifs_are_balanced(self):
         self.check("""
             a = 1;
-            for i in 0 .. 2 {
-                if a < 5 { if a < 3 { a = a + 1; } }
-            }
+            if a < 5 { if a < 3 { a = a + 1; } }
             return a;
         """, """
             a = 1;
-            for i in 0 .. 2 {
-                if a < 5 {
-                    if a < 3 {
-                        a = a + 1;
-                    } else {
-                        a = a;
-                    }
+            if a < 5 {
+                if a < 3 {
+                    a = a + 1;
                 } else {
                     a = a;
                 }
+            } else {
+                a = a;
             }
             return a;
         """)

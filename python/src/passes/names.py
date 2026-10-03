@@ -1,9 +1,9 @@
 """Which names a statement reads and defines, including everything nested inside it."""
 from dataclasses import fields
-from typing import FrozenSet, Iterator
+from typing import FrozenSet, Iterator, List, Sequence
 
 from parser.grammar import (
-    Assign, ExprStmt, ForLoop, If, Node, Return, Unassign, Variable,
+    Assign, ExprStmt, If, Node, Return, Unassign, Variable,
 )
 
 _NONE: FrozenSet[str] = frozenset()
@@ -33,8 +33,6 @@ def read(statement: Node) -> FrozenSet[str]:
         return variables(statement.value)
     if isinstance(statement, If):
         inner, outer = statement.body + statement.orelse, variables(statement.condition)
-    elif isinstance(statement, ForLoop):
-        inner, outer = statement.body + statement.header, variables(statement.start) | variables(statement.stop)
     else:
         return _NONE  # a function definition is analysed on its own
     return outer.union(*map(read, inner))
@@ -46,8 +44,6 @@ def defined(statement: Node) -> FrozenSet[str]:
         return frozenset({statement.name})
     if isinstance(statement, If):
         return frozenset().union(*map(defined, statement.body + statement.orelse))
-    if isinstance(statement, ForLoop):
-        return frozenset({statement.var}).union(*map(defined, statement.body + statement.header))
     return _NONE
 
 
@@ -55,3 +51,14 @@ def results(statement: If) -> FrozenSet[str]:
     """Versions an `if` produces: those defined in both branches (rename gives them the same name)."""
     then, orelse = (frozenset().union(*map(defined, block)) for block in (statement.body, statement.orelse))
     return then & orelse
+
+
+def assigned(block: Sequence[Node]) -> List[str]:
+    """Names assigned anywhere in a block, including nested blocks, in order of first assignment."""
+    names: List[str] = []
+    for statement in block:
+        if isinstance(statement, Assign):
+            names.append(statement.name)
+        elif isinstance(statement, If):
+            names += assigned(statement.body) + assigned(statement.orelse)
+    return list(dict.fromkeys(names))

@@ -1,25 +1,23 @@
 import textwrap
 import unittest
-import warnings
 
 from parser.parser import parse
-from passes.allocation import insert_releases, lower_allocation
+from passes.allocation import lower_allocation
 from passes.balance import balance
 from passes.rename import rename
+from passes.unroll import unroll
 from allocation_poc.printer import unparse
 from allocation_poc.simulate import SimulationError, simulate
 
 
 def compiled(source):
-    """The default pipeline: balance, rename, then insert the releases."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return parse(source)
+    """The default pipeline."""
+    return parse(source)
 
 
 def prepared(source):
     """What the insertion pass starts from."""
-    return parse(source, passes=(balance, rename))
+    return parse(source, passes=(unroll, balance, rename))
 
 
 def expected(text):
@@ -152,27 +150,24 @@ class InsertionExamplesTestCase(unittest.TestCase):
             return f(1);
         """)
 
-    def test_loop_body_temporaries_are_released_every_iteration(self):
-        self.check("function g(x: int): int { s = x; for i in 0 .. 3 { t = s + i; s = t * 2; } return s; } return g(3);", """
+    def test_an_unrolled_loop_is_released_like_straight_line_code(self):
+        # every value the loop updated is an ordinary version, so nothing is carried and all of it is released
+        self.check("function g(x: int): int { s = x; for i in 0 .. 2 { t = s + i; s = t * 2; } return s; } return g(3);", """
             function g(x#0: int): int {
                 s#1 = x#0;
-                // header: s#2 = phi(s#1, s#3)
-                for i#1 in 0 .. 3 {
-                    t#1 = s#2 + i#1;
-                    s#3 = t#1 * 2;
-                    t#1 ~= s#2 + i#1;
-                }
-                return s#2;
+                t@0#1 = s#1 + 0;
+                s#2 = t@0#1 * 2;
+                t@1#1 = s#2 + 1;
+                s#3 = t@1#1 * 2;
+                t@1#1 ~= s#2 + 1;
+                s#2 ~= t@0#1 * 2;
+                t@0#1 ~= s#1 + 0;
+                s#1 ~= x#0;
+                return s#3;
             }
             return g(3);
         """)
 
-    def test_a_value_carried_round_a_loop_is_reported_and_left_alone(self):
-        source = "function g(n: int): int { s = 0; for i in 0 .. 3 { s = s + i; } return n; } return g(3);"
-        _, unreleased = insert_releases(prepared(source))
-        self.assertEqual(["s#2"], unreleased)
-        with self.assertWarns(UserWarning):
-            lower_allocation(prepared(source))
 
 
 class InsertionBehaviourTestCase(unittest.TestCase):
@@ -223,19 +218,16 @@ class InsertionBehaviourTestCase(unittest.TestCase):
             return quad(@N@);
         """,
     }
-    # loops keep their carried values (the entry value and the last iteration's), which are not released
-    LOOP_LEAKS = {"loop with a temporary", "if inside a loop"}
 
     def test_values_are_unchanged_and_releases_are_valid(self):
         for name, template in self.PROGRAMS.items():
             for n in range(6):
                 source = template.replace("@N@", str(n))
                 with self.subTest(program=name, n=n):
-                    before = simulate(prepared(source)).value
+                    before = simulate(parse(source, passes=())).value  # the program as written, loops and all
                     after = simulate(compiled(source))
                     self.assertEqual(before, after.value)
-                    if name not in self.LOOP_LEAKS:
-                        self.assertEqual({}, {s: l for s, l in after.leaks.items() if l}, "registers left behind")
+                    self.assertEqual({}, {s: l for s, l in after.leaks.items() if l}, "registers left behind")
 
     def test_a_wrong_witness_is_caught_by_the_simulation(self):
         broken = parse("function f(a: int): int { t = a + 1; t ~= a + 2; return a; } return f(1);")

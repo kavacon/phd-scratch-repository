@@ -34,30 +34,24 @@ Not specified by the paper, and chosen here:
   released after every version whose release reads it (its witness operands must still be there). The paper's
   example inserts the adjoint history in reverse, but does not state this as a rule.
 
-Control flow. At the level of the enclosing block, an `if` or loop is a single operation that reads the
-outer versions used anywhere inside it, defines the versions it produces (the version both branches of an `if`
-share, or a loop's header `Phi` targets), and entangles all of them.
-So an outer version used inside a branch or loop stays live until after the whole statement. Each branch or
-loop body is also analysed as a block of its own (`Liveness.nested`): its temporaries are released by the
-end of the block, starting from the entanglement graph at the point where the block begins. Limitations:
-- Versions taken by a loop's header `Phi` (the value entering the loop) are merged into the phi's target and
-  are not released on their own. How to release them is left to the insertion step. The balance pass makes
-  both branches of an `if` define each variable, so an `if`'s old version is released normally after it.
+Control flow. At the level of the enclosing block, an `if` is a single operation that reads the outer
+versions used anywhere inside it, defines the versions it produces (the version both branches share), and
+entangles all of them. So an outer version used inside a branch stays live until after the whole `if`. Each
+branch is also analysed as a block of its own (`Liveness.nested`): its temporaries are released by the end of
+the block, starting from the entanglement graph at the point where the block begins. Limitations:
 - Releasing a version an `if` produced needs to know which branch made it, so the condition has to stay
   available until then. That is not modelled yet.
-- A loop is treated as one unit: carried values are live throughout and the registers they use across
-  iterations are not reclaimed per iteration.
-- Release of a phi target reads everything the statement read, which is conservative.
+- Release of a version an `if` produced reads everything the `if` read, which is conservative.
+Loops never reach this analysis: the unroll pass has already expanded them.
 
 Rename must have run first, so every name is a unique version.
 """
 from typing import Dict, FrozenSet, Iterator, NamedTuple, Optional, Sequence, Set, Tuple
 
-from parser.grammar import Assign, ExprStmt, ForLoop, FunctionDef, If, Node, Return, Unassign
+from parser.grammar import Assign, ExprStmt, FunctionDef, If, Node, Return, Unassign
 from passes.names import defined as _defined, read as _read, results as _results, variables as _variables
 
 _NONE: FrozenSet[str] = frozenset()
-_COMPOUND = (If, ForLoop)
 
 
 class _Effects(NamedTuple):
@@ -65,7 +59,6 @@ class _Effects(NamedTuple):
     uses: FrozenSet[str] = _NONE
     entangles: FrozenSet[str] = _NONE  # variables an operation on several variables makes mutually entangled
     releases: Optional[str] = None  # a version released by `~=`, which disentangles it
-    merges: FrozenSet[str] = _NONE  # versions taken by a phi, which become part of the phi's target
 
 
 class Liveness(NamedTuple):
@@ -73,11 +66,11 @@ class Liveness(NamedTuple):
     # conservative: first point at which each version (other than outputs) is no longer live. Versions that are
     # still live at the end of a nested block (because they are entangled with something live outside) are absent.
     dies_at: Dict[str, int]
-    outputs: FrozenSet[str]  # versions that escape the block (returned, or taken by a phi); never released here
+    outputs: FrozenSet[str]  # versions that escape the block (returned, or produced by an if); never released here
     reclaim_at: Dict[str, int]  # point at which each temporary can be released; parameters and outputs excluded
     release_order: Tuple[str, ...]  # temporaries ordered by release point, then reverse creation order
-    # for each `if`/loop statement (by index), the analysis of its blocks: (then, else) or (body,); points are
-    # relative to each block
+    # for each `if` statement (by index), the analysis of its two blocks (then, else); points are relative to
+    # each block
     nested: Dict[int, Tuple["Liveness", ...]]
 
 
@@ -93,15 +86,11 @@ def _effects(statement: Node) -> _Effects:
         return _Effects(uses=used, entangles=used if len(used) > 1 else _NONE)
     if isinstance(statement, Return):
         return _Effects(uses=_variables(statement.value))
-    if isinstance(statement, _COMPOUND):
+    if isinstance(statement, If):
         free = _read(statement) - _defined(statement)
-        if isinstance(statement, If):
-            targets, merged = _results(statement), _NONE
-        else:
-            targets = frozenset(a.name for a in statement.header)
-            merged = frozenset().union(*(_variables(a.value) for a in statement.header))
+        targets = _results(statement)
         group = free | targets
-        return _Effects(defs=targets, uses=free, entangles=group if len(group) > 1 else _NONE, merges=merged)
+        return _Effects(defs=targets, uses=free, entangles=group if len(group) > 1 else _NONE)
     if isinstance(statement, FunctionDef):
         return _Effects()  # analysed on its own, see analyse_program
     raise NotImplementedError(f"liveness of {type(statement).__name__}")
@@ -136,7 +125,6 @@ def _reclaim_points(body: Sequence[Node], effects: Sequence[_Effects], outputs: 
     Versions the programmer already released with `~=` keep that point.
     """
     defined_at = {name: k for k, e in enumerate(effects) for name in e.defs}
-    merged = frozenset().union(*(e.merges for e in effects))
     last_use: Dict[str, int] = {}
     for k, e in enumerate(effects):
         for name in e.uses:
@@ -147,13 +135,13 @@ def _reclaim_points(body: Sequence[Node], effects: Sequence[_Effects], outputs: 
     for statement, e in zip(body, effects):
         if isinstance(statement, Assign):
             reads[statement.name] = e.uses
-        elif isinstance(statement, _COMPOUND):
+        elif isinstance(statement, If):
             reads.update({target: e.uses for target in e.defs})
         elif isinstance(statement, Unassign):
             reads[statement.name] = _variables(statement.witness) - {statement.name}
 
     reclaim: Dict[str, int] = {}
-    candidates = (n for n in defined_at if n not in outputs and n not in merged)
+    candidates = (n for n in defined_at if n not in outputs)
     for name in sorted(candidates, key=defined_at.get, reverse=True):
         if name in explicit:
             reclaim[name] = explicit[name]
@@ -203,15 +191,11 @@ def _analyse(
     nested = {}
     for k, statement in enumerate(body):
         if isinstance(statement, If):
-            blocks, leaving = (statement.body, statement.orelse), effects[k].defs  # both branches produce these
-        elif isinstance(statement, ForLoop):
-            blocks = (statement.body,)
-            leaving = frozenset(a.value.operands[1].name for a in statement.header)  # a header phi takes (entry, end of body)
-        else:
-            continue
-        nested[k] = tuple(
-            _analyse(block, (), entanglement, edges_before[k], live[k + 1] | leaving, leaving) for block in blocks
-        )
+            leaving = effects[k].defs  # both branches produce these
+            nested[k] = tuple(
+                _analyse(block, (), entanglement, edges_before[k], live[k + 1] | leaving, leaving)
+                for block in (statement.body, statement.orelse)
+            )
 
     reclaim_at = _reclaim_points(body, effects, outputs)
     order = sorted(reclaim_at, key=lambda v: (reclaim_at[v], -defined_at[v]))
