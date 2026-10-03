@@ -1,0 +1,79 @@
+start: (function_def | statement)* return_stmt
+
+?statement: assignment
+          | for_loop
+          | while_loop
+          | if_stmt
+          | unassign_stmt
+          | expr_statement
+
+assignment: NAME "=" expr ";"
+
+function_def: "function" NAME "(" params? ")" return_type? function_body
+function_body: "{" statement* return_stmt "}"
+
+params: param ("," param)*
+param: NAME ":" type
+
+return_type: ":" type
+
+for_loop: "for" NAME "in" expr ".." expr block  // half-open; spaces around ".." are required so "0 .. 3" is not lexed as a float
+
+while_loop: "while" expr block
+
+if_stmt: "if" expr block else_clause?
+else_clause: "else" (block | if_stmt)
+
+return_stmt: "return" expr ";"
+unassign_stmt: NAME "~=" expr ";"  // inverse of assignment: NAME currently equals expr
+
+expr_statement: expr ";"
+
+block: "{" statement* "}"
+
+?expr: or_expr
+
+?or_expr: and_expr
+       | or_expr "||" and_expr   -> or_
+
+?and_expr: equality
+        | and_expr "&&" equality -> and_
+
+?equality: comparison ("==" comparison)*
+         | comparison "!=" comparison  -> ne
+
+?comparison: sum
+           | sum "<" sum    -> lt
+           | sum ">" sum    -> gt
+
+?sum: product
+    | sum "+" product   -> add
+    | sum "-" product   -> sub
+
+?product: unary
+        | product "*" unary -> mul
+        | product "/" unary -> div
+
+?unary: atom
+      | "!" unary -> not_
+
+?atom: NUMBER           -> number
+     | "true"           -> true
+     | "false"          -> false
+     | NAME             -> variable
+     | function_call
+     | "(" expr ")"
+
+function_call: NAME "(" args? ")"
+
+args: expr ("," expr)*
+
+type: NAME
+
+COMMENT: "//" /[^\n]*/
+
+%import common.CNAME -> NAME
+%import common.NUMBER
+%import common.WS
+%ignore WS
+%ignore COMMENT
