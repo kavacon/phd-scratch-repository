@@ -3,7 +3,7 @@ import unittest
 from lark.exceptions import UnexpectedInput
 
 from parser.grammar import (
-    Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Not, Number, Param, Return, Unassign, Variable, WhileLoop,
+    Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Not, Number, Param, Return, Unassign, Variable,
 )
 from parser.parser import parse, rewrite, walk
 
@@ -24,17 +24,16 @@ class ParseTestCase(unittest.TestCase):
         x = 1;
         function f(a: int, b: int): int { t = a + b; return t; }
         for i in 0 .. 3 { x = x + i; }
-        while x == 1 { x = x - 1; }
         f(1, 2);
         return x;
         """)
         self.assertEqual(
-            [Assign, FunctionDef, ForLoop, WhileLoop, ExprStmt, Return], [type(s) for s in program]
+            [Assign, FunctionDef, ForLoop, ExprStmt, Return], [type(s) for s in program]
         )
         self.assertEqual((Param("a", "int"), Param("b", "int")), program[1].params)
         self.assertEqual("int", program[1].return_type)
         self.assertEqual(Return(Variable("t")), program[1].body[-1])
-        self.assertEqual(Call("f", (Number(1), Number(2))), program[4].expr)
+        self.assertEqual(Call("f", (Number(1), Number(2))), program[3].expr)
 
     def test_function_without_params_or_return_type(self):
         function = raw("function f() { return 1; } return 1;")[0]
@@ -93,6 +92,10 @@ class ParseTestCase(unittest.TestCase):
         self.assertEqual(Boolean(True), statement.value)
         self.assertEqual(Variable("falsey"), other.value)
 
+    def test_while_is_not_part_of_the_language(self):
+        with self.assertRaises(UnexpectedInput):
+            stmts("while true { x = 1; }")
+
     def test_unassign(self):
         self.assertEqual(
             [Unassign("x", BinOp("+", Variable("y"), Number(1))), Return(Number(1))],
@@ -114,7 +117,7 @@ class ReturnRulesTestCase(unittest.TestCase):
             "", "x = 1;",                                      # program must end with a return
             "return 1; x = 2; return 2;",                      # return only at the very end
             "if true { return 1; } return 2;",                 # not inside blocks
-            "while true { return 1; } return 2;",
+            "for i in 0 .. 2 { return 1; } return 2;",
             "function f() { x = 1; } return 1;",               # functions must end with a return
             "function f() { return 1; x = 2; } return 1;",
             "return;",                                         # return always carries a value

@@ -1,7 +1,7 @@
 import textwrap
 import unittest
 
-from parser.grammar import Assign, ForLoop, If, WhileLoop
+from parser.grammar import Assign, ForLoop, If
 from parser.parser import _parser, parse, walk
 from passes.balance import balance
 from passes.rename import RenameError, rename
@@ -20,10 +20,6 @@ for x in 0 .. 10 {
     y = y + x;
 }
 
-while x == 1 {
-    x = x - 1;
-}
-
 return y;
 """
 
@@ -36,7 +32,6 @@ class ParserTestCase(unittest.TestCase):
         self.assertIn("y", variable_names)
         self.assertIn("f", variable_names)
         self.assertEqual(1, len(list(ast.find_data("for_loop"))))
-        self.assertEqual(1, len(list(ast.find_data("while_loop"))))
         self.assertEqual(1, len(list(ast.find_data("function_def"))))
 
 def renamed(source):
@@ -49,8 +44,8 @@ def balanced(source):
 
 
 def compiled(source):
-    """The default pipeline: balance, then rename."""
-    return unparse(parse(source))
+    """Balance, then rename (the default pipeline minus release insertion)."""
+    return unparse(parse(source, passes=(balance, rename)))
 
 
 def expected(text):
@@ -144,17 +139,6 @@ class RenameExamplesTestCase(unittest.TestCase):
                 z#1 = x#1;
             }
             return y#1;
-        """)
-
-    def test_while_loop_carries_variables_through_a_header(self):
-        self.check("n = 0; while n < 3 { n = n + 1; } m = n; return m;", """
-            n#1 = 0;
-            // header: n#2 = phi(n#1, n#3)
-            while n#2 < 3 {
-                n#3 = n#2 + 1;
-            }
-            m#1 = n#2;
-            return m#1;
         """)
 
     def test_for_loop_header_and_loop_variable(self):
@@ -261,7 +245,7 @@ def paths(block):
             result = [p + [statement.name] for p in result]
         elif isinstance(statement, If):
             result = [p + q for p in result for q in paths(statement.body) + paths(statement.orelse)]
-        elif isinstance(statement, (WhileLoop, ForLoop)):
+        elif isinstance(statement, ForLoop):
             header = [a.name for a in statement.header]
             result = [p + header + q for p in result for q in paths(statement.body)]
     return result
@@ -272,7 +256,7 @@ class RenameInvariantsTestCase(unittest.TestCase):
         program = parse("""
             function f(a: int): int { a = a + 1; if a < 3 { a = a * 2; } return a; }
             x = 0;
-            while x < 10 { x = x + 1; if x == 5 { x = x + 2; } }
+            for j in 0 .. 10 { x = x + 1; if x == 5 { x = x + 2; } }
             for i in 0 .. x { x = x + i; }
             return x;
         """)
@@ -290,7 +274,7 @@ class RenameInvariantsTestCase(unittest.TestCase):
         with self.assertRaises(RenameError):
             parse("x = 1; if true { x ~= 1; } return 2;")
         with self.assertRaises(RenameError):
-            parse("x = 1; n = 0; while n < 2 { x ~= 1; n = n + 1; } return n;")
+            parse("x = 1; n = 0; for i in 0 .. 2 { x ~= 1; n = n + 1; } return n;")
 
     def test_undefined_names_are_rejected(self):
         with self.assertRaises(RenameError):

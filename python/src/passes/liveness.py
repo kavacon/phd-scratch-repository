@@ -53,11 +53,11 @@ Rename must have run first, so every name is a unique version.
 """
 from typing import Dict, FrozenSet, Iterator, NamedTuple, Optional, Sequence, Set, Tuple
 
-from parser.grammar import Assign, ExprStmt, ForLoop, FunctionDef, If, Node, Return, Unassign, WhileLoop
-from passes.names import defined as _defined, read as _read, variables as _variables
+from parser.grammar import Assign, ExprStmt, ForLoop, FunctionDef, If, Node, Return, Unassign
+from passes.names import defined as _defined, read as _read, results as _results, variables as _variables
 
 _NONE: FrozenSet[str] = frozenset()
-_COMPOUND = (If, WhileLoop, ForLoop)
+_COMPOUND = (If, ForLoop)
 
 
 class _Effects(NamedTuple):
@@ -79,12 +79,6 @@ class Liveness(NamedTuple):
     # for each `if`/loop statement (by index), the analysis of its blocks: (then, else) or (body,); points are
     # relative to each block
     nested: Dict[int, Tuple["Liveness", ...]]
-
-
-def _results(statement: If) -> FrozenSet[str]:
-    """Versions an `if` produces: those defined in both branches (rename gives them the same name)."""
-    then, orelse = (frozenset().union(*map(_defined, block)) for block in (statement.body, statement.orelse))
-    return then & orelse
 
 
 def _effects(statement: Node) -> _Effects:
@@ -210,7 +204,7 @@ def _analyse(
     for k, statement in enumerate(body):
         if isinstance(statement, If):
             blocks, leaving = (statement.body, statement.orelse), effects[k].defs  # both branches produce these
-        elif isinstance(statement, (WhileLoop, ForLoop)):
+        elif isinstance(statement, ForLoop):
             blocks = (statement.body,)
             leaving = frozenset(a.value.operands[1].name for a in statement.header)  # a header phi takes (entry, end of body)
         else:

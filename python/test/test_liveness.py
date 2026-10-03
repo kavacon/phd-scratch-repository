@@ -1,7 +1,14 @@
 import unittest
 
-from parser.parser import parse
+from parser.parser import parse as parse_with
+from passes.balance import balance
+from passes.rename import rename
 from passes.liveness import analyse_program
+
+
+def parse(source):
+    """The program as liveness sees it: balanced and renamed, before any releases are inserted."""
+    return parse_with(source, passes=(balance, rename))
 
 
 def dies_at(source, function, entanglement=True):
@@ -218,13 +225,6 @@ class ControlFlowTestCase(unittest.TestCase):
         self.assertEqual({}, outer.reclaim_at)  # s#1 enters the phi, s#2 is returned
         (body,) = outer.nested[1]
         self.assertEqual(({"t#1": 2}, frozenset({"s#3"})), (body.reclaim_at, body.outputs))
-
-    def test_while_loop(self):
-        source = "function f(n: int): int { c = 0; while c < n { d = c + 1; c = d; } return c; } return f(3);"
-        outer = analysis(source, "f")
-        self.assertEqual({}, outer.reclaim_at)
-        (body,) = outer.nested[1]
-        self.assertEqual({"d#1": 2}, body.reclaim_at)
 
     def test_loop_carried_value_that_is_not_returned_is_released_after_the_loop(self):
         source = """

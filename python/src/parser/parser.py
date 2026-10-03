@@ -6,7 +6,7 @@ from lark import Lark, Transformer, v_args
 
 from parser.grammar import (
     Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not,
-    Number, Param, Return, Unassign, Variable, WhileLoop,
+    Number, Param, Return, Unassign, Variable,
 )
 from passes.allocation import lower_allocation
 from passes.balance import balance
@@ -46,7 +46,6 @@ class _ToGrammar(Transformer):
     unassign_stmt = lambda self, name, witness: Unassign(str(name), witness)
     expr_statement = lambda self, expr: ExprStmt(expr)
     for_loop = lambda self, var, start, stop, body: ForLoop(str(var), start, stop, body)
-    while_loop = lambda self, cond, body: WhileLoop(cond, body)
     if_stmt = lambda self, cond, body, orelse=(): If(cond, body, orelse)
     else_clause = lambda self, block: block
     function_call = lambda self, name, args=(): Call(str(name), args)
