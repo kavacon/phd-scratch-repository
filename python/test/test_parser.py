@@ -164,6 +164,13 @@ class RenameExamplesTestCase(unittest.TestCase):
             return y#1;
         """)
 
+    def test_unassign_accepts_a_literal_witness(self):
+        self.check("x = 2; x ~= 2; return 1;", """
+            x#1 = 2;
+            x#1 ~= 2;
+            return 1;
+        """)
+
     def test_explicit_unassign_in_a_function(self):
         # hand-written deallocation: the same program the allocation-only version should compile to
         self.check("""
