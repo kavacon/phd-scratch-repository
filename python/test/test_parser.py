@@ -1,9 +1,10 @@
 import textwrap
 import unittest
 
-from parser.grammar import Assign
+from parser.grammar import Assign, ForLoop, If, WhileLoop
 from parser.parser import _parser, parse, walk
-from passes.rename import RenameError
+from passes.balance import balance
+from passes.rename import RenameError, rename
 from printer import unparse
 
 INPUT = """
@@ -39,11 +40,22 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(1, len(list(ast.find_data("function_def"))))
 
 def renamed(source):
+    """Rename only, so these tests are about rename and not the passes around it."""
+    return unparse(rename(parse(source, passes=())))
+
+
+def balanced(source):
+    return unparse(balance(parse(source, passes=())))
+
+
+def compiled(source):
+    """The default pipeline: balance, then rename."""
     return unparse(parse(source))
 
 
 def expected(text):
     return textwrap.dedent(text).strip()
+
 
 class RenameExamplesTestCase(unittest.TestCase):
     def check(self, source, text):
@@ -83,31 +95,56 @@ class RenameExamplesTestCase(unittest.TestCase):
             return r#1;
         """)
 
-    def test_if_else_merges_versions_with_a_join(self):
+    def test_if_else_branches_share_the_final_version(self):
+        # the branches are mutually exclusive, so both define x#2 and nothing needs merging afterwards
         self.check("x = 1; if x < 2 { x = x + 1; } else { x = x * 2; } y = x; return y;", """
             x#1 = 1;
             if x#1 < 2 {
                 x#2 = x#1 + 1;
             } else {
-                x#3 = x#1 * 2;
+                x#2 = x#1 * 2;
             }
-            // join: x#4 = phi(x#2, x#3)
-            y#1 = x#4;
+            y#1 = x#2;
             return y#1;
         """)
 
-    def test_one_armed_if_merges_with_the_prior_version(self):
-        self.check("x = 1; if x < 2 { x = 5; } return x;", """
+    def test_a_branch_that_assigns_twice_shares_only_its_final_version(self):
+        self.check("x = 1; if x < 2 { x = x + 1; x = x * 3; } else { x = x * 2; } return x;", """
             x#1 = 1;
             if x#1 < 2 {
-                x#2 = 5;
+                x#2 = x#1 + 1;
+                x#3 = x#2 * 3;
+            } else {
+                x#3 = x#1 * 2;
             }
-            // join: x#3 = phi(x#2, x#1)
             return x#3;
         """)
 
-    def test_untouched_variables_get_no_join(self):
-        self.assertNotIn("join", renamed("x = 1; y = 2; if y < 3 { z = x; } return y;"))
+    def test_each_branch_may_use_its_own_intermediate_versions(self):
+        self.check("x = 1; if x < 2 { x = x + 1; } else { x = x + 2; x = x * 2; } return x;", """
+            x#1 = 1;
+            if x#1 < 2 {
+                x#2 = x#1 + 1;
+            } else {
+                x#3 = x#1 + 2;
+                x#2 = x#3 * 2;
+            }
+            return x#2;
+        """)
+
+    def test_unbalanced_if_is_rejected_by_rename_alone(self):
+        with self.assertRaises(RenameError):
+            renamed("x = 1; if x < 2 { x = 5; } return x;")
+
+    def test_block_local_variables_need_no_sharing(self):
+        self.check("x = 1; y = 2; if y < 3 { z = x; } return y;", """
+            x#1 = 1;
+            y#1 = 2;
+            if y#1 < 3 {
+                z#1 = x#1;
+            }
+            return y#1;
+        """)
 
     def test_while_loop_carries_variables_through_a_header(self):
         self.check("n = 0; while n < 3 { n = n + 1; } m = n; return m;", """
@@ -135,22 +172,23 @@ class RenameExamplesTestCase(unittest.TestCase):
         self.check("""
             a = 1; b = 2;
             for i in 0 .. 3 {
-                if a < b { t = a + i; a = t; }
+                if a < b { t = a + i; a = t; } else { a = a; }
                 b = b + a;
             }
             return a;
         """, """
             a#1 = 1;
             b#1 = 2;
-            // header: a#2 = phi(a#1, a#4)
+            // header: a#2 = phi(a#1, a#3)
             // header: b#2 = phi(b#1, b#3)
             for i#1 in 0 .. 3 {
                 if a#2 < b#2 {
                     t#1 = a#2 + i#1;
                     a#3 = t#1;
+                } else {
+                    a#3 = a#2;
                 }
-                // join: a#4 = phi(a#3, a#2)
-                b#3 = b#2 + a#4;
+                b#3 = b#2 + a#3;
             }
             return a#2;
         """)
@@ -214,8 +252,23 @@ class RenameExamplesTestCase(unittest.TestCase):
             return f(1);
         """)
 
+
+def paths(block):
+    """The names defined along every path through a block (branches are alternatives, not both taken)."""
+    result = [[]]
+    for statement in block:
+        if isinstance(statement, Assign):
+            result = [p + [statement.name] for p in result]
+        elif isinstance(statement, If):
+            result = [p + q for p in result for q in paths(statement.body) + paths(statement.orelse)]
+        elif isinstance(statement, (WhileLoop, ForLoop)):
+            header = [a.name for a in statement.header]
+            result = [p + header + q for p in result for q in paths(statement.body)]
+    return result
+
+
 class RenameInvariantsTestCase(unittest.TestCase):
-    def test_every_name_is_assigned_exactly_once(self):
+    def test_every_name_is_assigned_once_along_any_path(self):
         program = parse("""
             function f(a: int): int { a = a + 1; if a < 3 { a = a * 2; } return a; }
             x = 0;
@@ -223,8 +276,9 @@ class RenameInvariantsTestCase(unittest.TestCase):
             for i in 0 .. x { x = x + i; }
             return x;
         """)
-        names = [n.name for statement in program for n in walk(statement) if isinstance(n, Assign)]
-        self.assertEqual(len(names), len(set(names)))
+        for statement in [program] + [s.body for s in program if hasattr(s, "params")]:
+            for path in paths(statement):
+                self.assertEqual(len(path), len(set(path)), path)
 
     def test_block_locals_do_not_escape(self):
         with self.assertRaises(RenameError):
@@ -249,6 +303,107 @@ class RenameInvariantsTestCase(unittest.TestCase):
         original = parse(source, passes=())
         parse(source)
         self.assertEqual(parse(source, passes=()), original)
+
+
+class BalanceExamplesTestCase(unittest.TestCase):
+    """Balance runs before rename, on the grammar-level program."""
+
+    def check(self, source, text):
+        self.assertEqual(expected(text), balanced(source))
+
+    def test_one_armed_if_gets_an_identity_assignment_in_the_missing_else(self):
+        self.check("x = 1; if x < 2 { x = 5; } return x;", """
+            x = 1;
+            if x < 2 {
+                x = 5;
+            } else {
+                x = x;
+            }
+            return x;
+        """)
+
+    def test_missing_branch_can_be_the_then_branch(self):
+        self.check("x = 1; if x < 2 { } else { x = 5; } return x;", """
+            x = 1;
+            if x < 2 {
+                x = x;
+            } else {
+                x = 5;
+            }
+            return x;
+        """)
+
+    def test_an_existing_else_that_assigns_different_variables_is_balanced(self):
+        self.check("a = 1; b = 2; if a < b { a = 3; } else { b = 4; } return a + b;", """
+            a = 1;
+            b = 2;
+            if a < b {
+                a = 3;
+                b = b;
+            } else {
+                b = 4;
+                a = a;
+            }
+            return a + b;
+        """)
+
+    def test_variables_local_to_a_branch_are_not_copied(self):
+        self.check("x = 1; if x < 2 { t = 1; } return x;", """
+            x = 1;
+            if x < 2 {
+                t = 1;
+            }
+            return x;
+        """)
+
+    def test_balanced_ifs_are_left_alone_and_the_pass_is_idempotent(self):
+        both = "x = 1; if x < 2 { x = 5; } else { x = 6; } return x;"
+        self.assertEqual(parse(both, passes=()), balance(parse(both, passes=())))
+        once = balance(parse("x = 1; if x < 2 { x = 5; } return x;", passes=()))
+        self.assertEqual(once, balance(once))
+
+    def test_nested_ifs_and_loop_bodies_are_balanced(self):
+        self.check("""
+            a = 1;
+            for i in 0 .. 2 {
+                if a < 5 { if a < 3 { a = a + 1; } }
+            }
+            return a;
+        """, """
+            a = 1;
+            for i in 0 .. 2 {
+                if a < 5 {
+                    if a < 3 {
+                        a = a + 1;
+                    } else {
+                        a = a;
+                    }
+                } else {
+                    a = a;
+                }
+            }
+            return a;
+        """)
+
+    def test_function_parameters_count_as_existing_variables(self):
+        out = balanced("function f(a: int): int { if a < 3 { a = a + 1; } return a; } return f(1);")
+        self.assertIn("} else {\n        a = a;\n    }", out)
+
+    def test_functions_do_not_see_outer_variables(self):
+        # x is not visible inside f, so the assignment is local to the branch and not copied
+        out = balanced("x = 1; function f(): int { if true { x = 2; } return 1; } return x;")
+        self.assertNotIn("else", out)
+
+    def test_balance_then_rename_gives_the_branches_one_shared_version(self):
+        self.assertEqual(expected("""
+            x#1 = 1;
+            if x#1 < 2 {
+                x#2 = 5;
+            } else {
+                x#2 = x#1;
+            }
+            return x#2;
+        """), compiled("x = 1; if x < 2 { x = 5; } return x;"))
 
 
 if __name__ == '__main__':

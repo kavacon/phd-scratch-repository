@@ -1,6 +1,6 @@
 """
-Liveness detection on the renamed AST. This only reports when each variable version stops being live;
-it does not rewrite the program or insert any `~=`.
+Liveness detection on the renamed AST. This only reports when each variable version stops being live and
+when it can be released; it does not rewrite the program or insert any `~=`.
 
 Liveness follows Faro, Marino and Messina, "Reversible Lifetime Semantics for Quantum Programs" (2026,
 arXiv:2603.14538), which presents it for the Qutes language:
@@ -11,6 +11,7 @@ arXiv:2603.14538), which presents it for the Qutes language:
   several variables connects all of them.
 - Program points follow the paper's numbering: point k is the state immediately after the k-th statement
   (point 0 is the start of the block).
+- Lexical scope bounds lifetime (Section 3): a temporary defined in a block is released by the end of it.
 
 Liveness alone is not the whole algorithm. The paper's Remark and Lemma 11 note that entanglement-based
 liveness is a sound but incomplete approximation: a temporary entangled with a live output can still be
@@ -33,18 +34,30 @@ Not specified by the paper, and chosen here:
   released after every version whose release reads it (its witness operands must still be there). The paper's
   example inserts the adjoint history in reverse, but does not state this as a rule.
 
-Scope of this section: straight-line blocks only (assignments, `~=`, expression statements and the final
-return, per function and for the top-level program). Control flow (`if`, `while`, `for`) raises
-NotImplementedError until it is added.
+Control flow. At the level of the enclosing block, an `if` or loop is a single operation that reads the
+outer versions used anywhere inside it, defines the versions it produces (the version both branches of an `if`
+share, or a loop's header `Phi` targets), and entangles all of them.
+So an outer version used inside a branch or loop stays live until after the whole statement. Each branch or
+loop body is also analysed as a block of its own (`Liveness.nested`): its temporaries are released by the
+end of the block, starting from the entanglement graph at the point where the block begins. Limitations:
+- Versions taken by a loop's header `Phi` (the value entering the loop) are merged into the phi's target and
+  are not released on their own. How to release them is left to the insertion step. The balance pass makes
+  both branches of an `if` define each variable, so an `if`'s old version is released normally after it.
+- Releasing a version an `if` produced needs to know which branch made it, so the condition has to stay
+  available until then. That is not modelled yet.
+- A loop is treated as one unit: carried values are live throughout and the registers they use across
+  iterations are not reclaimed per iteration.
+- Release of a phi target reads everything the statement read, which is conservative.
 
 Rename must have run first, so every name is a unique version.
 """
-from dataclasses import fields
 from typing import Dict, FrozenSet, Iterator, NamedTuple, Optional, Sequence, Set, Tuple
 
-from parser.grammar import Assign, ExprStmt, FunctionDef, Node, Return, Unassign, Variable
+from parser.grammar import Assign, ExprStmt, ForLoop, FunctionDef, If, Node, Return, Unassign, WhileLoop
+from passes.names import defined as _defined, read as _read, variables as _variables
 
 _NONE: FrozenSet[str] = frozenset()
+_COMPOUND = (If, WhileLoop, ForLoop)
 
 
 class _Effects(NamedTuple):
@@ -52,26 +65,26 @@ class _Effects(NamedTuple):
     uses: FrozenSet[str] = _NONE
     entangles: FrozenSet[str] = _NONE  # variables an operation on several variables makes mutually entangled
     releases: Optional[str] = None  # a version released by `~=`, which disentangles it
+    merges: FrozenSet[str] = _NONE  # versions taken by a phi, which become part of the phi's target
 
 
 class Liveness(NamedTuple):
     live: Tuple[FrozenSet[str], ...]  # live[k]: the versions live at point k
-    dies_at: Dict[str, int]  # conservative: first point at which each version (other than outputs) is not live
-    outputs: FrozenSet[str]  # versions returned from the block; they escape, so they are never released
+    # conservative: first point at which each version (other than outputs) is no longer live. Versions that are
+    # still live at the end of a nested block (because they are entangled with something live outside) are absent.
+    dies_at: Dict[str, int]
+    outputs: FrozenSet[str]  # versions that escape the block (returned, or taken by a phi); never released here
     reclaim_at: Dict[str, int]  # point at which each temporary can be released; parameters and outputs excluded
     release_order: Tuple[str, ...]  # temporaries ordered by release point, then reverse creation order
+    # for each `if`/loop statement (by index), the analysis of its blocks: (then, else) or (body,); points are
+    # relative to each block
+    nested: Dict[int, Tuple["Liveness", ...]]
 
 
-def _variables(node: Node) -> FrozenSet[str]:
-    def walk(n) -> Iterator[str]:
-        if isinstance(n, Variable):
-            yield n.name
-        for f in fields(n):
-            value = getattr(n, f.name)
-            for child in value if isinstance(value, tuple) else (value,):
-                if isinstance(child, Node):
-                    yield from walk(child)
-    return frozenset(walk(node))
+def _results(statement: If) -> FrozenSet[str]:
+    """Versions an `if` produces: those defined in both branches (rename gives them the same name)."""
+    then, orelse = (frozenset().union(*map(_defined, block)) for block in (statement.body, statement.orelse))
+    return then & orelse
 
 
 def _effects(statement: Node) -> _Effects:
@@ -86,9 +99,18 @@ def _effects(statement: Node) -> _Effects:
         return _Effects(uses=used, entangles=used if len(used) > 1 else _NONE)
     if isinstance(statement, Return):
         return _Effects(uses=_variables(statement.value))
+    if isinstance(statement, _COMPOUND):
+        free = _read(statement) - _defined(statement)
+        if isinstance(statement, If):
+            targets, merged = _results(statement), _NONE
+        else:
+            targets = frozenset(a.name for a in statement.header)
+            merged = frozenset().union(*(_variables(a.value) for a in statement.header))
+        group = free | targets
+        return _Effects(defs=targets, uses=free, entangles=group if len(group) > 1 else _NONE, merges=merged)
     if isinstance(statement, FunctionDef):
         return _Effects()  # analysed on its own, see analyse_program
-    raise NotImplementedError(f"liveness of {type(statement).__name__} (control flow) is not implemented yet")
+    raise NotImplementedError(f"liveness of {type(statement).__name__}")
 
 
 def _closure(edges: Set[FrozenSet[str]], seeds: FrozenSet[str]) -> FrozenSet[str]:
@@ -115,11 +137,12 @@ def _release(edges: Set[FrozenSet[str]], released: str) -> Set[FrozenSet[str]]:
 
 def _reclaim_points(body: Sequence[Node], effects: Sequence[_Effects], outputs: FrozenSet[str]) -> Dict[str, int]:
     """
-    Point at which each temporary (a version defined in the block that is not returned) can be released:
+    Point at which each temporary (a version defined in the block that is not an output) can be released:
     after its last use, and after the release of every temporary whose release reads it.
     Versions the programmer already released with `~=` keep that point.
     """
     defined_at = {name: k for k, e in enumerate(effects) for name in e.defs}
+    merged = frozenset().union(*(e.merges for e in effects))
     last_use: Dict[str, int] = {}
     for k, e in enumerate(effects):
         for name in e.uses:
@@ -127,15 +150,17 @@ def _reclaim_points(body: Sequence[Node], effects: Sequence[_Effects], outputs: 
     explicit = {e.releases: k + 1 for k, e in enumerate(effects) if e.releases}
 
     reads: Dict[str, FrozenSet[str]] = {}  # versions that must still exist when a version is released
-    for statement in body:
+    for statement, e in zip(body, effects):
         if isinstance(statement, Assign):
-            reads[statement.name] = _variables(statement.value)
-    for statement in body:
-        if isinstance(statement, Unassign):
+            reads[statement.name] = e.uses
+        elif isinstance(statement, _COMPOUND):
+            reads.update({target: e.uses for target in e.defs})
+        elif isinstance(statement, Unassign):
             reads[statement.name] = _variables(statement.witness) - {statement.name}
 
     reclaim: Dict[str, int] = {}
-    for name in sorted((n for n in defined_at if n not in outputs), key=defined_at.get, reverse=True):
+    candidates = (n for n in defined_at if n not in outputs and n not in merged)
+    for name in sorted(candidates, key=defined_at.get, reverse=True):
         if name in explicit:
             reclaim[name] = explicit[name]
             continue
@@ -145,38 +170,67 @@ def _reclaim_points(body: Sequence[Node], effects: Sequence[_Effects], outputs: 
     return reclaim
 
 
-def analyse(body: Sequence[Node], params: Sequence[str] = (), entanglement: bool = True) -> Liveness:
-    """
-    Liveness of a straight-line block. With `entanglement=False` only direct uses count (classic liveness),
-    which is not the paper's algorithm (it would let an operand die before a temporary computed from it) and
-    exists only as a baseline for comparison.
-    """
+def _analyse(
+    body: Sequence[Node],
+    params: Sequence[str],
+    entanglement: bool,
+    entry_edges: FrozenSet[FrozenSet[str]],
+    live_after: FrozenSet[str],
+    escaping: FrozenSet[str],
+) -> Liveness:
     effects = [_effects(s) for s in body]
     n = len(body)
 
     used_later: list = [_NONE] * (n + 1)  # liveness from direct uses, computed backwards
+    used_later[n] = live_after
     for k in range(n - 1, -1, -1):
         used_later[k] = (used_later[k + 1] - effects[k].defs) | effects[k].uses
 
-    live, edges = [], set()  # edges: entanglement existing at the current point, forward
+    live, edges_before = [], []  # edges: entanglement existing at the current point, computed forward
+    edges = set(entry_edges)
     for k in range(n + 1):
         live.append(_closure(edges, used_later[k]) if entanglement else used_later[k])
+        edges_before.append(frozenset(edges))
         if k < n:
             group = sorted(effects[k].entangles)
             edges |= {frozenset((a, b)) for i, a in enumerate(group) for b in group[i + 1:]}
             if effects[k].releases:
                 edges = _release(edges, effects[k].releases)
 
-    outputs = frozenset().union(*(e.uses for s, e in zip(body, effects) if isinstance(s, Return)))
+    outputs = escaping.union(*(e.uses for s, e in zip(body, effects) if isinstance(s, Return)))
     defined_at = {p: 0 for p in params}
     defined_at.update({name: k + 1 for k, e in enumerate(effects) for name in e.defs})
-    dies_at = {
-        name: next(k for k in range(start, n + 1) if name not in live[k])
-        for name, start in defined_at.items() if name not in outputs
-    }
+    dies_at = {}
+    for name, start in defined_at.items():
+        died = next((k for k in range(start, n + 1) if name not in live[k]), None)
+        if name not in outputs and died is not None:
+            dies_at[name] = died
+
+    nested = {}
+    for k, statement in enumerate(body):
+        if isinstance(statement, If):
+            blocks, leaving = (statement.body, statement.orelse), effects[k].defs  # both branches produce these
+        elif isinstance(statement, (WhileLoop, ForLoop)):
+            blocks = (statement.body,)
+            leaving = frozenset(a.value.operands[1].name for a in statement.header)  # a header phi takes (entry, end of body)
+        else:
+            continue
+        nested[k] = tuple(
+            _analyse(block, (), entanglement, edges_before[k], live[k + 1] | leaving, leaving) for block in blocks
+        )
+
     reclaim_at = _reclaim_points(body, effects, outputs)
     order = sorted(reclaim_at, key=lambda v: (reclaim_at[v], -defined_at[v]))
-    return Liveness(tuple(live), dies_at, outputs, reclaim_at, tuple(order))
+    return Liveness(tuple(live), dies_at, outputs, reclaim_at, tuple(order), nested)
+
+
+def analyse(body: Sequence[Node], params: Sequence[str] = (), entanglement: bool = True) -> Liveness:
+    """
+    Liveness and reclamation points of a block. With `entanglement=False` only direct uses count (classic
+    liveness), which is not the paper's algorithm (it would let an operand die before a temporary computed
+    from it) and exists only as a baseline for comparison.
+    """
+    return _analyse(tuple(body), params, entanglement, frozenset(), _NONE, _NONE)
 
 
 def analyse_program(program: Sequence[Node], entanglement: bool = True) -> Dict[str, Liveness]:

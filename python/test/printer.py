@@ -49,7 +49,7 @@ def _stmt(node: Node, depth: int) -> List[str]:
         lines = [f"{pad}if {_expr(node.condition)} {{"] + _block(node.body, depth + 1)
         if node.orelse:
             lines += [f"{pad}}} else {{"] + _block(node.orelse, depth + 1)
-        return lines + [f"{pad}}}"] + _phis("join", node.join, pad)
+        return lines + [f"{pad}}}"]
     if isinstance(node, WhileLoop):
         return _phis("header", node.header, pad) + [f"{pad}while {_expr(node.condition)} {{"] \
             + _block(node.body, depth + 1) + [f"{pad}}}"]

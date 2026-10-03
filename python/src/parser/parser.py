@@ -9,6 +9,7 @@ from parser.grammar import (
     Number, Param, Return, Unassign, Variable, WhileLoop,
 )
 from passes.allocation import lower_allocation
+from passes.balance import balance
 from passes.rename import rename
 
 # Define lark based AST parsing for grammar file.
@@ -47,7 +48,7 @@ class _ToGrammar(Transformer):
     for_loop = lambda self, var, start, stop, body: ForLoop(str(var), start, stop, body)
     while_loop = lambda self, cond, body: WhileLoop(cond, body)
     if_stmt = lambda self, cond, body, orelse=(): If(cond, body, orelse)
-    else_clause = lambda self, x: x if isinstance(x, tuple) else (x,)
+    else_clause = lambda self, block: block
     function_call = lambda self, name, args=(): Call(str(name), args)
     equality = lambda self, *operands: Equals(operands)
     add = lambda self, l, r: BinOp("+", l, r)
@@ -99,7 +100,7 @@ def walk(node: Node) -> Iterator[Node]:
         yield from walk(child)
 
 
-def parse(program: str, passes: Sequence[Pass] = (rename, lower_allocation)) -> List[Node]:
+def parse(program: str, passes: Sequence[Pass] = (balance, rename, lower_allocation)) -> List[Node]:
     """Parse source into the typed AST, then apply each pass in order. Use `passes=()` for the raw AST."""
     nodes = _ToGrammar().transform(_parser.parse(program))
     for p in passes:
