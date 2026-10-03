@@ -3,7 +3,7 @@ from typing import List, Sequence
 
 from parser.grammar import (
     Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not,
-    Number, Phi, Return, Unassign, Variable, WhileLoop,
+    Number, Phi, Return, Unassign, Variable,
 )
 
 
@@ -50,9 +50,6 @@ def _stmt(node: Node, depth: int) -> List[str]:
         if node.orelse:
             lines += [f"{pad}}} else {{"] + _block(node.orelse, depth + 1)
         return lines + [f"{pad}}}"]
-    if isinstance(node, WhileLoop):
-        return _phis("header", node.header, pad) + [f"{pad}while {_expr(node.condition)} {{"] \
-            + _block(node.body, depth + 1) + [f"{pad}}}"]
     if isinstance(node, ForLoop):
         return _phis("header", node.header, pad) \
             + [f"{pad}for {node.var} in {_expr(node.start)} .. {_expr(node.stop)} {{"] \

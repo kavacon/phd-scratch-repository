@@ -2,7 +2,6 @@ start: (function_def | statement)* return_stmt
 
 ?statement: assignment
           | for_loop
-          | while_loop
           | if_stmt
           | unassign_stmt
           | expr_statement
@@ -18,8 +17,6 @@ param: NAME ":" type
 return_type: ":" type
 
 for_loop: "for" NAME "in" expr ".." expr block  // half-open; spaces around ".." are required so "0 .. 3" is not lexed as a float
-
-while_loop: "while" expr block
 
 if_stmt: "if" expr block else_clause?
 else_clause: "else" block

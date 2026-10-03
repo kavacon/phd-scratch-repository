@@ -3,7 +3,7 @@ from dataclasses import fields
 from typing import FrozenSet, Iterator
 
 from parser.grammar import (
-    Assign, ExprStmt, ForLoop, If, Node, Return, Unassign, Variable, WhileLoop,
+    Assign, ExprStmt, ForLoop, If, Node, Return, Unassign, Variable,
 )
 
 _NONE: FrozenSet[str] = frozenset()
@@ -33,8 +33,6 @@ def read(statement: Node) -> FrozenSet[str]:
         return variables(statement.value)
     if isinstance(statement, If):
         inner, outer = statement.body + statement.orelse, variables(statement.condition)
-    elif isinstance(statement, WhileLoop):
-        inner, outer = statement.body + statement.header, variables(statement.condition)
     elif isinstance(statement, ForLoop):
         inner, outer = statement.body + statement.header, variables(statement.start) | variables(statement.stop)
     else:
@@ -48,7 +46,12 @@ def defined(statement: Node) -> FrozenSet[str]:
         return frozenset({statement.name})
     if isinstance(statement, If):
         return frozenset().union(*map(defined, statement.body + statement.orelse))
-    if isinstance(statement, (WhileLoop, ForLoop)):
-        loop_var = frozenset({statement.var}) if isinstance(statement, ForLoop) else _NONE
-        return loop_var.union(*map(defined, statement.body + statement.header))
+    if isinstance(statement, ForLoop):
+        return frozenset({statement.var}).union(*map(defined, statement.body + statement.header))
     return _NONE
+
+
+def results(statement: If) -> FrozenSet[str]:
+    """Versions an `if` produces: those defined in both branches (rename gives them the same name)."""
+    then, orelse = (frozenset().union(*map(defined, block)) for block in (statement.body, statement.orelse))
+    return then & orelse

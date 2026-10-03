@@ -15,12 +15,12 @@ This makes the branches write the same variables; it does not make them take equ
 it is not a claim about the synchronisation condition in Yuan, Villanyi and Carbin (2024).
 
 Scoping follows rename: a name first assigned inside a block is local to that block, so it is never copied.
-Only `if` is handled. Loops that may run zero times have a similar issue and are left for later.
+Only `if` is handled. A loop that runs zero times has a similar issue and is left for later.
 """
 from dataclasses import replace
 from typing import List, Sequence, Set
 
-from parser.grammar import Assign, ForLoop, FunctionDef, If, Node, Variable, WhileLoop
+from parser.grammar import Assign, ForLoop, FunctionDef, If, Node, Variable
 
 
 def _assigned(block: Sequence[Node]) -> List[str]:
@@ -31,7 +31,7 @@ def _assigned(block: Sequence[Node]) -> List[str]:
             names.append(statement.name)
         elif isinstance(statement, If):
             names += _assigned(statement.body) + _assigned(statement.orelse)
-        elif isinstance(statement, (WhileLoop, ForLoop)):
+        elif isinstance(statement, ForLoop):
             names += _assigned(statement.body)
     return list(dict.fromkeys(names))
 
@@ -45,9 +45,8 @@ def _block(body: Sequence[Node], visible: Set[str]) -> tuple:
             visible.add(statement.name)
         elif isinstance(statement, If):
             statement = _if(statement, visible)
-        elif isinstance(statement, (WhileLoop, ForLoop)):
-            inner = visible | {statement.var} if isinstance(statement, ForLoop) else visible
-            statement = replace(statement, body=_block(statement.body, inner))
+        elif isinstance(statement, ForLoop):
+            statement = replace(statement, body=_block(statement.body, visible | {statement.var}))
         elif isinstance(statement, FunctionDef):
             scope = {p.name for p in statement.params}
             statement = replace(statement, body=_block(statement.body, scope))

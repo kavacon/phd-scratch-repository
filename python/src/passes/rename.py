@@ -14,7 +14,7 @@ version in each (the then-branch's), and code after the `if` reads that version.
 assign the same outer variables, which the balance pass guarantees, so it has to run first.
 
 Loops need a merge, because a variable's value at the top of an iteration is either the one that entered
-the loop or the one from the end of the previous iteration. `WhileLoop.header` / `ForLoop.header` hold
+the loop or the one from the end of the previous iteration. `ForLoop.header` holds
 `Phi` assignments choosing between the entry version and the version at the end of the body, for each
 outer variable assigned in the body. Code after the loop sees the header version.
 """
@@ -23,7 +23,7 @@ from typing import Dict, Iterator, List, Sequence
 
 from parser.grammar import (
     Assign, BinOp, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not, Param, Phi,
-    Return, Unassign, Variable, WhileLoop,
+    Return, Unassign, Variable,
 )
 
 
@@ -39,7 +39,7 @@ def _assigned(body: Sequence[Node]) -> Iterator[str]:
         elif isinstance(statement, If):
             yield from _assigned(statement.body)
             yield from _assigned(statement.orelse)
-        elif isinstance(statement, (WhileLoop, ForLoop)):
+        elif isinstance(statement, ForLoop):
             yield from _assigned(statement.body)
 
 
@@ -88,10 +88,8 @@ class _Renamer:
             return Unassign(name, witness)
         if isinstance(node, If):
             return self.if_stmt(node, env)
-        if isinstance(node, WhileLoop):
-            return self.loop(node, env)
         if isinstance(node, ForLoop):
-            return self.loop(node, env)
+            return self.for_loop(node, env)
         if isinstance(node, FunctionDef):
             return self.function(node)
         raise RenameError(f"Cannot rename {type(node).__name__}")
@@ -117,18 +115,13 @@ class _Renamer:
         env.update(shared)
         return If(condition, body, orelse)
 
-    def loop(self, node, env: Dict[str, str]):
-        is_for = isinstance(node, ForLoop)
-        if is_for:  # bounds are evaluated once, on entry
-            start, stop = self.expr(node.start, env), self.expr(node.stop, env)
-        carried = [n for n in dict.fromkeys(_assigned(node.body)) if n in env and not (is_for and n == node.var)]
+    def for_loop(self, node: ForLoop, env: Dict[str, str]) -> ForLoop:
+        start, stop = self.expr(node.start, env), self.expr(node.stop, env)  # bounds are evaluated once, on entry
+        carried = [n for n in dict.fromkeys(_assigned(node.body)) if n in env and n != node.var]
         entry = {n: env[n] for n in carried}
         headers = {n: self.fresh(n) for n in carried}
         body_env = {**env, **headers}
-        if is_for:
-            body_env[node.var] = var = self.fresh(node.var)
-        else:
-            condition = self.expr(node.condition, body_env)
+        body_env[node.var] = var = self.fresh(node.var)
         body = self.block(node.body, body_env)
         for name in env:
             self.check_still_defined(name, body_env)
@@ -136,9 +129,7 @@ class _Renamer:
             Assign(headers[n], Phi((Variable(entry[n]), Variable(body_env[n])))) for n in carried
         )
         env.update(headers)
-        if is_for:
-            return ForLoop(var, start, stop, body, header)
-        return WhileLoop(condition, body, header)
+        return ForLoop(var, start, stop, body, header)
 
     def function(self, node: FunctionDef) -> FunctionDef:
         local = _Renamer()

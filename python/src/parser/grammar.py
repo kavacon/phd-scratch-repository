@@ -85,13 +85,6 @@ class ForLoop(Node):
 
 
 @dataclass(frozen=True)
-class WhileLoop(Node):
-    condition: Node
-    body: Tuple[Node, ...]
-    header: Tuple[Node, ...] = ()  # loop-carried Phi assignments, evaluated before the condition
-
-
-@dataclass(frozen=True)
 class If(Node):
     condition: Node
     body: Tuple[Node, ...]
