@@ -86,10 +86,6 @@ class LivenessTestCase(unittest.TestCase):
         analysis = analyse_program(parse(self.AREA))
         self.assertEqual({"<program>", "area"}, set(analysis))
 
-    def test_control_flow_is_not_supported_yet(self):
-        with self.assertRaises(NotImplementedError):
-            analyse_program(parse("x = 1; if x < 2 { y = 1; } return x;"))
-
 
 def reclaim(source, function):
     analysis = analyse_program(parse(source))[function]
@@ -169,6 +165,92 @@ class ReclamationTestCase(unittest.TestCase):
         reclaim_at, order = reclaim(source, "f")
         self.assertEqual({"t#1": 4, "u#1": 4}, reclaim_at)
         self.assertEqual(("u#1", "t#1"), order)
+
+
+def analysis(source, function):
+    return analyse_program(parse(source))[function]
+
+
+class ControlFlowTestCase(unittest.TestCase):
+    """Blocks inside `if` and loops are analysed on their own, and the statement as a whole in its parent."""
+
+    IF_ELSE = """
+        function f(x: int): int {
+            a = x + 1;
+            y = 0;
+            if a < 5 { t = a * 2; y = t + 1; } else { y = a - 1; }
+            r = y + 1;
+            return r;
+        }
+        return f(1);
+    """
+
+    def test_outer_version_used_in_a_branch_waits_for_the_whole_statement(self):
+        # y#1 is overwritten in both branches so it is dead on arrival (point 2). a#1 is read inside the if, and
+        # the version the if produces (y#2) reads everything the if read, so a#1 is only released after it (point 4).
+        outer = analysis(self.IF_ELSE, "f")
+        self.assertEqual({"y#1": 2, "y#2": 4, "a#1": 4}, outer.reclaim_at)
+        self.assertEqual(("y#1", "y#2", "a#1"), outer.release_order)
+
+    def test_branch_temporaries_are_released_by_the_end_of_their_block(self):
+        then_block, else_block = analysis(self.IF_ELSE, "f").nested[2]
+        self.assertEqual({"t#1": 2}, then_block.reclaim_at)  # t is local to the branch; y#2 is produced by both branches
+        self.assertEqual(frozenset({"y#2"}), then_block.outputs)
+        self.assertEqual({}, else_block.reclaim_at)
+        self.assertEqual(frozenset({"y#2"}), else_block.outputs)
+
+    def test_one_armed_if_is_balanced_so_the_old_version_is_released_after_it(self):
+        # the missing else gets a copy of x#1, so x#1 is leftover on both paths and is released unconditionally
+        source = "function f(a: int): int { x = a + 1; if x < 3 { x = x + 5; } return x; } return f(1);"
+        outer = analysis(source, "f")
+        self.assertEqual({"x#1": 2}, outer.reclaim_at)
+        then_block, else_block = outer.nested[1]
+        self.assertEqual(({}, frozenset({"x#2"})), (then_block.reclaim_at, then_block.outputs))
+        self.assertEqual(({}, frozenset({"x#2"})), (else_block.reclaim_at, else_block.outputs))
+
+    def test_loop_entry_values_are_merged_into_the_loop_target(self):
+        source = "function g(n: int): int { s = 0; for i in 0 .. n { s = s + i; } return s; } return g(3);"
+        self.assertEqual({}, analysis(source, "g").reclaim_at)  # s#1 enters the loop's phi, so it is not released alone
+
+    def test_for_loop_body_temporaries_are_released_each_iteration(self):
+        source = "function g(n: int): int { s = 0; for i in 0 .. n { t = s + i; s = t * 2; } return s; } return g(3);"
+        outer = analysis(source, "g")
+        self.assertEqual({}, outer.reclaim_at)  # s#1 enters the phi, s#2 is returned
+        (body,) = outer.nested[1]
+        self.assertEqual(({"t#1": 2}, frozenset({"s#3"})), (body.reclaim_at, body.outputs))
+
+    def test_while_loop(self):
+        source = "function f(n: int): int { c = 0; while c < n { d = c + 1; c = d; } return c; } return f(3);"
+        outer = analysis(source, "f")
+        self.assertEqual({}, outer.reclaim_at)
+        (body,) = outer.nested[1]
+        self.assertEqual({"d#1": 2}, body.reclaim_at)
+
+    def test_loop_carried_value_that_is_not_returned_is_released_after_the_loop(self):
+        source = """
+            function h(n: int): int {
+                a = 1; b = 2;
+                for i in 0 .. n { if a < b { t = a + i; a = t; } b = b + a; }
+                return a;
+            }
+            return h(3);
+        """
+        outer = analysis(source, "h")
+        self.assertEqual({"b#2": 3}, outer.reclaim_at)  # b's header target is not returned
+        (body,) = outer.nested[2]
+        self.assertEqual({}, body.reclaim_at)
+        then_block, _ = body.nested[0]  # the if inside the loop body
+        self.assertEqual({"t#1": 2}, then_block.reclaim_at)
+
+    def test_explicit_unassign_inside_a_block(self):
+        source = "function f(a: int): int { r = a; if a < 3 { t = a + 1; t ~= a + 1; } return r; } return f(1);"
+        (block, _) = analysis(source, "f").nested[1]
+        self.assertEqual({"t#1": 2}, block.reclaim_at)
+
+    def test_outer_versions_stay_live_across_the_statement_that_uses_them(self):
+        outer = analysis(self.IF_ELSE, "f")
+        self.assertIn("a#1", outer.live[2])  # before the if
+        self.assertIn("a#1", outer.live[3])  # after it, still entangled with y#2
 
 
 if __name__ == '__main__':

@@ -56,12 +56,11 @@ class ParseTestCase(unittest.TestCase):
                 stmts(bad)
 
     def test_conditionals(self):
-        [plain, chained] = stmts("if x < 1 { y = 1; } if x < 1 { y = 1; } else if x > 1 { y = 2; } else { y = 3; }")
+        [plain, with_else] = stmts("if x < 1 { y = 1; } if x < 1 { y = 1; } else { y = 3; }")
         self.assertEqual(If(BinOp("<", Variable("x"), Number(1)), (Assign("y", Number(1)),)), plain)
-        self.assertEqual((Assign("y", Number(1)),), chained.body)
-        [nested] = chained.orelse
-        self.assertEqual(BinOp(">", Variable("x"), Number(1)), nested.condition)
-        self.assertEqual((Assign("y", Number(3)),), nested.orelse)
+        self.assertEqual(((Assign("y", Number(1)),), (Assign("y", Number(3)),)), (with_else.body, with_else.orelse))
+        with self.assertRaises(UnexpectedInput):  # `else if` is not part of the language
+            stmts("if x < 1 { y = 1; } else if x > 1 { y = 2; }")
 
     def test_for_range(self):
         [loop] = stmts("for i in 0 .. n + 1 { x = i; }")

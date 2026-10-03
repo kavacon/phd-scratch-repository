@@ -1,7 +1,7 @@
 """
 Rename pass: gives every binding a unique version, written `name#n` (parameters are `name#0`,
-assignments start at `name#1`). After renaming each name is assigned exactly once, so a value's
-producer and its uses can be tracked without worrying about overwrites.
+assignments start at `name#1`). After renaming each name is assigned exactly once along any path through
+the program, so a value's producer and its uses can be tracked without worrying about overwrites.
 
 Scoping is lexical: a name first assigned inside a block is local to that block, while assigning to
 a name that already exists in an enclosing scope creates a new version of that outer variable.
@@ -9,12 +9,16 @@ Functions cannot see variables outside themselves.
 
 Unassign (`x ~= e;`) releases the current version of x, so x is no longer in scope afterwards.
 
-Where control flow merges, `Phi` assignments select between versions:
-- `If.join`: after the branches, for each outer variable the branches left at different versions.
-- `WhileLoop.header` / `ForLoop.header`: at the loop header, for each outer variable assigned in the
-  body, choosing between its entry version and the version at the end of the body. Code after the loop
-  sees the header version.
+Branches of an `if` are mutually exclusive, so an outer variable assigned in both gets the same final
+version in each (the then-branch's), and code after the `if` reads that version. The two branches must
+assign the same outer variables, which the balance pass guarantees, so it has to run first.
+
+Loops need a merge, because a variable's value at the top of an iteration is either the one that entered
+the loop or the one from the end of the previous iteration. `WhileLoop.header` / `ForLoop.header` hold
+`Phi` assignments choosing between the entry version and the version at the end of the body, for each
+outer variable assigned in the body. Code after the loop sees the header version.
 """
+from dataclasses import fields, replace
 from typing import Dict, Iterator, List, Sequence
 
 from parser.grammar import (
@@ -101,15 +105,17 @@ class _Renamer:
         then_env, else_env = dict(env), dict(env)
         body = self.block(node.body, then_env)
         orelse = self.block(node.orelse, else_env)
-        join, merged = [], {}
-        for name in env:
+        shared = {}
+        for name, before in env.items():
             self.check_still_defined(name, then_env, else_env)
             then_version, else_version = then_env[name], else_env[name]
-            if then_version != else_version:
-                merged[name] = self.fresh(name)
-                join.append(Assign(merged[name], Phi((Variable(then_version), Variable(else_version)))))
-        env.update(merged)
-        return If(condition, body, orelse, tuple(join))
+            if (then_version == before) != (else_version == before):
+                raise RenameError(f"'{name}' is assigned in only one branch of an if; run balance first")
+            if then_version != else_version:  # assigned in both: use the then-branch's version in both
+                orelse = tuple(_substitute(s, else_version, then_version) for s in orelse)
+                shared[name] = then_version
+        env.update(shared)
+        return If(condition, body, orelse)
 
     def loop(self, node, env: Dict[str, str]):
         is_for = isinstance(node, ForLoop)
@@ -139,6 +145,22 @@ class _Renamer:
         params = tuple(Param(f"{p.name}#0", p.type) for p in node.params)
         env = {p.name: f"{p.name}#0" for p in node.params}
         return FunctionDef(node.name, params, node.return_type, local.block(node.body, env))
+
+
+def _substitute(node: Node, old: str, new: str) -> Node:
+    """Replace every occurrence of the name `old` (a version, so it cannot clash with anything else) with `new`."""
+    changes = {}
+    for f in fields(node):
+        value = getattr(node, f.name)
+        if value == old:
+            changes[f.name] = new
+        elif isinstance(value, Node):
+            changes[f.name] = _substitute(value, old, new)
+        elif isinstance(value, tuple):
+            changes[f.name] = tuple(
+                _substitute(c, old, new) if isinstance(c, Node) else (new if c == old else c) for c in value
+            )
+    return replace(node, **changes)
 
 
 def rename(program: List[Node]) -> List[Node]:

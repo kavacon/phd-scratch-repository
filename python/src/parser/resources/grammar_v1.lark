@@ -22,7 +22,7 @@ for_loop: "for" NAME "in" expr ".." expr block  // half-open; spaces around ".."
 while_loop: "while" expr block
 
 if_stmt: "if" expr block else_clause?
-else_clause: "else" (block | if_stmt)
+else_clause: "else" block
 
 return_stmt: "return" expr ";"
 unassign_stmt: NAME "~=" expr ";"  // inverse of assignment: NAME currently equals expr

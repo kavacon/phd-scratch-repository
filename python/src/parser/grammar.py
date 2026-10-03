@@ -37,7 +37,7 @@ class Not(Node):
 
 @dataclass(frozen=True)
 class Phi(Node):
-    """Selects between versions of a variable at a control-flow merge. Introduced by rename, never parsed."""
+    """Selects between versions of a variable at a loop header. Introduced by rename, never parsed."""
     operands: Tuple["Variable", ...]
 
 
@@ -95,8 +95,7 @@ class WhileLoop(Node):
 class If(Node):
     condition: Node
     body: Tuple[Node, ...]
-    orelse: Tuple[Node, ...] = ()  # an `else if` is a single If in here
-    join: Tuple[Node, ...] = ()  # Phi assignments merging the branches, evaluated after the if
+    orelse: Tuple[Node, ...] = ()
 
 
 @dataclass(frozen=True)
