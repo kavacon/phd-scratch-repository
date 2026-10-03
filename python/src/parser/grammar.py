@@ -36,6 +36,12 @@ class Not(Node):
 
 
 @dataclass(frozen=True)
+class Phi(Node):
+    """Selects between versions of a variable at a control-flow merge. Introduced by rename, never parsed."""
+    operands: Tuple["Variable", ...]
+
+
+@dataclass(frozen=True)
 class Equals(Node):
     operands: Tuple[Node, ...]  # a == b == c
 
@@ -75,12 +81,14 @@ class ForLoop(Node):
     start: Node
     stop: Node  # exclusive
     body: Tuple[Node, ...]
+    header: Tuple[Node, ...] = ()  # loop-carried Phi assignments, evaluated at the top of each iteration
 
 
 @dataclass(frozen=True)
 class WhileLoop(Node):
     condition: Node
     body: Tuple[Node, ...]
+    header: Tuple[Node, ...] = ()  # loop-carried Phi assignments, evaluated before the condition
 
 
 @dataclass(frozen=True)
@@ -88,6 +96,7 @@ class If(Node):
     condition: Node
     body: Tuple[Node, ...]
     orelse: Tuple[Node, ...] = ()  # an `else if` is a single If in here
+    join: Tuple[Node, ...] = ()  # Phi assignments merging the branches, evaluated after the if
 
 
 @dataclass(frozen=True)

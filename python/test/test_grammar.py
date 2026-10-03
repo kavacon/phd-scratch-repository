@@ -129,6 +129,7 @@ class PassesTestCase(unittest.TestCase):
         source = "x = 1; return x;"
         self.assertEqual([], parse(source, passes=[lambda p: []]))
         self.assertEqual(raw(source), parse(source, passes=()))
+        self.assertEqual(Assign("x#1", Number(1)), parse(source)[0])  # default passes include rename
 
 
 class TraversalTestCase(unittest.TestCase):
