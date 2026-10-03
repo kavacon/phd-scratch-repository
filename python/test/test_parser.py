@@ -5,7 +5,7 @@ from parser.grammar import Assign, ForLoop, If
 from parser.parser import _parser, parse, walk
 from passes.balance import balance
 from passes.rename import RenameError, rename
-from printer import unparse
+from allocation_poc.printer import unparse
 
 INPUT = """
 x = 1;

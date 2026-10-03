@@ -6,7 +6,8 @@ from parser.parser import parse
 from passes.allocation import insert_releases, lower_allocation
 from passes.balance import balance
 from passes.rename import rename
-from printer import unparse
+from allocation_poc.printer import unparse
+from allocation_poc.simulate import SimulationError, simulate
 
 
 def compiled(source):
@@ -172,6 +173,80 @@ class InsertionExamplesTestCase(unittest.TestCase):
         self.assertEqual(["s#2"], unreleased)
         with self.assertWarns(UserWarning):
             lower_allocation(prepared(source))
+
+
+class InsertionBehaviourTestCase(unittest.TestCase):
+    """Run the programs: values are unchanged, every witness is right, and nothing is read after release."""
+
+    PROGRAMS = {
+        "chain": "function f(x: int): int { a = x + 1; b = a * 2; c = b + a; return c; } return f(@N@);",
+        "returned expression": "function f(a: int): int { t = a + 1; u = t * 3; return t + u; } return f(@N@);",
+        "if else": """
+            function f(x: int): int {
+                a = x + 1; y = 0;
+                if a < 5 { t = a * 2; y = t + 1; } else { y = a - 1; }
+                r = y + 1;
+                return r;
+            }
+            return f(@N@);
+        """,
+        "one-armed if": "function f(a: int): int { x = a + 1; if x < 4 { x = x + 5; } return x; } return f(@N@);",
+        "nested ifs": """
+            function f(a: int): int {
+                x = a;
+                if a < 5 { if a < 3 { x = a + 1; } else { x = a + 2; } x = x * 2; } else { x = a - 1; }
+                r = x + a;
+                return r;
+            }
+            return f(@N@);
+        """,
+        "branch assigns a variable twice": """
+            function f(a: int): int {
+                x = a + 1;
+                if a < 3 { x = x * 2; x = x + 7; } else { x = x - 1; }
+                return x;
+            }
+            return f(@N@);
+        """,
+        "loop with a temporary": "function g(n: int): int { s = 0; for i in 0 .. n { t = s + i; s = t * 2 + 1; } return s; } return g(@N@);",
+        "if inside a loop": """
+            function g(n: int): int {
+                a = 1;
+                for i in 0 .. n { if a < 20 { t = a + i; a = t * 2; } }
+                return a;
+            }
+            return g(@N@);
+        """,
+        "functions calling functions": """
+            function double(x: int): int { y = x * 2; return y + 0; }
+            function quad(x: int): int { d = double(x); return double(d); }
+            return quad(@N@);
+        """,
+    }
+    # loops keep their carried values (the entry value and the last iteration's), which are not released
+    LOOP_LEAKS = {"loop with a temporary", "if inside a loop"}
+
+    def test_values_are_unchanged_and_releases_are_valid(self):
+        for name, template in self.PROGRAMS.items():
+            for n in range(6):
+                source = template.replace("@N@", str(n))
+                with self.subTest(program=name, n=n):
+                    before = simulate(prepared(source)).value
+                    after = simulate(compiled(source))
+                    self.assertEqual(before, after.value)
+                    if name not in self.LOOP_LEAKS:
+                        self.assertEqual({}, {s: l for s, l in after.leaks.items() if l}, "registers left behind")
+
+    def test_a_wrong_witness_is_caught_by_the_simulation(self):
+        broken = parse("function f(a: int): int { t = a + 1; t ~= a + 2; return a; } return f(1);")
+        with self.assertRaises(SimulationError):
+            simulate(broken)
+
+    def test_inserting_twice_adds_nothing(self):
+        for name, template in self.PROGRAMS.items():
+            with self.subTest(program=name):
+                once = compiled(template.replace("@N@", "2"))
+                self.assertEqual(once, lower_allocation(once))
 
 
 if __name__ == '__main__':

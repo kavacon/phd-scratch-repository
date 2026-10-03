@@ -11,6 +11,10 @@ def unparse(program: Sequence[Node]) -> str:
     return "\n".join(_block(program, 0))
 
 
+def unparse_statement(statement: Node) -> str:
+    return "\n".join(_stmt(statement, 0))
+
+
 def _expr(node: Node, nested: bool = False) -> str:
     if isinstance(node, (Number, Variable)):
         return str(node.value if isinstance(node, Number) else node.name)

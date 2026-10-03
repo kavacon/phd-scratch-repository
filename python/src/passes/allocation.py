@@ -11,6 +11,8 @@ and in the order that `passes.liveness` reports, which uses the ideas of Faro, M
   condition with a `~=` in each branch. The witness there is written in terms of versions that still exist
   after the `if`: temporaries local to a branch are released at the end of the branch, so the definitions of
   those are substituted in. If a nested `if` contributed, the release nests the same way.
+  TODO: avoid this extra condition block by flattening and releasing within the block, if that is possible
+  (see `_release`).
 - A function or program that returns an expression gets it named first (`return#1 = e; return return#1;`), so
   the versions the expression reads become temporaries that can be released.
 - Values carried round a loop (the targets of a loop's header) are not released, because that would mean
@@ -74,6 +76,10 @@ def _release(statement: Node, name: str) -> Optional[Node]:
     if isinstance(statement, Assign):
         return Unassign(name, statement.value)
     if isinstance(statement, If):
+        # TODO: avoid emitting a second `if` just to release what an `if` produced. The goal is to flatten the
+        #  conditional and release inside the block instead, so the condition is not tested again and no extra
+        #  condition block is needed. It is not yet clear this is possible: the version is used after the `if`,
+        #  so the release cannot simply move into the branch that made it.
         branches = [_witness(b, name, {}) for b in (statement.body, statement.orelse)]
         return None if None in branches else If(statement.condition, branches[0], branches[1])
     return None  # a value carried round a loop
@@ -147,10 +153,15 @@ def _name_results(program: Sequence[Node]) -> List[Node]:
     ]
 
 
+def prepare(program: Sequence[Node]) -> Tuple[List[Node], Dict[str, Liveness]]:
+    """The program as the insertion pass sees it (returned expressions named), with its liveness analysis."""
+    named = _name_results(program)
+    return named, analyse_program(named)
+
+
 def insert_releases(program: Sequence[Node]) -> Tuple[List[Node], List[str]]:
     """The program with a `~=` for every releasable temporary, and the versions that could not be released."""
-    program = _name_results(program)
-    analyses = analyse_program(program)
+    program, analyses = prepare(program)
     inserter = _Inserter(analyses)
     return list(inserter.block(program, analyses["<program>"])), inserter.unreleased
 
