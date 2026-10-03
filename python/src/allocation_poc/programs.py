@@ -104,7 +104,7 @@ return f(1);
     {
         "id": "loop",
         "name": "A loop",
-        "description": "Temporaries inside the body are released every iteration. The value carried round the loop is not released.",
+        "description": "Loop bounds are fixed, so the loop is unrolled into copies of its body. Each iteration's values are ordinary versions, released in reverse order like everything else.",
         "source": """function g(x: int): int {
     s = x;
     for i in 0 .. 3 {

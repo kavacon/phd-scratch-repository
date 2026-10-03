@@ -5,8 +5,8 @@ pass promises:
 - nothing reads a register that was never defined or has been freed,
 - the registers left over when a function or the program returns (`leaks`) are only what is expected.
 
-Each version is a register. `Assign` writes one, `~=` frees one, loop headers copy the entry or back-edge
-version into the header register. Registers a function returns or takes as parameters are not leaks.
+Each version is a register. `Assign` writes one and `~=` frees one. Registers a function returns or takes as
+parameters are not leaks. Loops run directly, so a program can be run before it is unrolled.
 It also records the most registers held at once in each scope (`peak`), a stand-in for circuit width.
 """
 import operator
@@ -91,18 +91,10 @@ class Machine:
             return self.block(branch, registers, scope)
         elif isinstance(node, ForLoop):
             start, stop = self.eval(node.start, registers, scope), self.eval(node.stop, registers, scope)
-            i, first = start, True
-            while True:
-                for phi in node.header:
-                    entry, back = phi.value.operands
-                    self.hold(phi.name, self.read((entry if first else back).name, registers), registers, scope)
-                first = False
-                if i >= stop:
-                    break
+            for i in range(start, stop):
                 self.hold(node.var, i, registers, scope)
                 self.block(node.body, registers, scope)
                 registers.pop(node.var, None)
-                i += 1
         return None
 
     def read(self, name: str, registers: Dict[str, Any]) -> Any:

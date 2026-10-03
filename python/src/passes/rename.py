@@ -13,34 +13,19 @@ Branches of an `if` are mutually exclusive, so an outer variable assigned in bot
 version in each (the then-branch's), and code after the `if` reads that version. The two branches must
 assign the same outer variables, which the balance pass guarantees, so it has to run first.
 
-Loops need a merge, because a variable's value at the top of an iteration is either the one that entered
-the loop or the one from the end of the previous iteration. `ForLoop.header` holds
-`Phi` assignments choosing between the entry version and the version at the end of the body, for each
-outer variable assigned in the body. Code after the loop sees the header version.
+Loops are expanded by the unroll pass before this one, so none reach it.
 """
 from dataclasses import fields, replace
-from typing import Dict, Iterator, List, Sequence
+from typing import Dict, List, Sequence
 
 from parser.grammar import (
-    Assign, BinOp, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not, Param, Phi,
-    Return, Unassign, Variable,
+    Assign, BinOp, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not, Param, Return, Unassign,
+    Variable,
 )
 
 
 class RenameError(Exception):
     pass
-
-
-def _assigned(body: Sequence[Node]) -> Iterator[str]:
-    """Names assigned anywhere in `body`, including nested blocks."""
-    for statement in body:
-        if isinstance(statement, Assign):
-            yield statement.name
-        elif isinstance(statement, If):
-            yield from _assigned(statement.body)
-            yield from _assigned(statement.orelse)
-        elif isinstance(statement, ForLoop):
-            yield from _assigned(statement.body)
 
 
 class _Renamer:
@@ -89,7 +74,7 @@ class _Renamer:
         if isinstance(node, If):
             return self.if_stmt(node, env)
         if isinstance(node, ForLoop):
-            return self.for_loop(node, env)
+            raise RenameError("loops must be unrolled before renaming")
         if isinstance(node, FunctionDef):
             return self.function(node)
         raise RenameError(f"Cannot rename {type(node).__name__}")
@@ -114,22 +99,6 @@ class _Renamer:
                 shared[name] = then_version
         env.update(shared)
         return If(condition, body, orelse)
-
-    def for_loop(self, node: ForLoop, env: Dict[str, str]) -> ForLoop:
-        start, stop = self.expr(node.start, env), self.expr(node.stop, env)  # bounds are evaluated once, on entry
-        carried = [n for n in dict.fromkeys(_assigned(node.body)) if n in env and n != node.var]
-        entry = {n: env[n] for n in carried}
-        headers = {n: self.fresh(n) for n in carried}
-        body_env = {**env, **headers}
-        body_env[node.var] = var = self.fresh(node.var)
-        body = self.block(node.body, body_env)
-        for name in env:
-            self.check_still_defined(name, body_env)
-        header = tuple(
-            Assign(headers[n], Phi((Variable(entry[n]), Variable(body_env[n])))) for n in carried
-        )
-        env.update(headers)
-        return ForLoop(var, start, stop, body, header)
 
     def function(self, node: FunctionDef) -> FunctionDef:
         local = _Renamer()

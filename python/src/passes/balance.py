@@ -15,25 +15,13 @@ This makes the branches write the same variables; it does not make them take equ
 it is not a claim about the synchronisation condition in Yuan, Villanyi and Carbin (2024).
 
 Scoping follows rename: a name first assigned inside a block is local to that block, so it is never copied.
-Only `if` is handled. A loop that runs zero times has a similar issue and is left for later.
+Only `if` needs this: the unroll pass has already removed every loop.
 """
 from dataclasses import replace
 from typing import List, Sequence, Set
 
-from parser.grammar import Assign, ForLoop, FunctionDef, If, Node, Variable
-
-
-def _assigned(block: Sequence[Node]) -> List[str]:
-    """Names assigned anywhere in a block, including nested blocks, in order of first assignment."""
-    names: List[str] = []
-    for statement in block:
-        if isinstance(statement, Assign):
-            names.append(statement.name)
-        elif isinstance(statement, If):
-            names += _assigned(statement.body) + _assigned(statement.orelse)
-        elif isinstance(statement, ForLoop):
-            names += _assigned(statement.body)
-    return list(dict.fromkeys(names))
+from parser.grammar import Assign, FunctionDef, If, Node, Variable
+from passes.names import assigned
 
 
 def _block(body: Sequence[Node], visible: Set[str]) -> tuple:
@@ -45,8 +33,6 @@ def _block(body: Sequence[Node], visible: Set[str]) -> tuple:
             visible.add(statement.name)
         elif isinstance(statement, If):
             statement = _if(statement, visible)
-        elif isinstance(statement, ForLoop):
-            statement = replace(statement, body=_block(statement.body, visible | {statement.var}))
         elif isinstance(statement, FunctionDef):
             scope = {p.name for p in statement.params}
             statement = replace(statement, body=_block(statement.body, scope))
@@ -56,8 +42,8 @@ def _block(body: Sequence[Node], visible: Set[str]) -> tuple:
 
 def _if(node: If, visible: Set[str]) -> If:
     body, orelse = _block(node.body, visible), _block(node.orelse, visible)
-    in_then = [n for n in _assigned(body) if n in visible]
-    in_else = [n for n in _assigned(orelse) if n in visible]
+    in_then = [n for n in assigned(body) if n in visible]
+    in_else = [n for n in assigned(orelse) if n in visible]
     body += tuple(Assign(n, Variable(n)) for n in in_else if n not in in_then)
     orelse += tuple(Assign(n, Variable(n)) for n in in_then if n not in in_else)
     return replace(node, body=body, orelse=orelse)

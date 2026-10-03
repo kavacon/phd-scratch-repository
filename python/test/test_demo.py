@@ -49,11 +49,10 @@ class PipelineTestCase(unittest.TestCase):
         for program in PROGRAMS:
             with self.subTest(program=program["id"]):
                 stages = run_pipeline(program["source"], ALL)["stages"]
-                self.assertEqual(["source", "balance", "rename", "allocation"], [s["id"] for s in stages])
+                self.assertEqual(["source", "unroll", "balance", "rename", "allocation"], [s["id"] for s in stages])
                 self.assertFalse(any(s.get("error") for s in stages))
                 self.assertEqual(1, len({s["run"]["value"] for s in stages}))
-                if program["id"] != "loop":  # a value carried round a loop is not released
-                    self.assertEqual([], stages[-1]["run"]["leaked"])
+                self.assertEqual([], stages[-1]["run"]["leaked"])
 
     def test_early_release_lowers_peak_width(self):
         width = next(p for p in PROGRAMS if p["id"] == "width")
@@ -81,10 +80,6 @@ class PipelineTestCase(unittest.TestCase):
         endless = "function f(n: int): int { x = n; for i in 0 .. 10000000 { x = x + 1; } return x; } return f(1);"
         self.assertIn("step limit", run_pipeline(endless, [])["stages"][0]["run"]["error"])
 
-    def test_a_loop_carried_value_that_is_not_returned_is_reported(self):
-        source = "function g(n: int): int { s = 0; for i in 0 .. 3 { s = s + i; } return n; } return g(3);"
-        notes = run_pipeline(source, ALL)["stages"][-1]["notes"]
-        self.assertTrue(any("s#2" in note for note in notes))
 
 
 class LivenessViewTestCase(unittest.TestCase):
@@ -95,8 +90,8 @@ class LivenessViewTestCase(unittest.TestCase):
 
     def test_only_the_release_stage_carries_a_liveness_view(self):
         stages = run_pipeline(PROGRAMS[0]["source"], ALL)["stages"]
-        self.assertEqual([None, None, None], [s["liveness"] for s in stages[:3]])
-        self.assertIsNotNone(stages[3]["liveness"])
+        self.assertEqual([None] * 4, [s["liveness"] for s in stages[:4]])
+        self.assertIsNotNone(stages[4]["liveness"])
 
     def test_scopes_follow_the_structure_of_the_program(self):
         scopes = self.view("if-else")["liveness"]["scopes"]
@@ -127,11 +122,6 @@ class LivenessViewTestCase(unittest.TestCase):
                     for column in scope["columns"]:
                         if column["kind"] == "temp":
                             self.assertTrue(any(f"{column['name']} ~=" in line for line in released), column["name"])
-
-    def test_loop_carried_values_are_shown_as_kept(self):
-        scopes = self.view("loop")["liveness"]["scopes"]
-        kinds = {c["name"]: c["kind"] for c in scopes[1]["columns"]}
-        self.assertEqual("kept", kinds["s#1"])
 
     def test_the_view_is_skipped_unless_rename_ran(self):
         stages = run_pipeline(PROGRAMS[0]["source"], ["balance", "allocation"])["stages"]
@@ -167,7 +157,7 @@ class ServerTestCase(unittest.TestCase):
         )
         with urllib.request.urlopen(request) as response:
             stages = json.loads(response.read())["stages"]
-        self.assertEqual(4, len(stages))
+        self.assertEqual(5, len(stages))
 
 
 if __name__ == '__main__':

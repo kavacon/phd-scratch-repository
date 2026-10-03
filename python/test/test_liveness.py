@@ -179,7 +179,7 @@ def analysis(source, function):
 
 
 class ControlFlowTestCase(unittest.TestCase):
-    """Blocks inside `if` and loops are analysed on their own, and the statement as a whole in its parent."""
+    """Blocks inside an `if` are analysed on their own, and the statement as a whole in its parent."""
 
     IF_ELSE = """
         function f(x: int): int {
@@ -214,33 +214,6 @@ class ControlFlowTestCase(unittest.TestCase):
         then_block, else_block = outer.nested[1]
         self.assertEqual(({}, frozenset({"x#2"})), (then_block.reclaim_at, then_block.outputs))
         self.assertEqual(({}, frozenset({"x#2"})), (else_block.reclaim_at, else_block.outputs))
-
-    def test_loop_entry_values_are_merged_into_the_loop_target(self):
-        source = "function g(n: int): int { s = 0; for i in 0 .. 3 { s = s + i; } return s; } return g(3);"
-        self.assertEqual({}, analysis(source, "g").reclaim_at)  # s#1 enters the loop's phi, so it is not released alone
-
-    def test_for_loop_body_temporaries_are_released_each_iteration(self):
-        source = "function g(n: int): int { s = 0; for i in 0 .. 3 { t = s + i; s = t * 2; } return s; } return g(3);"
-        outer = analysis(source, "g")
-        self.assertEqual({}, outer.reclaim_at)  # s#1 enters the phi, s#2 is returned
-        (body,) = outer.nested[1]
-        self.assertEqual(({"t#1": 2}, frozenset({"s#3"})), (body.reclaim_at, body.outputs))
-
-    def test_loop_carried_value_that_is_not_returned_is_released_after_the_loop(self):
-        source = """
-            function h(n: int): int {
-                a = 1; b = 2;
-                for i in 0 .. 3 { if a < b { t = a + i; a = t; } b = b + a; }
-                return a;
-            }
-            return h(3);
-        """
-        outer = analysis(source, "h")
-        self.assertEqual({"b#2": 3}, outer.reclaim_at)  # b's header target is not returned
-        (body,) = outer.nested[2]
-        self.assertEqual({}, body.reclaim_at)
-        then_block, _ = body.nested[0]  # the if inside the loop body
-        self.assertEqual({"t#1": 2}, then_block.reclaim_at)
 
     def test_explicit_unassign_inside_a_block(self):
         source = "function f(a: int): int { r = a; if a < 3 { t = a + 1; t ~= a + 1; } return r; } return f(1);"

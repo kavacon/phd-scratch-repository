@@ -11,6 +11,7 @@ from parser.grammar import (
 from passes.allocation import lower_allocation
 from passes.balance import balance
 from passes.rename import rename
+from passes.unroll import unroll
 
 # Define lark based AST parsing for grammar file.
 _grammar = (
@@ -99,7 +100,7 @@ def walk(node: Node) -> Iterator[Node]:
         yield from walk(child)
 
 
-def parse(program: str, passes: Sequence[Pass] = (balance, rename, lower_allocation)) -> List[Node]:
+def parse(program: str, passes: Sequence[Pass] = (unroll, balance, rename, lower_allocation)) -> List[Node]:
     """Parse source into the typed AST, then apply each pass in order. Use `passes=()` for the raw AST."""
     nodes = _ToGrammar().transform(_parser.parse(program))
     for p in passes:

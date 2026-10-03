@@ -27,13 +27,14 @@ from lark.exceptions import UnexpectedCharacters, UnexpectedEOF, UnexpectedInput
 from allocation_poc.printer import unparse, unparse_statement
 from allocation_poc.programs import PROGRAMS
 from allocation_poc.simulate import simulate
-from parser.grammar import Assign, ForLoop, FunctionDef, If, Node
+from parser.grammar import Assign, FunctionDef, If, Node
 from parser.parser import parse
 from passes.allocation import lower_allocation, prepare
 from passes.balance import balance
 from passes.liveness import Liveness
 from passes.names import results
 from passes.rename import rename
+from passes.unroll import unroll
 
 STATIC = Path(__file__).parent / "static"
 
@@ -49,6 +50,12 @@ class PassInfo:
 
 # In the order the compiler runs them.
 PASSES = [
+    PassInfo(
+        "unroll", "Unroll loops",
+        "Loop bounds are fixed numbers, so each for loop is replaced by one copy of its body per iteration, with "
+        "the loop variable replaced by the iteration number. Later passes only see straight-line code and ifs.",
+        (), unroll,
+    ),
     PassInfo(
         "balance", "Balance branches",
         "If only one branch of an if changes a variable, the other branch gets an identity assignment (x = x;), "
@@ -162,8 +169,6 @@ def _scope(title: str, body: Sequence[Node], analysis: Liveness, params: Sequenc
             defined_row[statement.name] = k
         elif isinstance(statement, If):
             defined_row.update({name: k for name in sorted(results(statement))})
-        elif isinstance(statement, ForLoop):
-            defined_row.update({a.name: k for a in statement.header})
 
     order = {}  # position among the versions released at the same point
     for name in analysis.release_order:
@@ -181,10 +186,8 @@ def _scope(title: str, body: Sequence[Node], analysis: Liveness, params: Sequenc
             kind = "param"
         elif name in analysis.outputs:
             kind = "output"
-        elif reclaim is not None:
-            kind = "temp"
         else:
-            kind = "kept"  # carried round a loop, or merged into a loop's target
+            kind = "temp"
         conservative_end = n - 1 if died is None else died - 1
         live_end = reclaim - 1 if kind == "temp" else n - 1 if kind == "output" else conservative_end
         columns.append({
@@ -206,8 +209,6 @@ def _scope(title: str, body: Sequence[Node], analysis: Liveness, params: Sequenc
         if isinstance(statement, If):
             for branch, block, child in zip(("then", "else"), (statement.body, statement.orelse), analysis.nested[k]):
                 _scope(f"{branch} branch of {label}", block, child, (), depth + 1, out)
-        elif isinstance(statement, ForLoop):
-            _scope(f"loop body of {label}", statement.body, analysis.nested[k][0], (), depth + 1, out)
 
 
 def liveness_view(nodes: Sequence[Node]) -> Dict:

@@ -108,7 +108,7 @@
   .live td.code .no { color: var(--muted); display: inline-block; width: 22px; text-align: right; margin-right: 8px; }
   .live td.cell { width: 34px; min-width: 34px; height: 26px; padding: 0; text-align: center; font: 700 12px var(--mono); position: relative; cursor: default; }
   .live tr:nth-child(even) td.code { background: transparent; }
-  .k-temp { --c: var(--accent); } .k-output { --c: var(--ok); } .k-param { --c: var(--muted); } .k-kept { --c: var(--chg-strong); }
+  .k-temp { --c: var(--accent); } .k-output { --c: var(--ok); } .k-param { --c: var(--muted); }
   .live td.live { background: linear-gradient(var(--c), var(--c)) center / 12px 100% no-repeat; color: var(--panel); }
   .live td.cell:not(.live) { color: var(--text); }
   .live td.cell .mark { position: relative; text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel); color: var(--text); }
@@ -220,7 +220,6 @@ function describe(c) {
   const rows = (n) => `row ${n + 1}`;
   if (c.kind === "param") return `${c.name}: a parameter, owned by the caller, so it is never released here.`;
   if (c.kind === "output") return `${c.name}: returned (or passed out of the block), so it is never released here.`;
-  if (c.kind === "kept") return `${c.name}: carried round a loop, so it is not released here yet.`;
   return `${c.name}: defined at ${rows(c.defined)}, released after ${rows(c.release_row)}.`;
 }
 
