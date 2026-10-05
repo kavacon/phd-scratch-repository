@@ -1,160 +1,103 @@
 \section{Discussion}\label{sec:discussion}
-Eleven quantum programming systems were assessed across five abstraction tiers using the instrument defined in Section~\ref{sec:evaluation_instrument}.
-Each system was evaluated by implementing the representative task suite (T1--T4) and recording condition outcomes (C1--C9), with aggregated profiles and tier assignments summarised in Table~\ref{tab:system_assessments:system_summary} and the tier distribution shown in Figure~\ref{fig:system_assessments:tier_distribution}.
-No system in the review set occupies the quantum-implicit tier under the recorded outcomes.
-The comparative patterns also contextualise the notion of \textit{quantum bias} introduced in Section~\ref{subsec:introduction:quantum_bias}: required quantum knowledge pressure remains non-trivial even at the highest assigned tier.
-The conditions that most directly encode artefact, identity, observation and composition obligations (C2, C3, C6 and C9) remain binding, and the required-knowledge condition C8 exhibits strong task dependence.
-This section answers RQ1 and RQ2 in turn, names the quantum-implicit gap as a novel empirical contribution and draws design implications grounded in the assessment findings.
+The recorded profiles distinguish improvements in program organisation from the removal of quantum-specific programming obligations.
+Composition, compiler assistance and compact result extraction simplify particular aspects of programming, but none of the eleven reviewed systems satisfies the quantum-implicit requirements across the representative task suite.
+The distinction concerns what programmers must understand and author, rather than the presence of functions, a standalone syntax or a compilation pipeline.
 
 \subsection{RQ1: Current abstraction levels and the quantum-implicit gap}\label{subsec:discussion:rq1}
-Current quantum programming systems do not meet the abstraction-tier requirements identified in the literature for the quantum-implicit tier.
-Table~\ref{tab:system_assessments:system_summary} and Subsection~\ref{subsubsec:system_assessments:qi_gap} show that no reviewed system occupies the quantum-implicit tier under the recorded outcomes.
-The gap is attributable to recurring constraints in primary artefact, identity and observation semantics that remain visible in representative tasks.
-This result provides an empirical anchor for the developer-friction framing introduced in Subsection~\ref{subsec:introduction:quantum_bias}.
-It shows that substrate-level vocabulary requirements persist at the programming boundary even where systems improve structure, tooling and reuse.
+Table~\ref{tab:system_assessments:system_summary} records an unoccupied quantum-implicit tier.
+The recurring constraints concern primary artefacts, qubit identity and observation boundaries.
+Their persistence gives the quantum-bias framing in Section~\ref{subsec:introduction:quantum_bias} a task-based evidential basis: improved organisation and reuse do not consistently remove quantum vocabulary from ordinary correctness work.
 
-Assembly and IR systems satisfy hardware-fidelity and compilation-facing requirements.
-Frameworks lower the circuit-construction barrier through API abstraction and transpilation infrastructure.
-In both cases Section~\ref{sec:system_assessments} shows that representative constructions remain circuit-centred and qubit-explicit, with user-visible qubit identity.
-The resulting vocabulary burden reflects the persistence of a circuit primary artefact rather than a design failure within the tier~\cite{corralesgarro2025productivityexpressiveness}.
-The same interpretation is consistent with comparative accounts that treat current abstraction progress as dominated by structure and tooling layered over circuit substrates rather than by a change in representational starting point~\cite{furntratt2024higherabstractionlevels}.
-High-level systems partially meet the usability requirements established in Section~\ref{sec:background}~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
-The most capable assessed systems provide more program-like organisation, more structured clean-up support and more backend-agnostic workflows, yet quantum vocabulary remains required at the programming boundary in representative tasks.
+Assembly and IR systems provide instruction fidelity, interchange and compiler-facing representations.
+Frameworks provide library abstraction, transpilation and execution infrastructure.
+These functions address requirements within their respective roles, rather than failing because they retain the representations they were designed to support.
+The remaining vocabulary requirement is consistent with accounts of abstraction progress dominated by structure and tooling over circuit substrates~\cite{corralesgarro2025productivityexpressiveness,furntratt2024higherabstractionlevels}.
+The High-level systems simplify the management of additional obligations, but only partially meet the programmer-facing abstraction requirements identified in the literature~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
 
-Section~\ref{sec:system_assessments} reports that representative constructions improve program structuring and reuse earlier than they eliminate circuit-centred artefacts, user-visible qubit identity and explicit observation boundaries.
-The remaining vocabulary requirement is not resolved by incremental feature addition alone.
-The abstraction gap is therefore at the top of the hierarchy rather than at the bottom; no reviewed system crosses the joint threshold implied by the quantum-implicit tier requirements, even when other programmer burdens are relieved.
-Circuit-level programming continues to require bespoke quantum operations for each task in a manner the literature has likened to computation before abstraction layers became available~\cite{cobb2022higherlevelabstractions}.
+Tier assignments alone do not capture this differentiation.
+Systems within a tier vary in structured reversal, observation handling and composition.
+Conversely, function-structured programming does not establish the stronger usability sense of high-level abstraction.
+Q\#, Quff, Qutes and Qwerty provide program-like organisation or alternative expression mechanisms, yet their recorded profiles remain Framework because other obligations persist.
+The relevant distinction is between organising quantum operations and making quantum concepts non-mandatory.
 
-Tier assignment captures coarse structure, and the condition profiles also expose within-tier differentiation across representative tasks.
-Systems assigned to the same tier can differ materially in how far they relieve manual reversal obligations, compress observation boundaries and support first-class composition.
-This produces mixed profiles in which some programmer burdens are reduced without removing the circuit, identity and observation obligations that block movement into the quantum-implicit tier.
-Within-tier differentiation of this kind is ordinary in classical programming, where C, Java and Rust are each widely treated as high-level languages despite making materially different default trade-offs in safety discipline and programmer-facing control.
-A language that hides quantum vocabulary by default while retaining explicit expert access is a sufficient target; safe defaults with opt-in low-level control are an established pattern in language design.
-
-The term \textit{high-level} in quantum computing has come to denote function-structured programming, meaning that programs are organised as named callables rather than as flat gate sequences.
-This does not carry the programmer-usability dimension the same term has in classical computing, where \textit{high-level} implies vocabulary distance from the hardware substrate.
-Figure~\ref{fig:system_assessments:tier_distribution} contrasts the systems’ taxonomy positioning from Section~\ref{sec:taxonomy} with the tier distribution under the task and condition instrument showing that several systems do not occupy the tier suggested by informal labels.
-Section~\ref{sec:system_assessments} assigns Q\# to the Framework tier despite its standalone compiled form, since representative constructions still require explicit allocation, user-visible qubit identity and explicit result extraction.
-Quff is assigned to the Framework tier even though its program-first surface supports first-class composition, yet representative constructions still make quantum-marked regions and explicit identity management part of ordinary use.
-Qutes is assigned to the Framework tier despite task-local quantum-implicit appearances in Grover, since the remaining tasks in the suite still require quantum-explicit obligations that dominate the aggregated profile.
-Qwerty is assigned to the Framework tier even though its basis-oriented surface changes the form of circuit expression, since representative constructions still require explicit staging and explicit observation boundaries.
-These cases show that function structure and compiler assistance can coexist with the same interface constraints that characterise the Framework profile, so the stronger usability sense of \textit{high-level} is not secured by packaging or syntax alone.
-
-The assessed landscape therefore supports a narrow conclusion and a clear design target.
-No reviewed system removes circuit-centred artefacts, user-visible qubit identity and explicit observation boundaries from representative constructions while retaining the program-level composition and reuse required for the quantum-implicit tier.
-Progress within the populated tiers is better characterised as gradation within and across paradigms than as convergence toward quantum-implicitness; systems can relieve organisation burdens while leaving substrate-level vocabulary requirements in place.
-A quantum-implicit language does not need to eliminate every quantum concept.
-However, it must make quantum vocabulary non-mandatory in the common case while preserving explicit expert escape hatches, it must do so without returning programmers to circuit- and qubit-explicit authoring as the default.
+The taxonomy's contribution is to define that distinction through explicit quantum-implicit criteria rather than through packaging or informal labels.
+Earlier classifications supply useful paradigm descriptions and accounts of abstraction progress, but do not define this tier through the joint programmer-facing requirements used here~\cite{Gay2006QPLSurvey,furntratt2024higherabstractionlevels}.
+The recorded comparisons characterise the gap rather than fill it.
+Within the reviewed systems and tasks, simplification of particular programming obligations has not produced a surface that satisfies the complete quantum-implicit profile.
 
 \subsection{RQ2: A new quantum programming language is justified}\label{subsec:discussion:rq2}
-The evidence supports the need for a new quantum programming language designed at a higher abstraction level.
-The argument is paradigm-level, not feature-level.
-No existing system fails because it lacks a specific feature that another system has proved possible; existing systems share representational approaches that constrain how far abstraction can reach.
+The eleven-system comparison supports a different baseline language design rather than further conveniences alone.
+This conclusion follows from the persistence of obligations across distinct abstraction mechanisms, not from a claim that the systems provide identical capabilities.
 
-Section~\ref{sec:background} establishes that the classical data structure contracts underlying higher-level language design do not transfer to the quantum setting~\cite{yuan2025foundationalabstractions}.
-Classical programming assumes that data can be copied freely, that inspecting it has no side effects and that temporary results don't need to be reversed.
-Each assumption fails for quantum data: no-cloning prohibits duplication, measurement collapses state on inspection and uncomputation introduces a mandatory reversal obligation without a classical equivalent.
-A language built on these constraints can abstract their management, but it cannot abstract away the constraints themselves without a different foundational data model~\cite{yuan2025foundationalabstractions}.
+OpenQASM exposes instruction sequences, while QIR and Q-MLIR supply compiler representations and lowering infrastructure.
+Their assessed constructions retain explicit quantum artefacts and resource identities.
+Qiskit and PennyLane provide reusable library structures and execution tooling, but the programmer still authors circuits or device-bound quantum operations.
+The additional infrastructure improves how those representations are constructed and executed without replacing them as the programmer's starting point.
 
-Section~\ref{sec:system_assessments} reports that representative constructions can become more structured and compositional without changing the representational model the programmer must engage with.
-Circuit- or artefact-centred authoring require explicit qubit identity and observation boundaries at the programming boundary.
-Section~\ref{sec:background} argues that this ceiling follows from quantum data constraints, so surface structuring alone cannot make these obligations non-mandatory without a different foundational model~\cite{yuan2025foundationalabstractions}.
-Program-first surfaces therefore create an expectation of relief that the representative constructions do not satisfy, and systems remain classified as Framework for reasons driven by what remains mandatory rather than by a lack of program structure.
-Q\#, Quff, Qutes and Qwerty each present more program-like organisation than circuit-library baselines, yet representative constructions still require explicit engagement with circuit- or artefact-centred authoring, explicit qubit identity and explicit observation boundaries.
-The shared pattern is that structure is added above the boundary rather than replacing the boundary, so the programmer’s core correctness obligations remain expressed in circuit or basis vocabulary even when the surface looks higher-level.
-This outcome empirically demonstrates the quantum data constraints that shape any circuit-centred descriptive substrate~\cite{yuan2025foundationalabstractions}.
+Q\# provides typed operations and structured reversible constructs.
+Silq combines program-level values and composition with compiler-managed safety mechanisms~\cite{MicrosoftQSharpOverview,bichsel2020silq}.
+The recorded outcomes acknowledge these differences, including Silq's High-level assignment.
+Nevertheless, both assessed suites retain quantum-specific constructs and observation requirements.
+Program structure and implementation assistance therefore simplify the management of particular obligations without jointly removing those that define quantum-implicit entry.
 
-Subsection~\ref{subsec:introduction:quantum_bias} defines quantum bias as the degree to which gates, qubits and measurement are required to understand and productively use a language.
-Section~\ref{sec:system_assessments} reports that required-knowledge pressure varies by task family rather than decreasing consistently with tier.
-Phase estimation concentrates the strongest failures across the review set.
-Quantum bias therefore remains a constraint at the programming boundary even when surfaces become more program-like.
-Representative constructions still require amplitude-, phase- or entanglement-level reasoning for correctness in phase estimation and tasks that make entanglement an explicit correctness concept.
-Empirical survey evidence reports the same effect at the programmer level, with quantum-specific vocabulary and the absence of higher-level abstraction identified as key barriers to adoption~\cite{ferreira2024qplusage}.
+Qmod, Quff and Qutes provide further mechanisms through synthesis, runtime inversion and task-specific implicit operations~\cite{vax2025qmodexpressivehighlevelquantum,wright2024quff,faro2025qutes}.
+Their assessed programs improve composition and compress result extraction.
+Qutes' membership operation passes every condition for its search task, providing a concrete task-local example in which the programmer does not explicitly manage the assessed quantum obligations.
+That outcome does not extend across the remaining constructions.
+Qwerty's basis-oriented approach changes the representational form more substantially than circuit-library organisation~\cite{adams2024qwerty}.
+Its task-local improvements likewise coexist with explicit staging, observation and phase reasoning elsewhere in the suite.
 
-Qutes can present a task-local quantum-implicit appearance in Grover, but the same surface does not generalise across the suite.
-Qwerty changes the form of circuit expression through basis-oriented primitives, but representative constructions still require explicit staging and explicit result extraction.
-These cases separate presentation from obligation, they motivate the need for a representational starting point that makes the boundary obligations non-mandatory rather than merely reorganised.
+These comparisons show that the mechanisms represented by the reviewed systems have not closed the gap.
+The recurring obligations are not explained simply by an absence of reusable functions, compiler assistance or higher-level syntax.
+Required-knowledge pressure also persists across different authoring models, particularly in phase estimation.
+This pattern is consistent with practitioner evidence identifying quantum vocabulary and insufficient higher-level abstraction as adoption barriers~\cite{ferreira2024qplusage}.
 
-Tower~\cite{yuan2025foundationalabstractions} provides an existence proof that the circuit representation is a design choice rather than an inevitability.
-The Tower aside in Section~\ref{sec:system_assessments} describes a programming model built around pointer-based quantum data structures and dynamic allocation, with correctness constraints treated as first-class language concerns.
-Tower is excluded from the task and condition instrument, but it strengthens the RQ2 claim by making the design-choice point concrete in a worked language design.
+Quantum data constraints make the design problem more than syntactic.
+The foundational account discussed in Section~\ref{sec:background} distinguishes quantum data from classical assumptions about unrestricted copying, inspection and temporary-value disposal~\cite{yuan2025foundationalabstractions}.
+Those constraints must be respected by an implementation.
+The language-design question is which responsibilities must remain in the programmer's ordinary working model and which can be managed through its abstractions.
 
-A quantum-implicit language must provide a use-case model in which amplitude-, phase- and entanglement-level concepts do not arise as programmer responsibilities, rather than hiding them behind an API\@.
-Subsection~\ref{subsec:introduction:quantum_bias} frames this requirement as the removal of bleed-through, where programmers otherwise resort to gate-level escape hatches to express intent that a well-formed abstraction should handle implicitly.
-Section~\ref{sec:system_assessments} reports that phase estimation and explicit entanglement constructions repeatedly surface these concepts as correctness requirements across the review set, and this pressure persists at higher tiers.
+Tower provides a supporting example of a different representational starting point through familiar data structures and an associated control machine model~\cite{yuan2025foundationalabstractions}.
+As described in Section~\ref{subsec:system_descriptions:tower}, it retains explicit reversibility obligations.
+Its exclusion from the assessment prevents treating it as a demonstrated quantum-implicit solution, but its design supports considering alternatives to circuit-centred authoring.
 
-The evidence therefore supports the need for a new quantum programming language designed at a higher abstraction level.
-The dominant paradigms improve structure and tooling while leaving circuit-centred artefacts, explicit qubit identity, explicit observation boundaries and task-dependent required-knowledge pressure as programmer responsibilities.
-A language that reaches the quantum-implicit tier requires a representational starting point that makes these obligations non-mandatory by default.
-
-\subsection{The quantum-implicit gap as a novel contribution}\label{subsec:discussion:contribution}
-The quantum-implicit tier is the central novel contribution of this review's taxonomy.
-Prior comparative surveys classified quantum programming systems by design orientation, paradigm or abstraction level, but none defined the quantum-implicit tier as a named category with explicit entry criteria~\cite{Gay2006QPLSurvey,furntratt2024higherabstractionlevels}.
-This review provides the first structured definition of the tier.
-The tier is definable in criterion terms, its requirements are derivable from the literature~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines,yuan2025foundationalabstractions} and no current system occupies it under the recorded outcomes.
-
-Prior taxonomy established a useful vocabulary for the field.
-The earliest systematic survey classified quantum programming languages by design paradigm: imperative, functional and formal semantic approaches~\cite{Gay2006QPLSurvey}.
-This provided a framework for describing what systems exist but did not define tier membership by programmer experience or vocabulary requirement.
-Subsequent comparative work identified fragmentation and stalled abstraction progress but did not define the quantum-implicit tier as a named, criteria-backed category~\cite{furntratt2024higherabstractionlevels,corralesgarro2025productivityexpressiveness}.
-What this review adds is a criterion-based definition.
-The definition is grounded in the abstraction requirements identified in Section~\ref{sec:background} and operationalised through the task and condition instrument defined in Section~\ref{sec:evaluation_instrument}.
-
-The condition outcomes make the quantum-implicit tier checkable, since entry requires that the discriminator condition set is jointly satisfied in representative use rather than by isolated features.
-The same outcomes provide a structured way to discuss within-tier differentiation, since systems can relieve some programmer burdens while leaving circuit-centred artefacts, explicit qubit identity or explicit observation boundaries as mandatory obligations.
-The contribution is to identify and characterise the quantum-implicit gap, not to fill it.
-A gap that has not been defined and characterised cannot be systematically closed, the definition and empirical grounding here are a necessary precondition for any future language design effort targeting this tier.
-The design implications this finding supports are drawn in Section~\ref{subsec:discussion:implications}, and the programme of work the gap motivates is addressed in Section~\ref{sec:conclusion}.
+Taken together, the findings justify investigating a new language whose baseline model makes quantum realisation an implementation responsibility.
+The reviewed mechanisms have improved particular aspects of programming without satisfying the joint requirements.
+A different baseline design is therefore a reasonable conclusion from the observed pattern.
+The comparison does not establish that every possible adaptation of an existing system would fail.
 
 \subsection{Methodological reflections}\label{subsec:discussion:methodological_reflections}
-Section~\ref{sec:system_assessments} records Condition~C7 as \texttt{P} across Tasks~T1--T4 for OpenQASM~3.0 despite the Assembly-tier expectation in Table~\ref{tab:evaluation_instrument:expected_profile}.
-This pattern can arise when the representative task suite does not exercise a system capability even when the language exposes it.
-The canonical constructions used in Section~\ref{sec:system_assessments} do not require basis-set selection, topology-aware routing, timing control or pulse-level calibration, so the evaluation does not force engagement with the hardware-control surfaces that C7 is intended to test.
-This mismatch admits three interpretations.
-First, the canonical task suite under-exercises hardware-control obligations, and C7 therefore appears non-discriminating even for systems that materially expose such obligations.
-Second, assembly languages may have shifted the default workflow away from mandatory hardware-control engagement, and the expected profile for the Assembly tier should be revised to reflect that change.
-Third, the canonical-example sample may bias the observed pattern by selecting constructions that avoid hardware-control features even where they are available.
-Section~\ref{sec:system_assessments} should therefore be read as evidence about what the representative tasks require rather than as an exhaustive statement of what each language can express.
+The results concern obligations exercised by the representative constructions, not exhaustive system capabilities.
+OpenQASM's C7 passes despite the expected Assembly profile because the examples do not require timing, topology or pulse-level calibration.
+This may reflect task under-coverage, selection of examples that avoid hardware-control features or a change in default assembly workflows.
+The recorded pattern alone does not distinguish those explanations.
 
-Section~\ref{sec:system_assessments} also contains absences in the evidence record, where a condition outcome cannot be supported from the canonical sources used for representative tasks.
-These absences arise when the artefacts do not expose the relevant obligation at the programming surface, when the task does not require the capability the condition is intended to test or when the available canonical material is incomplete.
-The QIR C6 case is representative, since the available artefacts do not provide evidence that observation boundaries are expressed at the programming surface in a way that the instrument can assess.
-Absences of this kind affect comparative interpretation, since they can suppress visible differentiation between systems even when the underlying capability or obligation differs.
-The methodological implication is that cross-system patterns should be read as statements about what the representative tasks and available canonical evidence require and expose, not as exhaustive statements about the full capabilities of each language.
+Unassessable outcomes require the same care.
+QIR's C6 lacks task-aligned observation evidence.
+A missing outcome can reflect an unexercised capability, an obligation absent from the artefact or incomplete source coverage.
+It must not be interpreted as either satisfied abstraction or demonstrated lack of capability.
+Task dependence and evidence coverage therefore qualify cross-system conclusions without removing the observed gap.
 
 \subsection{Design implications}\label{subsec:discussion:implications}
-The condition outcomes reported in Section~\ref{sec:system_assessments} support four design implications for a quantum-implicit programming language.
-Each implication makes contact with the abstract machine requirements identified in Section~\ref{sec:background}~\cite{nunez_corrales2025betterabstractmachines}.
+The comparison supports four requirements for a quantum-implicit design, consistent with the abstract-machine concerns identified in the literature~\cite{nunez_corrales2025betterabstractmachines}.
 
 \paragraph{Quantum data model first}
-Section~\ref{sec:system_assessments} shows that representative constructions can become more structured and compositional without changing the representational substrate the programmer must engage with.
-Several systems support function-level decomposition and reuse, but the representative programming workflow still requires authoring or manipulating a circuit, tape or IR artefact in order to express core constructions or to compose them at scale.
-This pattern is visible in the persistence of the primary-artefact condition, and it remains binding even when composition improves under Condition~C9.
-A quantum-implicit language therefore cannot be designed as a circuit system with improved modularity.
-The surface model must be built around programs over values, and circuits must be a derived compilation product rather than the primary object of authoring.
-This implication is necessary but not sufficient, since a program-first surface can still reintroduce explicit qubit identity and explicit result extraction via measurement or sampling as mandatory steps in the representative workflow.
+The authoring model should express programs over values, with circuits derived through compilation rather than manipulated as the primary artefact.
+The persistence of C2 constraints despite improved C9 outcomes distinguishes this requirement from modularity alone.
+Program-first syntax is insufficient where ordinary use still reintroduces qubit identity or explicit observation.
 
 \paragraph{Computation model separation}
-Section~\ref{sec:system_assessments} indicates that the discriminator conditions persist even when other aspects of the programming experience improve.
-Representative workflows continue to require the programmer to track explicit qubit identity and lifetime management, and representative workflows continue to require explicit result extraction via measurement or sampling.
-These obligations are not incidental, since they define the point where the surface language forces the execution model back into the programmer's working vocabulary.
-A quantum-implicit language therefore cannot be obtained by layering additional safety constraints or library conveniences on top of a circuit-centred computation model.
-The computation model must be defined over the same abstract data representation that the surface language exposes, and the guarantees it provides must not require the programmer to name, index or manually manage qubits in representative constructions.
-The same separation must apply to program results, since the representative workflow should not require an explicit measurement or sampling step in order to obtain a usable value.
+The computation model should operate over the abstractions exposed by the language rather than requiring programmers to name, index or manage implementation qubits.
+Safety mechanisms and library conveniences simplify the management of particular obligations, but the recorded identity constraints remain.
+Quantum resource guarantees must therefore be expressed without making execution-level bookkeeping a prerequisite of representative programming.
 
 \paragraph{Measurement as system policy}
-Section~\ref{sec:system_assessments} indicates that explicit result extraction via measurement or sampling remains a routine step in representative workflows even when other obligations are partially relieved.
-Representative constructions therefore continue to expose an observation boundary that the programmer must cross explicitly in order to obtain usable outcomes.
-This boundary persists across tiers, and it persists even when program structuring and cleanup mechanisms improve elsewhere in the stack.
-A quantum-implicit language must treat observation as a system-level policy rather than as an operation that the programmer performs and wires into the program as part of ordinary work.
-The computation model must allow programs to consume results as ordinary values without requiring the programmer to explicitly select measurement operations, sampling strategies or observable interfaces in representative constructions.
-This shift parallels the role of compiler-managed uncomputation, since it moves a correctness obligation from the programmer's working model into the language and compiler.
+Result extraction should be managed by the language and runtime rather than selected and wired into ordinary programs.
+A compact measurement builtin reduces bookkeeping but still exposes the observation boundary.
+Programs should consume usable results without requiring explicit measurement operations, sampling strategies or observable interfaces in representative constructions.
 
 \paragraph{Vocabulary-free by default, expert access preserved}
-Section~\ref{sec:system_assessments} indicates that required-knowledge pressure remains concentrated in specific task families rather than declining uniformly with improved program structure.
-Representative constructions therefore still force many programmers to adopt amplitude, phase and interference vocabulary as part of ordinary correctness work, particularly in phase estimation.
-This pattern persists even in systems that reduce other burdens, and it is consistent with the persistence of explicit qubit identity and explicit result extraction via measurement or sampling in representative workflows.
-A quantum-implicit language should therefore be designed so that the common-case programming path does not require quantum-mechanical prerequisites.
-The design target is a safe-default surface in which programs can be written, tested and reasoned about without quantum vocabulary, and in which expert mechanisms are preserved as explicit opt-ins for optimisation, verification and low-level access.
-Practitioner evidence supports this prioritisation, since the dominant barrier for many current users is the requirement to use quantum vocabulary in common-case programming rather than the absence of low-level escape hatches~\cite{ferreira2024qplusage}.
+The common programming path should permit programs to be written, tested and reasoned about without amplitude, phase or entanglement vocabulary.
+The task-dependent C8 failures make this requirement distinct from improved function structure.
+Explicit opt-ins should preserve expert access for optimisation, verification and low-level control.
+This prioritisation is consistent with practitioner evidence concerning quantum vocabulary and abstraction barriers~\cite{ferreira2024qplusage}.
