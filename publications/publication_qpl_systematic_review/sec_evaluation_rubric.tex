@@ -1,95 +1,57 @@
 \section{Evaluation instrument}\label{sec:evaluation_instrument}
-This section defines the evaluation instrument used to classify each reviewed system against the taxonomy in Section~\ref{sec:taxonomy}.
-The instrument specifies the representative task suite, the condition outcomes recorded for each system with primary-source evidence and how tier assignments are justified from that evidence.
-This section defines the instrument; it does not apply it.
-Section~\ref{sec:system_assessments} applies the instrument to each reviewed system and reports the resulting evidence profiles and tier classifications.
-
-The instrument operationalises the taxonomy from Section~\ref{sec:taxonomy} and the quantum-implicit gating constraints in Subsection~\ref{subsec:evaluation_instrument:gating} are the operational form of the quantum-implicit litmus test stated in that section.
-
-The instrument is evidence-first.
-For each system, canonical code examples are collected or constructed where no canonical example exists.
-For the representative tasks defined in Subsection~\ref{subsec:evaluation_instrument:task_suite} condition outcomes are recorded with primary-source citations as defined in Subsection~\ref{subsec:evaluation_instrument:conditions}.
-A tier is assigned via a justified profile match.
-Tier assignment applies the explicit gating constraints for quantum-implicit claims defined in Subsection~\ref{subsec:evaluation_instrument:gating}.
+The evaluation instrument operationalises the abstraction taxonomy defined in Section~\ref{sec:taxonomy} through four representative programming tasks and nine conditions.
+Canonical code examples provide evidence for each system; constructed examples are used only where no canonical example exists.
+For each system and task, condition outcomes are recorded with primary-source citations.
+The resulting profile describes the abstraction requirements met by the representative constructions and the obligations that remain visible to the programmer.
+Tier assignment follows a justified match between the evidenced condition profile and the expected tier profiles, subject to explicit gating constraints for quantum-implicit classification.
 
 \subsection{Evaluation lenses}\label{subsec:evaluation_instrument:lenses}
-The evaluation instrument is guided by five lenses that describe what varies across tiers and how evidence should be interpreted.
+Five lenses guide interpretation of the programming evidence.
 \begin{description}
-    \item[Required mental model and vocabulary] What quantum-mechanical and execution-model concepts a programmer must use to complete representative workflows.
-    \item[Primary artefact] What the programmer primarily authors or manipulates (e.g.\ a program over values versus an explicit circuit/tape/IR object).
-    \item[Safety discipline and semantic guarantees] What type-theoretic or effects-based discipline the system enforces, including linearity, affinity, uncomputation and validity constraints~\cite{pierce2002tapl-doc9,bichsel2020silq}.
-    \item[Compilation responsibility] Which obligations fall on the programmer versus the compiler/runtime (e.g.\ introduction of quantum structure, resource management and clean-up).
-    \item[Execution and hardware adjacency] How much execution- and hardware-layer detail surfaces in representative programming, including basis gates, timing, controller instructions and device-specific constraints.
+    \item[Required mental model and vocabulary] The quantum-mechanical and execution-model concepts required to complete representative workflows.
+    \item[Primary artefact] The object the programmer authors or manipulates: a program over values or an explicit circuit, tape, IR or graph.
+    \item[Safety discipline and semantic guarantees] The enforced type or effect discipline, including linearity, affinity, uncomputation and validity constraints~\cite{pierce2002tapl-doc9,bichsel2020silq}.
+    \item[Compilation responsibility] The division of obligations between the programmer and compiler or runtime, including quantum structure, resource management and clean-up.
+    \item[Execution and hardware adjacency] The visibility of basis gates, timing, controller instructions and device-specific constraints.
 \end{description}
-The term \textit{bleed-through} names the central interpretation mechanism: execution- and hardware-layer concerns surface at the programming layer, making quantum-native vocabulary mandatory even when the programmer's intent could be expressed without it~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
-Bleed-through guides the graduated condition outcomes reported in Subsection~\ref{subsec:evaluation_instrument:conditions}: the more a representative workflow forces the programmer to drop into lower-layer obligations (e.g., circuit surgery, qubit bookkeeping, measurement plumbing, backend constraints), the more likely the relevant condition should be judged negatively.
 
-The lenses are not evaluated directly, instead they provide interpretive framing for the condition outcomes.
-In typical cases, conditions concerning superposition-as-value, marking and required quantum concepts primarily reflect the mental-model lens.
-Conditions concerning circuit-centric authoring and composition reflect the primary-artefact lens.
-Conditions concerning uncomputation reflect the safety and compilation-responsibility lenses and conditions concerning hardware/execution constraints reflect the hardware-adjacency lens.
+\textit{Bleed-through} occurs when execution- or hardware-layer concerns surface at the programming layer, requiring quantum-native vocabulary even where the programmer's intent could be expressed without it~\cite{DiMatteo2024AbstractionHierarchy,nunez_corrales2025betterabstractmachines}.
+Required lower-layer obligations inform negative or constrained condition outcomes.
 
-Table~\ref{tab:evaluation_instrument:tier_lenses} provides a descriptive summary of how the five tiers differ across the abstraction dimensions identified by the lenses.
-The table contextualises the tier labels used throughout the paper; tier assignment in this review is based on representative tasks and condition outcomes with primary-source evidence, as defined in Subsections~\ref{subsec:evaluation_instrument:task_suite} and~\ref{subsec:evaluation_instrument:conditions}.
-
-\begin{table*}[ht*]
-    \caption{Descriptive tier characteristics across five abstraction dimensions. This table contextualises the tier labels. Tier assignment in this review is based on representative tasks and condition outcomes with primary-source evidence.}
-    \label{tab:evaluation_instrument:tier_lenses}
-    \footnotesize
-    \begin{tabular}{p{1.6cm} p{2.3cm} p{2.3cm} p{2.3cm} p{2.3cm} p{2.3cm}}
-        \toprule
-        \textbf{Tier}    & \textbf{Mental model}                                                                            & \textbf{Primary artefact}                                                                       & \textbf{Safety}                                                                                                                 & \textbf{Compilation} & \textbf{Hardware adjacency} \\ \midrule
-        Assembly         & Quantum vocabulary unavoidable: qubits, gates, registers and measurement are the basic interface & Explicit instruction sequence or circuit, with limited classical control & Few language-level guarantees; safety mainly by convention & Programmer specifies quantum operations explicitly & Hardware-adjacent concepts visible: basis gates, measurement targets and controller details. \\
-        \addlinespace
-        IR               & Quantum-explicit, targeted at compiler and tooling authors                                       & Explicit IR intrinsics for primitives: allocation, release, gates, measurement and control flow & Precise enough for validation and verification hooks, including qubit-lifetime checks & Primarily a lowering target; quantum structure is already explicit & Designed for multiple backends; hardware mapping begins at this layer. \\
-        \addlinespace
-        Framework        & Host language (typically Python), but quantum vocabulary remains common in typical use & Circuit object, tape or graph as the central artefact & Safety discipline mostly API-driven; guarantees vary by framework & Framework provides transpilation, passes and automatic differentiation, but programmers still construct circuits explicitly & Often backend-portable with configurable basis and backend options. \\
-        \addlinespace
-        High-level       & Programmers reason in quantum concepts, but the interface is structured and algorithmic & Primary artefact is a program, not merely a circuit file & Stronger static discipline: linearity, affinity, effects and an explicit uncomputation or disposal story~\cite{bichsel2020silq} & Compiler provides major assistance, such as safe uncomputation, but the programmer still selects quantum constructs & Largely hardware-agnostic by default, with optional low-level tuning. \\
-        \addlinespace
-        Quantum-implicit & Non-trivial programs can be written and debugged without learning quantum vocabulary & Primary artefact is a mathematical or computational-level description, not a circuit & Guarantees framed in non-quantum terms; quantum operations exist only as optional escape hatches & Compiler infers and synthesises the quantum realisation, then lowers to IR or circuits & Hardware constraints not user-facing except through opt-in interoperability or tuning. \\
-        \bottomrule
-    \end{tabular}
-\end{table*}
-
-\subsection{Overview}\label{subsec:evaluation_instrument:overview}
-Each reviewed system is assigned a tier on the spectrum \textit{Assembly} through \textit{IR}, \textit{Framework}, \textit{High-level} to \textit{Quantum-implicit} by applying a fixed evaluation instrument.
-The instrument proceeds as follows.
-First, a fixed suite of representative tasks is attempted see Subsection~\ref{subsec:evaluation_instrument:task_suite}.
-Second, for each system and each task, outcomes are recorded on a fixed set of self-contained conditions, supported by primary-source evidence see Subsection~\ref{subsec:evaluation_instrument:conditions}.
-Third, a tier is assigned via a justified classification from the resulting condition profile.
-Tier assignment applies the explicit gating constraints for quantum-implicit claims defined in Subsection~\ref{subsec:evaluation_instrument:gating}.
-
-The five tiers are described alongside the evaluation lenses in Subsection~\ref{subsec:evaluation_instrument:lenses}, the expected condition profile against which tier assignment is justified is defined alongside the conditions in Subsection~\ref{subsec:evaluation_instrument:conditions}, subject to the gating constraints in Subsection~\ref{subsec:evaluation_instrument:gating}.
+The mental-model lens informs conditions concerning superposition, marking and required quantum concepts.
+The primary-artefact lens informs circuit-centric authoring and composition.
+Safety and compilation responsibility inform uncomputation, while hardware adjacency informs execution constraints.
+The lenses guide interpretation rather than being assessed directly; tier assignment depends on the evidenced condition profile.
 
 \subsection{Representative task suite}\label{subsec:evaluation_instrument:task_suite}
-Programming language evaluation methods based on representative tasks ground assessments in concrete programmer intent rather than theoretical capabilities~\cite{Myers2016PLUsabilitySIG}.
-The PLIERS process formalises this by requiring that tasks be defined before evaluation begins, representative of real workflows rather than adversarial edge cases and completed using the language's primary surface model rather than optional escape hatches~\cite{Coblenz2021PLIERS}.
-Following this approach, the four tasks below are defined prior to evaluation.
-Condition outcomes are recorded only with respect to the ability to complete these tasks using the system's representative programming model, with primary-source evidence.
+Representative tasks ground programming language evaluation in concrete programmer intent~\cite{Myers2016PLUsabilitySIG}.
+PLIERS requires tasks to be defined before evaluation, reflect real workflows rather than adversarial cases and use the language's primary surface model rather than optional escape hatches~\cite{Coblenz2021PLIERS}.
+Following this approach, four tasks are defined prior to evaluation.
+Condition outcomes concern their completion using each system's representative programming model.
 
 \begin{description}
-    \item[$T_1$ Deutsch--Jozsa] Implement the Deutsch--Jozsa decision procedure for a small input size, including an explicit oracle definition or the system's intended oracle hook.
-    The minimum deliverable parameterises the construction for a small $n$, provides a single oracle construction or hook with a balanced oracle by default and runs the procedure to expose a clear decision artefact.
-    If the system requires measurement or sampling to get the decision, the observation boundary is recorded under the conditions in~\ref{subsec:evaluation_instrument:conditions}.
-    \item[$T_2$ Grover search] Implement one Grover iteration, or a small fixed number, for a simple marked-state or predicate oracle, including the diffusion operator.
-    The minimum deliverable defines an oracle that marks a single basis state or simple predicate, implements one full Grover iteration as an oracle phase flip followed by diffusion and provides the canonical pathway to execute and get an outcome.
-    Any explicit sampling, shots or observable boundary is recorded under the conditions in~\ref{subsec:evaluation_instrument:conditions}.
-    \item[$T_3$ Quantum phase estimation] Implement quantum phase estimation for a small unitary and small precision, including controlled powers and an inverse QFT mechanism.
-    The minimum deliverable chooses and documents a simple unitary $U$ with a known phase or eigenvalue and implements the controlled-$U^{2^k}$ sequence for $k=0,\ldots,t-1$.
-    The inverse QFT is implemented explicitly or via a cited library routine and exposes the estimated phase bits or a documented analogue.
-    If measurement is required, the observation boundary is recorded under the conditions in~\ref{subsec:evaluation_instrument:conditions}.
-    \item[$T_4$ Bell state preparation] Prepare a Bell state from $\ket{00}$ and expose it as a reusable construction to exercise composition.
-    The minimum deliverable defines or calls a routine that produces an entangled pair and demonstrates use of the pair in a follow-on step, such as passing it to another routine or applying an additional controlled operation.
-    Measurement is avoided in the core construction where possible; if it is required by the system's result model, the boundary is recorded under the conditions in~\ref{subsec:evaluation_instrument:conditions}.
+    \item[$T_1$ Deutsch--Jozsa] Implement the decision procedure for a small input size.
+    The minimum deliverable parameterises the construction for a small $n$, supplies an explicit oracle or the system's intended oracle hook with a balanced oracle by default and runs the procedure to expose a clear decision artefact.
+
+    \item[$T_2$ Grover search] Implement one Grover iteration, or a small fixed number, for a simple marked-state or predicate oracle.
+    The minimum deliverable defines the oracle, implements a full iteration comprising an oracle phase flip followed by diffusion and provides the canonical execution and result-extraction pathway.
+
+    \item[$T_3$ Quantum phase estimation] Implement phase estimation for a small unitary and precision.
+    The minimum deliverable documents a unitary $U$ with a known phase or eigenvalue, implements controlled-$U^{2^k}$ for $k=0,\ldots,t-1$ and supplies an inverse QFT explicitly or through a cited library routine.
+    The construction exposes estimated phase bits or a documented analogue.
+
+    \item[$T_4$ Bell state preparation] Prepare a Bell state from $\ket{00}$ as a reusable construction.
+    The minimum deliverable defines or calls a routine producing an entangled pair and demonstrates follow-on use, such as passing the pair to another routine or applying an additional controlled operation.
+    Measurement is avoided in the core construction where possible.
 \end{description}
 
-Canonical examples are used wherever available in primary sources.
-Constructed examples are used only when a canonical code example does not exist, and each non-trivial feature used is justified by a primary-source citation.
-Tasks serve as evidence carriers for condition outcomes rather than scoring items.
+For every task, required measurement, sampling, shots or observable-boundary concepts are recorded in the condition outcomes, including where the system requires observation to expose the Bell construction's result.
+Canonical examples take precedence.
+Where none exists, a constructed example is used with primary-source justification for each non-trivial feature.
+Tasks provide evidence for condition outcomes rather than scoring items.
 
 \subsection{Conditions and outcome labels}\label{subsec:evaluation_instrument:conditions}
-For each system and each representative task, outcomes are recorded on a fixed set of self-contained conditions, using three outcome labels.
+Each system and task is assessed against nine conditions using three outcome labels.
 \begin{description}
     \item[Fail (F)] The condition is not met in representative constructions.
     \item[Constrained (C)] The condition is met only with restrictions, leakage of lower-layer obligations or reliance on escape hatches.
@@ -108,18 +70,14 @@ The conditions are:
     \item[$C8$ Amplitude/phase and entanglement/interference concepts not required] Correctness in representative programming does not require reasoning directly about amplitudes, phases, entanglement or interference.
     \item[$C9$ First-class subroutine composition] Larger programs are built by composing subroutines rather than circuit surgery or staging glue.
 \end{description}
-Condition outcomes are recorded for each system and each task.
-The resulting condition profile is used for tier assignment as described in Subsection~\ref{subsec:evaluation_instrument:overview}, with gating constraints for quantum-implicit claims defined in Subsection~\ref{subsec:evaluation_instrument:gating}.
 
-Table~\ref{tab:evaluation_instrument:expected_profile} records the expected condition outcomes for a system at each tier in representative $T_1$--$T_4$ constructions.
-Tier assignment is by justified profile match against this table as described in Subsection~\ref{subsec:evaluation_instrument:overview}.
-The four bold cells in the quantum-implicit row are the gating outcomes defined in Subsection~\ref{subsec:evaluation_instrument:gating}.
-A system whose representative constructions do not produce $P$ on those four conditions cannot be classified quantum-implicit, regardless of the remaining profile.
+Table~\ref{tab:evaluation_instrument:expected_profile} gives the expected condition profiles for justified tier assignment.
+The four bold quantum-implicit entries are mandatory gating outcomes.
+A profile that does not pass all four gates cannot receive that classification.
 
 \begin{table}[ht*]
-    \caption{Expected condition outcomes per tier.
-    Cells record the expected outcome $F$, $C$ or $P$ for a system at the given tier on each of the conditions defined in this subsection.
-    Bold entries in the quantum-implicit row are the gating outcomes defined in Subsection~\ref{subsec:evaluation_instrument:gating}.}
+    \caption{Expected condition outcomes per tier in representative $T_1$--$T_4$ constructions.
+    Bold entries identify mandatory quantum-implicit gating outcomes.}
     \label{tab:evaluation_instrument:expected_profile}
     \footnotesize
     \begin{tabular}{p{1.2cm}ccccccccc}
@@ -144,9 +102,7 @@ Three cells distinguish the high-level and quantum-implicit tiers and act as the
 The remaining conditions on which the two tiers might otherwise be compared, $C4$ (uncomputation) and $C9$ (subroutine composition), are both $P$ at high-level and quantum-implicit and therefore do not discriminate between them.
 
 \subsection{Quantum-implicit gating constraints}\label{subsec:evaluation_instrument:gating}
-This subsection operationalises the quantum-implicit litmus test stated in Section~\ref{sec:taxonomy}.
-A system is classified as quantum-implicit only if all the following gating conditions pass in representative $T_1$--$T_4$ constructions, using the outcomes recorded in Subsection~\ref{subsec:evaluation_instrument:conditions}.
-
+The quantum-implicit litmus test in Section~\ref{sec:taxonomy} requires four conditions to pass in representative $T_1$--$T_4$ constructions.
 \begin{description}
     \item[C2] The primary artefact is not a circuit, tape or IR object.
     \item[C3] Qubit identity and lifetime are not user-visible; representative constructions do not require explicit allocation, indexing, lifetime management, reset or release.
@@ -154,6 +110,5 @@ A system is classified as quantum-implicit only if all the following gating cond
     \item[C9] Subroutine composition is first-class; larger programs are built by composing subroutines rather than through circuit surgery or staging glue.
 \end{description}
 
-If any of the four gates does not pass, the quantum-implicit tier is not awarded.
-These conditions are necessary but not sufficient: passing all four does not by itself confer the quantum-implicit tier, which still requires a justified profile match against the tier definitions.
-A system whose representative constructions fail to satisfy any one of them cannot be classified at this tier.
+These conditions are necessary but not sufficient.
+Passing all four still requires a justified profile match against the tier definitions before quantum-implicit classification is awarded.
