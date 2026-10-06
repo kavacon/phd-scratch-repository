@@ -1,32 +1,32 @@
 \section{Review methodology}\label{sec:methodology}
-The review follows the evidence-based software engineering guidelines~\cite{KitchenhamCharters2007SLR}, with a pre-registered protocol available at~\cite{kavadias2026qplSurveyProtocol}.
-The evaluation instrument is defined in Section~\ref{sec:evaluation_instrument}; results are reported in Section~\ref{sec:system_assessments}.
+The review follows evidence-based software engineering guidelines~\cite{KitchenhamCharters2007SLR}, with a pre-registered protocol available at~\cite{kavadias2026qplSurveyProtocol}.
+The evaluation instrument is defined in Section~\ref{sec:evaluation_instrument}.
 
 \subsection{Search protocol}\label{subsec:methodology:search_protocol}
-Searches were conducted on 2026-05-19 across ACM Digital Library, IEEE Xplore and arXiv.
-Official project and specification sites were consulted per system throughout the assessment period.
-The literature cutoff was 2026-04-08; later evidence was excluded from assessment.
+Searches were conducted on 2026-05-19 across ACM Digital Library, IEEE Xplore and arXiv, with a literature cutoff of 2026-04-08.
+Later evidence was excluded from assessment.
+Official project and specification sites were consulted per system throughout assessment.
 
-Three verbatim search strings were applied consistently across all databases:
+Three verbatim search strings were applied consistently across the databases:
 \begin{description}
     \item[S1: broad seed terms] \texttt{"quantum programming language" OR "quantum intermediate representation" OR OpenQASM OR "quantum MLIR" OR Silq OR Qiskit OR PennyLane}.
     \item[S2: system-specific terms] \texttt{Silq quantum OR Quff quantum OR Qutes quantum OR Quipper quantum OR "Microsoft Q\#" OR "Q-MLIR"}.
     \item[S3: abstraction framing] \texttt{"quantum programming" AND "abstraction" AND "language"}.
 \end{description}
-Full search strings, per-database result counts and search URLs are published in Appendix~A of~\cite{kavadias2026qplSurveySupplementary}.
 The searches retrieved 852 records from arXiv, 1{,}295 from ACM Digital Library and 704 from IEEE Xplore.
 The combined 2{,}851 records yielded 2{,}233 unique records after deduplication.
+Per-database counts, search strings and URLs are published in Appendix~A of~\cite{kavadias2026qplSurveySupplementary}.
 
-Supplementary AI-assisted discovery used a scheduled agent to scan active project context and surface candidate papers fortnightly.
-Its dynamically generated queries are not reproducible verbatim, so it does not constitute a primary PRISMA search~\cite{page2021prisma}.
-All surfaced candidates were screened against the pre-specified criteria before inclusion.
+Supplementary AI-assisted discovery used a scheduled agent to surface candidate papers from active project context fortnightly.
+Its dynamically generated queries are not reproducible verbatim and do not constitute a primary PRISMA search~\cite{page2021prisma}.
+All candidates were screened against the pre-specified criteria.
 
 \subsection{Screening and selection}\label{subsec:methodology:screening}
-A pre-specified, bounded seed set of quantum programming systems informed search-strategy design and validation.
-Database searches provided the primary mechanism for discovering additional candidates and reducing discovery bias.
-Extraction and assessment concern each included system's authoritative evidence base, comprising primary papers or specifications and official documentation, rather than the full retrieved corpus.
+A bounded, pre-specified seed set informed search-strategy design and validation.
+Database searches provided the primary discovery mechanism.
+Extraction concerns each included system's authoritative papers, specifications and official documentation rather than the full retrieved corpus.
 
-A system is included if it meets at least three of four criteria:
+Systems must satisfy at least three of four inclusion criteria:
 \begin{description}
     \item[$C_1$] A formal specification or peer-reviewed primary paper exists.
     \item[$C_2$] Active releases or specification updates within 24 months prior to the cutoff.
@@ -34,106 +34,58 @@ A system is included if it meets at least three of four criteria:
     \item[$C_4$] Public documentation is enough to complete the representative tasks defined in Section~\ref{subsec:evaluation_instrument:task_suite} without access to private knowledge.
 \end{description}
 Exclusions comprise marketing-only primary materials, projects inactive for more than 36 months and documentation insufficient for representative workflows.
-The evaluation target is the latest stable major release or specification available by 2026-04-08.
-Earlier versions are used only as labelled historical contrasts.
+The latest stable major release or specification available by 2026-04-08 is assessed.
+Earlier versions serve only as labelled historical contrasts.
 
-Screening was conducted by a single reviewer.
-The review covers a pre-defined system set rather than a large open literature corpus.
-Per-system full-text exclusion rationales are published in Appendix~B of~\cite{kavadias2026qplSurveySupplementary}.
-Two additional reviewers participate in independent assessment and calibration reconciliation.
-Dual screening of the full inclusion corpus was not possible given the scope and is acknowledged as a limitation per PRISMA 2020 item~16b~\cite{page2021prisma}.
+Screening was conducted by one reviewer, with full-text exclusion rationales in Appendix~B of~\cite{kavadias2026qplSurveySupplementary}.
+Two additional reviewers participated in independent assessment and calibration reconciliation.
+The bounded review did not permit dual screening of the full inclusion corpus, which remains a review-process limitation~\cite{page2021prisma}.
 
 The eleven included systems are OpenQASM~3.0, QIR, Q-MLIR, Qiskit, PennyLane, Q\#, Silq, Qmod, Quff, Qwerty and Qutes.
-Tower fails C\textsubscript{2} and C\textsubscript{4} and is retained only as a labelled system of interest in Section~\ref{sec:system_descriptions}.
 
 \subsection{Study quality assessment}\label{subsec:methodology:quality}
-Evidence quality was assessed before extraction using a source hierarchy adapted from the evidence-based software engineering guidelines~\cite{KitchenhamCharters2007SLR}.
-Source tier~1 comprises peer-reviewed journal or conference publications.
-Source tier~2 comprises preprints from established research groups with a peer-reviewed publication programme.
-Source tier~3 comprises official specifications, standards-body publications and maintained documentation.
-No included system depends primarily on source tier~4 grey literature.
+Source quality was assessed before extraction using a hierarchy adapted from evidence-based software engineering guidelines~\cite{KitchenhamCharters2007SLR}.
+Tier~1 comprises peer-reviewed journal or conference publications, tier~2 preprints from established groups with a peer-reviewed publication programme and tier~3 official specifications, standards-body publications and maintained documentation.
+No included system depends primarily on tier~4 grey literature.
 
-QIR and Q-MLIR use source tier~3 specification documentation as their primary and most authoritative source by design.
-Not every IR or low-level framework has a peer-reviewed primary publication.
-For QIR, this absence reflects the artefact's nature rather than incomplete retrieval.
-
-Table~\ref{tab:quality_assessment} records primary citations, source tiers, confidence and leave-one-out flags.
-\textit{High} confidence denotes a source tier~1 primary citation with at least two independent corroborating sources.
-\textit{Medium} confidence denotes a source tier~2 primary citation or a system with one corroborating source.
-
-\begin{table*}[htbp*]
-    \centering
-    \caption{Source quality assessment per system.
-    LOO = leave-one-out sensitivity flag; see Subsection~\ref{subsec:methodology:sensitivity}.}
-    \label{tab:quality_assessment}
-    \begin{threeparttable}
-        \begin{tabular}{p{1.5cm} p{5.5cm} c c c}
-            \toprule
-            \textbf{System} & \textbf{Primary citation(s)} & \textbf{Source tier} & \textbf{Confidence} & \textbf{LOO} \\
-            \midrule
-            OpenQASM & \cite{cross2022openqasm3} & 1 & High & --- \\
-            QIR & \cite{qir_alliance_qir_spec_repo} & 3\tnote{\dag} & Medium & --- \\
-            Q-MLIR & \cite{McCaskey2021MLIRDialectQASM} & 1 & High & --- \\
-            Qiskit & \cite{aleksandrowicz2019qiskit} & 1 & High & --- \\
-            PennyLane & \cite{bergholm2018pennylane} & 1 & High & --- \\
-            Q\# & \cite{MicrosoftQSharpOverview} & 1, 3 & High & --- \\
-            Silq & \cite{bichsel2020silq} & 1 & High & --- \\
-            Qmod & \cite{vax2025qmodexpressivehighlevelquantum} & 2 & Medium & --- \\
-            Quff & \cite{wright2024quff} & 1 & Medium & \checkmark \\
-            Qutes & \cite{faro2025qutes,reversiblelifetime2026} & 1 & High & \checkmark \\
-            Qwerty & \cite{adams2024qwerty} & 1 & Medium & --- \\
-            \bottomrule
-        \end{tabular}
-        \begin{tablenotes}
-            \footnotesize
-            \item[\dag] Source tier~3 is the expected primary source for IR-tier artefacts; see text.
-        \end{tablenotes}
-    \end{threeparttable}
-\end{table*}
+The non-tier~1 primary sources are QIR's official specification, classified as tier~3~\cite{qir_alliance_qir_spec_repo}, and Qmod's preprint, classified as tier~2~\cite{vax2025qmodexpressivehighlevelquantum}.
 
 \subsection{Data extraction and synthesis}\label{subsec:methodology:extraction}
-For each system and task $T_1$--$T_4$, outcomes were recorded for conditions $C_1$--$C_9$ using the labels defined in Section~\ref{sec:evaluation_instrument}.
-Each outcome is supported by a minimal code construction, primary-source citations and a one-sentence justification.
+Each system and task $T_1$--$T_4$ is assessed against $C_1$--$C_9$ using the outcome labels in Section~\ref{sec:evaluation_instrument}.
+Outcomes are supported by minimal code constructions, primary-source citations and one-sentence justifications.
 
-Canonical examples from primary papers, specifications, official documentation and official tutorials take precedence.
+Canonical examples from primary papers, specifications, official documentation and tutorials take precedence.
 Constructed examples are used only where no canonical example exists for the task or feature.
-They are explicitly labelled, with primary-source justification for every non-trivial feature.
-Abridgement is permitted only where the omitted portion is a cited routine or referenced helper that is not the subject of the evidence claim.
-It must not conceal the mechanism being assessed, particularly result extraction, composition or uncomputation.
+They are labelled and require primary-source justification for every non-trivial feature.
+Abridgement may omit cited routines or helpers outside the evidence claim, but must not conceal the assessed mechanism.
 
-Each system $\times$ task $\times$ condition record captures example type, source links, minimal code, backend/simulator/version preconditions, the outcome and justification, and required escape hatches or cross-layer leakage.
+Records capture example type, sources, code, outcomes and justifications, and required escape hatches.
 Absent or ambiguous evidence received the more conservative outcome label.
-Outcomes inferred from examples marked optional or advanced were not used.
-Appendix~C publishes the extraction dataset and Appendix~D the assessed code samples~\cite{kavadias2026qplSurveySupplementary}.
+Appendices~C and~D publish the extraction dataset and assessed code samples respectively~\cite{kavadias2026qplSurveySupplementary}.
 
-Calibration was conducted by two reviewers independently assessing three to five systems before proceeding to full independent assessment.
-Disagreements greater than one level were discussed and resolved with a documented rationale; any amendments made post-calibration were applied prospectively.
-
-Synthesis follows a structured narrative approach without meta-analysis~\cite{KitchenhamCharters2007SLR}.
-Systems are grouped by taxonomy tier.
-The aggregation rules in Section~\ref{sec:evaluation_instrument} produce a tier assignment justified by discriminating conditions, a compact condition profile and representative evidence bullets with citations.
-Each system's synthesis identifies key evidence that is constructed rather than canonical.
+Structured narrative synthesis groups systems by taxonomy tier without meta-analysis~\cite{KitchenhamCharters2007SLR}.
+The instrument's aggregation rules produce tier assignments justified by discriminating conditions, condition profiles and cited representative evidence.
 
 \subsection{Sensitivity analysis and threats to validity}\label{subsec:methodology:sensitivity}
-A pre-specified leave-one-out sensitivity analysis examined systems where one document provides the sole or pivotal evidence for tasks or conditions~\cite{kavadias2026qplSurveyProtocol}.
+Pre-specified leave-one-out analysis examined sole or pivotal source dependencies~\cite{kavadias2026qplSurveyProtocol}.
 Two dependencies were identified.
 
-\textit{Quff}: all outcomes depend on one peer-reviewed source~\cite{wright2024quff}.
-No additional published specification or paper existed at the cutoff, so removing this source would leave no evidence base.
-Outcomes are retained given the peer-reviewed venue, with the dependency acknowledged.
+All Quff outcomes depend on one peer-reviewed source, with no additional published specification or paper available at the cutoff~\cite{wright2024quff}.
+Removing it leaves no evidence base.
+Its outcomes are retained with this dependency acknowledged.
 
-\textit{Qutes}: two tier-relevant outcomes depend critically on a preprint describing reversible lifetime semantics~\cite{reversiblelifetime2026}.
+Two tier-relevant Qutes outcomes depend critically on a reversible-lifetime preprint~\cite{reversiblelifetime2026}.
 The HPDC~2025 paper alone would not sustain the same tier justification~\cite{faro2025qutes}.
-The broader programme has peer-reviewed publications, but this mechanism's preprint status remains a limitation.
+The mechanism's preprint status remains a limitation despite the broader programme's peer-reviewed publications.
 
-The principal threats to validity and mitigations are:
+The principal validity threats and mitigations are:
 \begin{itemize}
-    \item \textit{Assessment subjectivity}: dual independent assessment, calibration, required evidence quotes and predefined rules for ambiguous cases.
-    \item \textit{Task-suite dependence}: $T_1$--$T_4$ were pre-specified in the protocol; post-calibration amendments are documented and applied prospectively only~\cite{kavadias2026qplSurveyProtocol}.
-    \item \textit{Ecosystem maturity}: source-tier labels and per-claim confidence ratings mitigate misattribution.
-    \item \textit{Version churn}: the latest stable major release by 2026-04-08 is assessed consistently.
-    \item \textit{Publication bias}: official specifications, standards-body publications and maintainer documentation are included to avoid under-representing IR-tier and industry-produced frameworks~\cite{KitchenhamCharters2007SLR,page2021prisma}.
-    \item \textit{Evidence availability and representativeness}: uneven canonical coverage necessitates constructed examples, which can over-approximate idiomatic workflows.
-    Constructed examples are labelled, each non-trivial feature requires primary-source justification and escape hatches or cross-layer leakage are recorded.
-    \item \textit{Interpretation drift}: common condition ladders, shared-subset calibration, one-sentence outcome justifications and conservative treatment of ambiguous evidence mitigate inconsistent interpretation.
+    \item \textit{Assessment subjectivity}: independent assessment, calibration, evidence quotes and predefined rules for ambiguity.
+    \item \textit{Task-suite dependence}: protocol-defined tasks and documented, prospective post-calibration amendments~\cite{kavadias2026qplSurveyProtocol}.
+    \item \textit{Ecosystem maturity}: source tiers and per-claim confidence ratings.
+    \item \textit{Version churn}: consistent assessment of stable releases available by 2026-04-08.
+    \item \textit{Publication bias}: specifications and maintainer documentation prevent under-representation of IR-tier and industry-produced frameworks~\cite{KitchenhamCharters2007SLR,page2021prisma}.
+    \item \textit{Evidence availability and representativeness}: uneven canonical coverage requires constructed examples, which can over-approximate idiomatic workflows.
+    These are labelled, supported by primary sources and record escape hatches or cross-layer leakage.
+    \item \textit{Interpretation drift}: common condition ladders, shared-subset calibration, outcome justifications and conservative treatment of ambiguous evidence.
 \end{itemize}

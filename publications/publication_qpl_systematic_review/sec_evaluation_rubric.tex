@@ -1,10 +1,8 @@
 \section{Evaluation instrument}\label{sec:evaluation_instrument}
-The evaluation instrument operationalises the abstraction taxonomy defined in Section~\ref{sec:taxonomy} through four representative programming tasks and nine conditions.
-Canonical code examples provide evidence for each system; constructed examples are used only where no canonical example exists.
-For each system and task, condition outcomes are recorded with primary-source citations.
-The resulting profile describes the abstraction requirements met by the representative constructions and the obligations that remain visible to the programmer.
-Tier assignment follows a justified match between the evidenced condition profile and the expected tier profiles, subject to explicit gating constraints for quantum-implicit classification.
+The evaluation instrument operationalises the taxonomy in Section~\ref{sec:taxonomy} through four representative programming tasks and nine conditions.
+Tier assignment follows a justified match between evidence-backed condition profiles and expected tier profiles, subject to explicit quantum-implicit gating constraints.
 
+\ifthesis
 \subsection{Evaluation lenses}\label{subsec:evaluation_instrument:lenses}
 Five lenses guide interpretation of the programming evidence.
 \begin{description}
@@ -22,12 +20,11 @@ The mental-model lens informs conditions concerning superposition, marking and r
 The primary-artefact lens informs circuit-centric authoring and composition.
 Safety and compilation responsibility inform uncomputation, while hardware adjacency informs execution constraints.
 The lenses guide interpretation rather than being assessed directly; tier assignment depends on the evidenced condition profile.
+\fi
 
 \subsection{Representative task suite}\label{subsec:evaluation_instrument:task_suite}
-Representative tasks ground programming language evaluation in concrete programmer intent~\cite{Myers2016PLUsabilitySIG}.
-PLIERS requires tasks to be defined before evaluation, reflect real workflows rather than adversarial cases and use the language's primary surface model rather than optional escape hatches~\cite{Coblenz2021PLIERS}.
-Following this approach, four tasks are defined prior to evaluation.
-Condition outcomes concern their completion using each system's representative programming model.
+Representative tasks ground evaluation in concrete programmer intent~\cite{Myers2016PLUsabilitySIG}.
+Following PLIERS, four tasks were defined before evaluation to reflect real workflows and use each language's primary surface model rather than optional escape hatches~\cite{Coblenz2021PLIERS}.
 
 \begin{description}
     \item[$T_1$ Deutsch--Jozsa] Implement the decision procedure for a small input size.
@@ -46,55 +43,45 @@ Condition outcomes concern their completion using each system's representative p
 \end{description}
 
 For every task, required measurement, sampling, shots or observable-boundary concepts are recorded in the condition outcomes, including where the system requires observation to expose the Bell construction's result.
-Canonical examples take precedence.
-Where none exists, a constructed example is used with primary-source justification for each non-trivial feature.
 Tasks provide evidence for condition outcomes rather than scoring items.
 
 \subsection{Conditions and outcome labels}\label{subsec:evaluation_instrument:conditions}
 Each system and task is assessed against nine conditions using three outcome labels.
-\begin{description}
-    \item[Fail (F)] The condition is not met in representative constructions.
-    \item[Constrained (C)] The condition is met only with restrictions, leakage of lower-layer obligations or reliance on escape hatches.
-    \item[Pass (P)] The condition is met in the representative programming model for the task suite.
-\end{description}
+\textbf{Fail (F)} The condition is not met in representative constructions.
+\textbf{Constrained (C)} The condition is met only with restrictions, leakage of lower-layer obligations or reliance on escape hatches.
+\textbf{Pass (P)} The condition is met in the representative programming model for the task suite.
 
-The conditions are:
-\begin{description}[style=unboxed]
-    \item[$C1$ Superposition introduced as a value] Superposition-like quantum data is introduced without explicit qubit identity and gate-level initiation as the conceptual entry point.
-    \item[$C2$ Primary artefact is not a circuit/tape/IR] Representative authoring is a program over values rather than construction or manipulation of a circuit, tape, IR or graph object.
-    \item[$C3$ Qubit identity and lifetime not user-visible] Representative constructions do not require explicit qubit handles, allocation, indexing, lifetime management, reset or release.
-    \item[$C4$ Uncomputation not manual reverse-programming] Clean-up is automatic or structured rather than requiring manual inversion as a normal correctness step.
-    \item[$C5$ Quantum and classical marking not mandatory] Representative code does not require explicit marking or staging boundaries between quantum and classical computation.
-    \item[$C6$ Measurement or observation boundary absent from the surface model] Getting results does not require explicit measurement, sampling, shots or observable-boundary concepts in representative constructions.
-    \item[$C7$ Hardware adjacency optional and separated] Basis gates, topology, timing and backend constraints are absent from representative programming, with tuning remaining opt-in.
-    \item[$C8$ Amplitude/phase and entanglement/interference concepts not required] Correctness in representative programming does not require reasoning directly about amplitudes, phases, entanglement or interference.
-    \item[$C9$ First-class subroutine composition] Larger programs are built by composing subroutines rather than circuit surgery or staging glue.
-\end{description}
+Table~\ref{tab:evaluation_instrument:expected_profile} defines the nine conditions and gives their expected outcomes by tier.
 
-Table~\ref{tab:evaluation_instrument:expected_profile} gives the expected condition profiles for justified tier assignment.
-The four bold quantum-implicit entries are mandatory gating outcomes.
-A profile that does not pass all four gates cannot receive that classification.
-
-\begin{table}[ht*]
-    \caption{Expected condition outcomes per tier in representative $T_1$--$T_4$ constructions.
+\begin{table*}[t]
+    \centering
+    \caption{Conditions and expected outcomes in representative $T_1$--$T_4$ constructions.
+    A = Assembly; IR = Intermediate representation; FW = Framework; HL = High-level; QI = Quantum-implicit.
     Bold entries identify mandatory quantum-implicit gating outcomes.}
     \label{tab:evaluation_instrument:expected_profile}
     \footnotesize
-    \begin{tabular}{p{1.2cm}ccccccccc}
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{lp{0.70\textwidth}ccccc}
         \toprule
-        \textbf{Tier}    & $C1$ & $C2$         & $C3$         & $C4$ & $C5$    & $C6$         & $C7$ & $C8$    & $C9$         \\ \midrule
-        Assembly         & $F$  & $F$          & $F$          & $F$  & $F$     & $F$          & $F$  & $F$     & $F$          \\ \addlinespace
-        IR               & $F$  & $F$          & $F$          & $F$  & $F$     & $F$          & $C$  & $F$     & $F$          \\ \addlinespace
-        Framework        & $F$  & $F$          & $F$          & $F$  & $C$/$F$ & $F$          & $P$  & $C$/$F$ & $C$          \\ \addlinespace
-        High-level       & $C$  & $C$          & $C$          & $C$  & $C$     & $C$          & $P$  & $C$     & $P$          \\ \addlinespace
-        Quantum-implicit & $P$  & $\mathbf{P}$ & $\mathbf{P}$ & $P$  & $P$     & $\mathbf{P}$ & $P$  & $P$     & $\mathbf{P}$ \\
+        \textbf{Condition} & \textbf{Definition} & \textbf{A} & \textbf{IR} & \textbf{FW} & \textbf{HL} & \textbf{QI} \\
+        \midrule
+        $C1$ & \textbf{Superposition introduced as a value.} Superposition-like quantum data is introduced without explicit qubit identity and gate-level initiation as the conceptual entry point. & $F$ & $F$ & $F$ & $C$ & $P$ \\
+        $C2$ & \textbf{Primary artefact is not a circuit/tape/IR.} Representative authoring is a program over values rather than construction or manipulation of a circuit, tape, IR or graph object. & $F$ & $F$ & $F$ & $C$ & $\mathbf{P}$ \\
+        $C3$ & \textbf{Qubit identity and lifetime not user-visible.} Representative constructions do not require explicit qubit handles, allocation, indexing, lifetime management, reset or release. & $F$ & $F$ & $F$ & $C$ & $\mathbf{P}$ \\
+        $C4$ & \textbf{Uncomputation not manual reverse-programming.} Clean-up is automatic or structured rather than requiring manual inversion as a normal correctness step. & $F$ & $F$ & $F$ & $C$ & $P$ \\
+        $C5$ & \textbf{Quantum and classical marking not mandatory.} Representative code does not require explicit marking or staging boundaries between quantum and classical computation. & $F$ & $F$ & $C/F$ & $C$ & $P$ \\
+        $C6$ & \textbf{Measurement or observation boundary absent from the surface model.} Getting results does not require explicit measurement, sampling, shots or observable-boundary concepts in representative constructions. & $F$ & $F$ & $F$ & $C$ & $\mathbf{P}$ \\
+        $C7$ & \textbf{Hardware adjacency optional and separated.} Basis gates, topology, timing and backend constraints are absent from representative programming, with tuning remaining opt-in. & $F$ & $C$ & $P$ & $P$ & $P$ \\
+        $C8$ & \textbf{Amplitude/phase and entanglement/interference concepts not required.} Correctness in representative programming does not require reasoning directly about amplitudes, phases, entanglement or interference. & $F$ & $F$ & $C/F$ & $C$ & $P$ \\
+        $C9$ & \textbf{First-class subroutine composition.} Larger programs are built by composing subroutines rather than circuit surgery or staging glue. & $F$ & $F$ & $C$ & $P$ & $\mathbf{P}$ \\
         \bottomrule
     \end{tabular}
-\end{table}
+\end{table*}
 
-Two conditions vary materially across the task suite and should be read with the task context.
+Task context affects $C4$ and $C6$ outcomes.
 Outcomes on $C4$ (uncomputation) are most strongly exercised by $T_1$--$T_3$, where oracle, diffusion and controlled-power constructions involve auxiliary state that must be released.
-Those outcomes are largely inert for $T_4$, which does not require uncomputation in its core construction $C4$ outcomes are read primarily from $T_1$--$T_3$.
+Those outcomes are largely inert for $T_4$, which does not require uncomputation in its core construction.
+$C4$ outcomes are read primarily from $T_1$--$T_3$.
 Outcomes on $C6$ (measurement or observation boundary) admit a measurement-free core construction for $T_4$ but require a result-extraction step in $T_1$--$T_3$ in most systems.
 $C6$ outcomes are read from the worst case across $T_1$--$T_4$.
 
@@ -102,13 +89,6 @@ Three cells distinguish the high-level and quantum-implicit tiers and act as the
 The remaining conditions on which the two tiers might otherwise be compared, $C4$ (uncomputation) and $C9$ (subroutine composition), are both $P$ at high-level and quantum-implicit and therefore do not discriminate between them.
 
 \subsection{Quantum-implicit gating constraints}\label{subsec:evaluation_instrument:gating}
-The quantum-implicit litmus test in Section~\ref{sec:taxonomy} requires four conditions to pass in representative $T_1$--$T_4$ constructions.
-\begin{description}
-    \item[C2] The primary artefact is not a circuit, tape or IR object.
-    \item[C3] Qubit identity and lifetime are not user-visible; representative constructions do not require explicit allocation, indexing, lifetime management, reset or release.
-    \item[C6] The measurement or observation boundary is absent from the surface model; results are obtained without explicit measurement, sampling or shots.
-    \item[C9] Subroutine composition is first-class; larger programs are built by composing subroutines rather than through circuit surgery or staging glue.
-\end{description}
-
+Quantum-implicit classification requires $C2$, $C3$, $C6$ and $C9$ to pass in representative $T_1$--$T_4$ constructions.
 These conditions are necessary but not sufficient.
-Passing all four still requires a justified profile match against the tier definitions before quantum-implicit classification is awarded.
+Passing all four still requires a justified profile match against the tier definitions in Section~\ref{sec:taxonomy}.

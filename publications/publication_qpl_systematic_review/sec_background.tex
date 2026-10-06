@@ -1,70 +1,45 @@
 \section{Background and related work}\label{sec:background}
-Prior quantum programming research provides classifications, abstraction requirements and evaluation methods, but these address different parts of the programming stack.
-The review brings those requirements into a consistent comparison of programmer-facing obligations across system families.
+Prior research provides classifications, abstraction requirements and evaluation methods for quantum programming.
+These address different aspects of programmer-facing abstraction.
 
 \subsection{Prior surveys and taxonomies}\label{subsec:background:prior_surveys}
-An early survey classified quantum programming languages by imperative, functional and formal semantic approaches~\cite{Gay2006QPLSurvey}.
-It identified complex data structures and expressive quantum control as structural gaps relative to classical programming~\cite{Gay2006QPLSurvey}.
-Its scope preceded the contemporary framework ecosystem and excluded quantum libraries hosted within classical languages on grounds of insufficient language-level formalisation~\cite{Gay2006QPLSurvey}.
-The classification supplies a historical vocabulary for language paradigms, but does not assess abstraction through programmer knowledge requirements.
+An early survey classified quantum programming languages by imperative, functional and formal semantic approaches, identifying complex data structures and expressive quantum control as structural gaps~\cite{Gay2006QPLSurvey}.
+Its scope preceded contemporary frameworks and excluded hosted quantum libraries on grounds of insufficient language-level formalisation~\cite{Gay2006QPLSurvey}.
 
-Later comparisons broadened system coverage.
-A survey of quantum SDKs and frameworks found no consistent progression in abstraction, with nominally higher-level systems not reliably providing greater separation from the quantum substrate~\cite{furntratt2024higherabstractionlevels}.
-A complementary evaluation compared standard algorithms using lines of code, cyclomatic complexity and Halstead complexity~\cite{corralesgarro2025productivityexpressiveness}.
-Higher-level claims did not consistently correspond to lower complexity, and standalone languages did not systematically outperform hosted libraries~\cite{corralesgarro2025productivityexpressiveness}.
-These findings distinguish stated abstraction from properties of the resulting programs, but complexity measures do not directly establish which quantum concepts programmers must understand.
+Later comparisons distinguish stated abstraction from properties of programs.
+A survey of quantum SDKs and frameworks found no consistent progression toward greater separation from the quantum substrate~\cite{furntratt2024higherabstractionlevels}.
+An evaluation using lines of code, cyclomatic complexity and Halstead complexity found that higher-level claims did not consistently correspond to lower complexity, nor did standalone languages systematically outperform hosted libraries~\cite{corralesgarro2025productivityexpressiveness}.
 
-A review of quantum intermediate representations applied qualitative criteria including hardware agnosticism, optimisation, tooling accessibility and ease of use~\cite{irreview2024}.
+A quantum IR review assessed hardware agnosticism, optimisation, tooling accessibility and ease of use~\cite{irreview2024}.
 QIR, Q-MLIR and related systems could perform well technically while remaining difficult to access through tooling~\cite{irreview2024}.
-This demonstrates the value of multi-criteria assessment, but its scope remains the IR tier.
+Its comparison remains within the IR tier.
 
-The prior comparisons therefore provide complementary evidence about paradigms, complexity and technical capabilities.
-They do not supply the cross-tier, task-based account of mandatory quantum vocabulary and programming obligations developed in this review.
-The distinction matters because reusable structure, technical capability and reduced code complexity need not imply the same programmer-facing abstraction.
+These approaches compare paradigms, code complexity and technical capabilities.
+They do not provide the cross-tier, task-based account of mandatory quantum vocabulary and programming obligations developed here.
 
 \subsection{Abstraction requirements and documented gaps}\label{subsec:background:abstraction}
-The programming, execution and hardware hierarchy identifies layer separation as a requirement for productive quantum programming~\cite{DiMatteo2024AbstractionHierarchy}.
-Algorithmic intent belongs at the programming layer, while its quantum realisation and device-specific implementation belong below it~\cite{DiMatteo2024AbstractionHierarchy}.
-Gate sequences, qubit allocation and circuit details nevertheless enter programmer-facing workflows through bleed-through~\cite{DiMatteo2024AbstractionHierarchy}.
-The hierarchy motivates separation for physicists and domain experts, while the requirements of programmers without quantum-mechanical prerequisites remain a further design concern~\cite{DiMatteo2024AbstractionHierarchy,ferreira2024qplusage}.
+The abstraction hierarchy requires separation of algorithmic intent from quantum realisation and hardware-specific implementation~\cite{DiMatteo2024AbstractionHierarchy}.
+Work on quantum abstract machines proposes fifteen criteria, with no examined candidate satisfying the three programming-layer criteria of symbolic denotational syntax, representation-independent data types and a stable instruction set architecture~\cite{nunez_corrales2025betterabstractmachines}.
+The analysis identifies a definitional coupling between instruction symbols and circuit primitives, with an application-programming target independent of qubit modality and gate-set choice~\cite{nunez_corrales2025betterabstractmachines}.
 
-Work on quantum abstract machines develops that concern through fifteen proposed criteria~\cite{nunez_corrales2025betterabstractmachines}.
-No examined candidate satisfies the three programming-layer criteria of symbolic denotational syntax, representation-independent data types and a stable instruction set architecture~\cite{nunez_corrales2025betterabstractmachines}.
-The analysis identifies a definitional coupling between instruction symbols and circuit primitives, rather than an absence of tooling alone~\cite{nunez_corrales2025betterabstractmachines}.
-Its application-programming target permits descriptions at pseudocode level without dependence on qubit modality or gate-set choice~\cite{nunez_corrales2025betterabstractmachines}.
-
-Quantum data and control introduce structural constraints on the abstractions used to achieve that separation~\cite{yuan2025foundationalabstractions}.
-Classical assumptions about unrestricted copying, side-effect-free inspection and disposal of temporary values do not transfer directly to quantum data~\cite{yuan2025foundationalabstractions}.
+Quantum semantics constrain the abstractions used to achieve that separation.
 No-cloning restricts copying, observation can change quantum data and temporary computations require a reversible clean-up account~\cite{yuan2025foundationalabstractions}.
-Classical control constructs also cannot be transferred unrestrictedly to superposition while preserving unitary behaviour~\cite{yuan2025foundationalabstractions}.
-These constraints require abstractions that respect quantum semantics rather than reproduce classical contracts unchanged.
-They do not by themselves determine which obligations must remain visible at the source-language interface.
+Classical control constructs cannot transfer unrestrictedly to superposition while preserving unitary behaviour~\cite{yuan2025foundationalabstractions}.
+These constraints must be respected by implementations but do not by themselves determine which obligations remain visible to programmers.
 
-The software engineering account of higher-level abstraction similarly identifies bespoke circuit construction as an obstacle to broader quantum programming~\cite{cobb2022higherlevelabstractions}.
-It argues for removing quantum-mechanical prerequisites from programming in the same way that classical abstraction removed hardware-specific prerequisites~\cite{cobb2022higherlevelabstractions}.
-
-Practitioner evidence connects these design concerns to experienced difficulties.
+The software engineering account of higher-level abstraction identifies bespoke circuit construction as an obstacle and argues for removing quantum-mechanical prerequisites from programming~\cite{cobb2022higherlevelabstractions}.
 Among 251 surveyed quantum programmers, 86\% had at least five years of classical programming experience, yet quantum-specific vocabulary remained a dominant challenge~\cite{ferreira2024qplusage}.
-Thirty-one per cent identified insufficient higher-level abstraction as a key missing feature~\cite{ferreira2024qplusage}.
-The complexity comparisons provide a separate observation: stated abstraction levels do not consistently predict simpler algorithm implementations across language families~\cite{corralesgarro2025productivityexpressiveness}.
-The survey measures reported programmer concerns, while the comparisons measure properties of code.
 
-Together, these sources motivate treating the gap as structural rather than simply a shortage of library features.
-The hierarchy specifies the desired separation, abstract-machine criteria identify representational requirements and quantum foundations constrain their implementation.
-Practitioner and complexity evidence show why improvements in tooling or language packaging alone are insufficient indicators of progress.
-A comparative instrument must therefore examine the obligations of representative programming directly.
+Together, these sources motivate examining programmer obligations directly rather than treating improved tooling, language packaging or reduced code complexity as sufficient evidence of abstraction.
 
 \subsection{Programming language usability frameworks}\label{subsec:background:usability}
-Formal language design and human-factors evaluation provide complementary foundations.
-Type systems and higher-order abstraction support separation between what a computation expresses and how it is implemented~\cite{pierce2002tapl-doc9}.
-Usability research treats programming languages as interfaces whose formal properties alone do not establish whether programmers can use them productively~\cite{Myers2016PLUsabilitySIG}.
+Type systems and higher-order abstraction support separation between computational intent and implementation~\cite{pierce2002tapl-doc9}.
+Usability frameworks treat languages as interfaces and identify onboarding, productivity and construct-related errors as evaluation dimensions~\cite{Myers2016PLUsabilitySIG,Coblenz2017UsablePLDesign}.
+PLIERS derives formative and summative evaluation from language goals and intended users' requirements~\cite{Coblenz2021PLIERS}.
+This review characterises interface obligations through task-based evidence.
+It does not measure onboarding, productivity or error rates, and does not replace subsequent human-factors validation.
 
-Usable-language design principles identify onboarding, productivity and construct-related errors as evaluation dimensions~\cite{Coblenz2017UsablePLDesign}.
-PLIERS integrates formative and summative human-computer interaction methods, deriving evaluation from language goals and the requirements imposed on intended users~\cite{Coblenz2021PLIERS}.
-These frameworks motivate examining representative workflows alongside formal abstractions.
-The present review uses task-based evidence to characterise interface obligations, not user experiments to measure onboarding, productivity or error rates.
-Its instrument consequently provides a basis for subsequent human-factors validation rather than replacing it.
-
+\ifthesis
 \subsection{Systematic review methodology}\label{subsec:background:slr}
 Software engineering systematic reviews use pre-specified questions and procedures, explicit eligibility criteria, documented searches, quality assessment and structured synthesis to support reproducibility and audit~\cite{KitchenhamCharters2007SLR}.
 Narrative synthesis accommodates heterogeneous evidence where meta-analysis is inappropriate~\cite{KitchenhamCharters2007SLR}.
@@ -77,3 +52,4 @@ Section~\ref{sec:methodology} specifies this review's search, screening, extract
 The contribution is a common evidential basis for locating the reviewed systems relative to explicit quantum-implicit requirements.
 It combines literature-derived abstraction criteria with representative tasks and traceable condition outcomes.
 The resulting comparison distinguishes obligations that systems simplify, obligations they remove in particular tasks and obligations that remain across the assessed suite.
+\fi
