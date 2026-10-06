@@ -14,4 +14,9 @@
   \newcommand{\chapter}{\section}
 }{}
 
+% Retain the complete content unless submission exclusions are enabled.
+\@ifundefined{ifthesis}{%
+  \newif\ifthesis
+  \thesistrue
+}{}
 \makeatother

@@ -114,29 +114,29 @@ Table~\ref{tab:system_assessments:system_summary} preserves the recorded tier as
 The set comprises one Assembly system, two IR systems, six Framework systems and two High-level systems.
 No reviewed system is assigned to Quantum-implicit.
 
-\begin{table*}[htbp*]
+\begin{table}[htbp*]
     \centering
-    \caption{System assessment results. Tier is assigned by justified profile match under the task/condition instrument. Outcomes are recorded as F (fail), C (constrained), P (pass) or `-' (unassessable).}
+    \caption{System assessment results. Tier is assigned by justified profile match under the task/condition instrument. Outcomes are recorded as F (fail), C (constrained), P (pass) or `-' (unassessable). A = Assembly; IR = Intermediate representation; FW = Framework; HL = High-level;}
     \label{tab:system_assessments:system_summary}
     \small
-    \begin{tabular}{@{}lcccccccccc@{}}
+    \begin{tabular}{@{}p{1.35cm}cccccccccc@{}}
         \toprule
-        \textbf{System} & \textbf{Tier} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
+        \textbf{System \& Tier} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
         \midrule
-        OpenQASM~3.0    & Assembly      & F           & F           & F           & F           & F           & F           & P           & F           & F           \\
-        QIR             & IR            & F           & F           & F           & F           & F           & -           & P           & F           & F           \\
-        Q-MLIR          & IR            & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
-        Qiskit          & Framework     & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
-        PennyLane       & Framework     & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
-        Q\#             & Framework     & F           & F           & F           & C           & F           & F           & P           & F           & C           \\
-        Silq            & High-level    & F           & C           & C           & C           & C           & C           & P           & F           & P           \\
-        Qmod            & High-level    & F           & C           & C           & F           & C           & C           & P           & F           & P           \\
-        Quff            & Framework     & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
-        Qutes           & Framework     & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
-        Qwerty          & Framework     & C           & C           & C           & C           & F           & F           & P           & F           & P           \\
+        OpenQASM 3.0 (A)        & F           & F           & F           & F           & F           & F           & P           & F           & F           \\
+        QIR (IR)                & F           & F           & F           & F           & F           & -           & P           & F           & F           \\
+        Q-MLIR (IR)             & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
+        Qiskit (FW)             & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
+        PennyLane (FW)          & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
+        Q\#  (FW)               & F           & F           & F           & C           & F           & F           & P           & F           & C           \\
+        Silq (HL)               & F           & C           & C           & C           & C           & C           & P           & F           & P           \\
+        Qmod (HL)               & F           & C           & C           & F           & C           & C           & P           & F           & P           \\
+        Quff (FW)               & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
+        Qutes (FW)              & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
+        Qwerty (FW)             & C           & C           & C           & C           & F           & F           & P           & F           & P           \\
         \bottomrule
     \end{tabular}
-\end{table*}
+\end{table}
 
 \subsection{Comparative analysis}\label{subsec:system_assessments:comparative}
 Tier groupings refer to the assignments in Table~\ref{tab:system_assessments:system_summary}.
@@ -166,10 +166,13 @@ Phase estimation concentrates failures involving phase or eigenvalue reasoning, 
 Under the recorded aggregation, favourable task-local outcomes do not remove C8 failure elsewhere in the suite.
 The profiles therefore show selective relief of programming obligations, not uniform improvement across every condition.
 
+\ifthesis
+
 \subsubsection{Systems $\times$ conditions heatmap}\label{subsubsec:system_assessments:condition_heatmap}
 Figure~\ref{fig:system_assessments:condition_heatmap} visualises the aggregated profiles in Table~\ref{tab:system_assessments:system_summary}.
 It highlights uniform C7 passes, persistent artefact and identity constraints, Qwerty's distinctive C1 outcome and QIR's unassessable observation condition.
 Task-specific differences are described in the evidence summaries rather than represented by the aggregated heatmap.
+
 
 \begin{figure}[htbp*]
     \centering
@@ -177,6 +180,7 @@ Task-specific differences are described in the evidence summaries rather than re
     \caption{Systems $\times$ conditions outcome heatmap (F/C/P/-).}
     \label{fig:system_assessments:condition_heatmap}
 \end{figure}
+\fi
 
 \subsubsection{Quantum-implicit gap finding}\label{subsubsec:system_assessments:qi_gap}
 No reviewed system satisfies the complete quantum-implicit gate set under the recorded task evidence.
