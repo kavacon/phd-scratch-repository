@@ -42,14 +42,15 @@ class PipelineTestCase(unittest.TestCase):
 
     def test_each_pass_reports_what_it_changed(self):
         stages = {s["id"]: s for s in run_pipeline(PROGRAMS[0]["source"], ALL)["stages"]}
-        self.assertEqual(7, stages["rename"]["stats"]["changed"])
+        self.assertEqual((1, 1), (stages["flatten"]["stats"]["changed"], stages["flatten"]["stats"]["added"]))  # the call is returned through a temporary
+        self.assertEqual(8, stages["rename"]["stats"]["changed"])
         self.assertEqual(3, stages["allocation"]["stats"]["releases"])  # p in area, then y and x in the caller
 
     def test_every_preloaded_program_keeps_its_result_and_ends_without_leftovers(self):
         for program in PROGRAMS:
             with self.subTest(program=program["id"]):
                 stages = run_pipeline(program["source"], ALL)["stages"]
-                self.assertEqual(["source", "unroll", "balance", "rename", "allocation"], [s["id"] for s in stages])
+                self.assertEqual(["source", "unroll", "flatten", "balance", "rename", "allocation"], [s["id"] for s in stages])
                 self.assertFalse(any(s.get("error") for s in stages))
                 self.assertEqual(1, len({s["run"]["value"] for s in stages}))
                 self.assertEqual([], stages[-1]["run"]["leaked"])
@@ -90,12 +91,12 @@ class LivenessViewTestCase(unittest.TestCase):
 
     def test_only_the_release_stage_carries_a_liveness_view(self):
         stages = run_pipeline(PROGRAMS[0]["source"], ALL)["stages"]
-        self.assertEqual([None] * 4, [s["liveness"] for s in stages[:4]])
-        self.assertIsNotNone(stages[4]["liveness"])
+        self.assertEqual([None] * 5, [s["liveness"] for s in stages[:5]])
+        self.assertIsNotNone(stages[5]["liveness"])
 
     def test_scopes_follow_the_structure_of_the_program(self):
         scopes = self.view("if-else")["liveness"]["scopes"]
-        self.assertEqual(["Program", "function f", "then branch of row 3", "else branch of row 3"], [s["title"] for s in scopes])
+        self.assertEqual(["Program", "function f", "then branch of row 4", "else branch of row 4"], [s["title"] for s in scopes])
         self.assertEqual([0, 0, 1, 1], [s["depth"] for s in scopes])
 
     def test_columns_say_where_each_version_is_live_and_released(self):
@@ -103,9 +104,9 @@ class LivenessViewTestCase(unittest.TestCase):
         self.assertEqual("param", function["x#0"]["kind"])
         self.assertEqual("output", function["r#1"]["kind"])
         a = function["a#1"]
-        self.assertEqual((0, 3, 4, 3), (a["defined"], a["live_end"], a["conservative_end"], a["release_row"]))
-        # y#2 and a#1 are released at the same point, y#2 first
-        self.assertEqual((1, 2), (function["y#2"]["order"], a["order"]))
+        self.assertEqual((0, 4, 5, 4), (a["defined"], a["live_end"], a["conservative_end"], a["release_row"]))
+        # y#2, the condition register $t1#1 and a#1 are released at the same point, in that order
+        self.assertEqual((1, 2, 3), (function["y#2"]["order"], function["$t1#1"]["order"], a["order"]))
 
     def test_a_branch_marks_what_leaves_it_as_returned(self):
         then_branch = {c["name"]: c for c in self.view("if-else")["liveness"]["scopes"][2]["columns"]}
@@ -157,7 +158,7 @@ class ServerTestCase(unittest.TestCase):
         )
         with urllib.request.urlopen(request) as response:
             stages = json.loads(response.read())["stages"]
-        self.assertEqual(5, len(stages))
+        self.assertEqual(6, len(stages))
 
 
 if __name__ == '__main__':
