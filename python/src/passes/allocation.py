@@ -1,7 +1,7 @@
 """
 Allocation lowering: insert `~=` to release every temporary at the point liveness says it can go.
 
-The program is expected to have been through unroll, balance and rename. Each temporary is released with its
+The program is expected to have been through unroll, flatten, balance and rename. Each temporary is released with its
 own defining expression as the witness (the inverse of the assignment that created it), at the release point
 and in the order that `passes.liveness` reports, which uses the ideas of Faro, Marino and Messina,
 "Reversible Lifetime Semantics for Quantum Programs" (2026, arXiv:2603.14538). Every block (function body and
@@ -13,14 +13,12 @@ and in the order that `passes.liveness` reports, which uses the ideas of Faro, M
   those are substituted in. If a nested `if` contributed, the release nests the same way.
   TODO: avoid this extra condition block by flattening and releasing within the block, if that is possible
   (see `_release`).
-- A function or program that returns an expression gets it named first (`return#1 = e; return return#1;`), so
-  the versions the expression reads become temporaries that can be released.
 - Parameters and returned values are never released. Versions already released with `~=` are left alone.
 """
 from dataclasses import fields, replace
 from typing import Dict, List, Mapping, Sequence, Tuple
 
-from parser.grammar import Assign, FunctionDef, If, Node, Return, Unassign, Variable
+from parser.grammar import Assign, FunctionDef, If, Node, Unassign, Variable
 from passes.liveness import Liveness, analyse_program
 from passes.names import defined, read, results, variables
 
@@ -116,24 +114,10 @@ class _Inserter:
         return statement
 
 
-def _name_result(body: Sequence[Node]) -> Tuple[Node, ...]:
-    *rest, last = body
-    if isinstance(last, Return) and not isinstance(last.value, Variable) and variables(last.value):
-        return (*rest, Assign("return#1", last.value), Return(Variable("return#1")))
-    return tuple(body)
-
-
-def _name_results(program: Sequence[Node]) -> List[Node]:
-    return [
-        replace(s, body=_name_result(s.body)) if isinstance(s, FunctionDef) else s
-        for s in _name_result(program)
-    ]
-
-
 def prepare(program: Sequence[Node]) -> Tuple[List[Node], Dict[str, Liveness]]:
-    """The program as the insertion pass sees it (returned expressions named), with its liveness analysis."""
-    named = _name_results(program)
-    return named, analyse_program(named)
+    """The program as the insertion pass sees it, with its liveness analysis."""
+    program = list(program)
+    return program, analyse_program(program)
 
 
 def insert_releases(program: Sequence[Node]) -> List[Node]:

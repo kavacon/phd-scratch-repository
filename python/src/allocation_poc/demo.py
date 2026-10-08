@@ -31,6 +31,7 @@ from parser.grammar import Assign, FunctionDef, If, Node
 from parser.parser import parse
 from passes.allocation import lower_allocation, prepare
 from passes.balance import balance
+from passes.flatten import flatten
 from passes.liveness import Liveness
 from passes.names import results
 from passes.rename import rename
@@ -55,6 +56,12 @@ PASSES = [
         "Loop bounds are fixed numbers, so each for loop is replaced by one copy of its body per iteration, with "
         "the loop variable replaced by the iteration number. Later passes only see straight-line code and ifs.",
         (), unroll,
+    ),
+    PassInfo(
+        "flatten", "Flatten expressions",
+        "One operation per step. Anything nested, like the 2 * a in (2 * a) + 1, goes into a temporary of its own "
+        "just before it is needed, so every intermediate value can be released like any other.",
+        ("unroll",), flatten,
     ),
     PassInfo(
         "balance", "Balance branches",

@@ -36,7 +36,8 @@ class InsertionExamplesTestCase(unittest.TestCase):
                 p#1 ~= w#0 * h#0;
                 return q#1;
             }
-            return area(2, 3);
+            $t1#1 = area(2, 3);
+            return $t1#1;
         """)
 
     def test_a_chain_is_released_in_reverse_creation_order(self):
@@ -49,18 +50,21 @@ class InsertionExamplesTestCase(unittest.TestCase):
                 a#1 ~= x#0 + 1;
                 return c#1;
             }
-            return f(1);
+            $t1#1 = f(1);
+            return $t1#1;
         """)
 
     def test_a_returned_expression_is_named_so_what_it_reads_can_be_released(self):
+        # flatten puts the returned expression in a temporary, so t is no longer an output and can be released
         self.check("function f(a: int): int { t = a + 1; return t * 2; } return f(1);", """
             function f(a#0: int): int {
                 t#1 = a#0 + 1;
-                return#1 = t#1 * 2;
+                $t1#1 = t#1 * 2;
                 t#1 ~= a#0 + 1;
-                return return#1;
+                return $t1#1;
             }
-            return f(1);
+            $t1#1 = f(1);
+            return $t1#1;
         """)
 
     def test_a_value_that_is_overwritten_before_use_is_released_straight_away(self):
@@ -71,12 +75,14 @@ class InsertionExamplesTestCase(unittest.TestCase):
                 y#2 = a#0 + 1;
                 return y#2;
             }
-            return f(1);
+            $t1#1 = f(1);
+            return $t1#1;
         """)
 
     def test_branch_temporaries_are_released_inside_the_branch_and_the_result_after_the_if(self):
-        # y#2 is produced by both branches, so its release is an if on the same condition. Its witnesses use
-        # a#1 only: the branch temporary t#1 is gone by then, so its definition is substituted in.
+        # The condition is a register of its own ($t1). It is read by the if and by the release if, so it is held
+        # until the result is released, and released after that. y#2's witnesses use a#1 only: the branch
+        # temporary t#1 is gone by then, so its definition is substituted in.
         self.check("""
             function f(x: int): int {
                 a = x + 1; y = 0;
@@ -90,7 +96,8 @@ class InsertionExamplesTestCase(unittest.TestCase):
                 a#1 = x#0 + 1;
                 y#1 = 0;
                 y#1 ~= 0;
-                if a#1 < 5 {
+                $t1#1 = a#1 < 5;
+                if $t1#1 {
                     t#1 = a#1 * 2;
                     y#2 = t#1 + 1;
                     t#1 ~= a#1 * 2;
@@ -98,18 +105,21 @@ class InsertionExamplesTestCase(unittest.TestCase):
                     y#2 = a#1 - 1;
                 }
                 r#1 = y#2 + 1;
-                if a#1 < 5 {
+                if $t1#1 {
                     y#2 ~= (a#1 * 2) + 1;
                 } else {
                     y#2 ~= a#1 - 1;
                 }
+                $t1#1 ~= a#1 < 5;
                 a#1 ~= x#0 + 1;
                 return r#1;
             }
-            return f(1);
+            $t1#1 = f(1);
+            return $t1#1;
         """)
-
     def test_nested_ifs_nest_the_release(self):
+        # Known rough edge: the inner condition register is released at the end of its branch, so the outer
+        # release substitutes its definition and re-tests `a#0 < 3` inline, which is not a flat condition.
         self.check("""
             function f(a: int): int {
                 x = a;
@@ -121,22 +131,25 @@ class InsertionExamplesTestCase(unittest.TestCase):
             function f(a#0: int): int {
                 x#1 = a#0;
                 x#1 ~= a#0;
-                if a#0 < 5 {
-                    if a#0 < 3 {
+                $t1#1 = a#0 < 5;
+                if $t1#1 {
+                    $t2#1 = a#0 < 3;
+                    if $t2#1 {
                         x#2 = a#0 + 1;
                     } else {
                         x#2 = a#0 + 2;
                     }
                     x#4 = x#2 * 2;
-                    if a#0 < 3 {
+                    if $t2#1 {
                         x#2 ~= a#0 + 1;
                     } else {
                         x#2 ~= a#0 + 2;
                     }
+                    $t2#1 ~= a#0 < 3;
                 } else {
                     x#4 = a#0 - 1;
                 }
-                if a#0 < 5 {
+                if $t1#1 {
                     if a#0 < 3 {
                         x#4 ~= (a#0 + 1) * 2;
                     } else {
@@ -145,11 +158,12 @@ class InsertionExamplesTestCase(unittest.TestCase):
                 } else {
                     x#4 ~= a#0 - 1;
                 }
+                $t1#1 ~= a#0 < 5;
                 return a#0;
             }
-            return f(1);
+            $t1#1 = f(1);
+            return $t1#1;
         """)
-
     def test_an_unrolled_loop_is_released_like_straight_line_code(self):
         # every value the loop updated is an ordinary version, so nothing is carried and all of it is released
         self.check("function g(x: int): int { s = x; for i in 0 .. 2 { t = s + i; s = t * 2; } return s; } return g(3);", """
@@ -165,7 +179,8 @@ class InsertionExamplesTestCase(unittest.TestCase):
                 s#1 ~= x#0;
                 return s#3;
             }
-            return g(3);
+            $t1#1 = g(3);
+            return $t1#1;
         """)
 
 
