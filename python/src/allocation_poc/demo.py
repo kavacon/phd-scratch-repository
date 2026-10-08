@@ -191,12 +191,14 @@ def _scope(title: str, body: Sequence[Node], analysis: Liveness, params: Sequenc
         died = analysis.dies_at.get(name)
         if is_param:
             kind = "param"
+        elif name in analysis.kept:
+            kind = "kept"  # in a branch: needed to release what the if produced, so it outlives the branch
         elif name in analysis.outputs:
             kind = "output"
         else:
             kind = "temp"
         conservative_end = n - 1 if died is None else died - 1
-        live_end = reclaim - 1 if kind == "temp" else n - 1 if kind == "output" else conservative_end
+        live_end = reclaim - 1 if kind == "temp" else n - 1 if kind in ("output", "kept") else conservative_end
         columns.append({
             "name": name,
             "kind": kind,

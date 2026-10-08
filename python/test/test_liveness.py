@@ -199,13 +199,87 @@ class ControlFlowTestCase(unittest.TestCase):
         self.assertEqual({"y#1": 2, "y#2": 4, "a#1": 4}, outer.reclaim_at)
         self.assertEqual(("y#1", "y#2", "a#1"), outer.release_order)
 
-    def test_branch_temporaries_are_released_by_the_end_of_their_block(self):
+    def test_a_branch_temporary_the_result_is_built_from_is_kept_for_the_release_of_the_if(self):
+        # y#2 is built from t#1 in the then branch, and releasing y#2 later re-runs that recipe backwards, so t#1
+        # cannot be released at the end of the branch. The parent's release of the if undoes both, latest first.
         then_block, else_block = analysis(self.IF_ELSE, "f").nested[2]
-        self.assertEqual({"t#1": 2}, then_block.reclaim_at)  # t is local to the branch; y#2 is produced by both branches
-        self.assertEqual(frozenset({"y#2"}), then_block.outputs)
-        self.assertEqual({}, else_block.reclaim_at)
-        self.assertEqual(frozenset({"y#2"}), else_block.outputs)
+        self.assertEqual({}, then_block.reclaim_at)
+        self.assertEqual((frozenset({"t#1"}), frozenset({"y#2", "t#1"})), (then_block.kept, then_block.release_later))
+        self.assertEqual(frozenset({"y#2", "t#1"}), then_block.outputs)
+        self.assertEqual((frozenset(), frozenset({"y#2"})), (else_block.kept, else_block.release_later))
 
+    def test_a_branch_temporary_the_result_does_not_read_is_released_in_the_branch(self):
+        source = """
+            function f(a: int): int {
+                x = 0;
+                if a < 5 { u = a * 3; x = a + 1; } else { x = a - 1; }
+                r = x + 1;
+                return r;
+            }
+            return f(1);
+        """
+        then_block, _ = analysis(source, "f").nested[1]
+        self.assertEqual(({"u#1": 1}, frozenset()), (then_block.reclaim_at, then_block.kept))
+
+    def test_a_result_that_is_returned_is_never_released_so_nothing_is_kept_for_it(self):
+        source = """
+            function f(a: int): int {
+                x = 0;
+                if a < 5 { t = a * 2; x = t + 1; } else { x = a - 1; }
+                return x;
+            }
+            return f(1);
+        """
+        outer = analysis(source, "f")
+        then_block, _ = outer.nested[1]
+        self.assertEqual({"x#1": 1}, outer.reclaim_at)  # only the overwritten initial value
+        self.assertEqual(({"t#1": 2}, frozenset()), (then_block.reclaim_at, then_block.kept))
+
+    def test_only_what_is_released_later_keeps_its_temporaries(self):
+        # x is returned and y is released later. t feeds both, so it is kept for y's release, but x is not.
+        source = """
+            function f(a: int): int {
+                x = 0; y = 0;
+                if a < 5 { t = a * 2; x = t + 1; y = t + 2; } else { x = a - 1; y = a - 2; }
+                z = y + 1;
+                return x;
+            }
+            return f(1);
+        """
+        then_block, _ = analysis(source, "f").nested[2]
+        self.assertEqual((frozenset({"t#1"}), frozenset({"y#2", "t#1"})), (then_block.kept, then_block.release_later))
+
+    def test_a_nested_if_stays_whole_when_something_it_produced_is_kept(self):
+        source = """
+            function f(a: int): int {
+                x = a;
+                if a < 5 { if a < 3 { x = a + 1; } else { x = a + 2; } x = x * 2; } else { x = a - 1; }
+                r = x + 1;
+                return r;
+            }
+            return f(1);
+        """
+        outer = analysis(source, "f")
+        then_block, _ = outer.nested[1]
+        self.assertEqual(frozenset({"x#2"}), then_block.kept)  # the inner if's result, which x#4 is built from
+        inner_then, _ = then_block.nested[0]
+        self.assertEqual(frozenset({"x#2"}), inner_then.release_later)
+
+    def test_everything_an_if_produced_is_released_at_the_same_point(self):
+        # x's last use is earlier than y's, but they are released together at the later point
+        source = """
+            function f(a: int): int {
+                x = 0; y = 0;
+                if a < 5 { x = a + 1; y = a + 2; } else { x = a - 1; y = a - 2; }
+                u = x + 1;
+                v = u * 2;
+                w = y + v;
+                return w;
+            }
+            return f(1);
+        """
+        outer = analysis(source, "f")
+        self.assertEqual(outer.reclaim_at["x#2"], outer.reclaim_at["y#2"])
     def test_one_armed_if_is_balanced_so_the_old_version_is_released_after_it(self):
         # the missing else gets a copy of x#1, so x#1 is leftover on both paths and is released unconditionally
         source = "function f(a: int): int { x = a + 1; if x < 3 { x = x + 5; } return x; } return f(1);"

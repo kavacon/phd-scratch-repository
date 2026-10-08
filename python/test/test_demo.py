@@ -110,7 +110,7 @@ class LivenessViewTestCase(unittest.TestCase):
 
     def test_a_branch_marks_what_leaves_it_as_returned(self):
         then_branch = {c["name"]: c for c in self.view("if-else")["liveness"]["scopes"][2]["columns"]}
-        self.assertEqual("temp", then_branch["t#1"]["kind"])
+        self.assertEqual("kept", then_branch["t#1"]["kind"])  # the release of y#2 needs it, so it outlives the branch
         self.assertEqual("output", then_branch["y#2"]["kind"])
 
     def test_every_released_version_shown_in_the_view_is_released_in_the_output(self):
