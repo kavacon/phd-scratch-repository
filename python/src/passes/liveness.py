@@ -37,10 +37,12 @@ Not specified by the paper, and chosen here:
 Control flow. At the level of the enclosing block, an `if` is a single operation that reads the outer
 versions used anywhere inside it, defines the versions it produces (the version both branches share), and
 entangles all of them. So an outer version used inside a branch stays live until after the whole `if`. Each
-branch is also analysed as a block of its own (`Liveness.nested`): its temporaries are released by the end of
-the block, starting from the entanglement graph at the point where the block begins. Limitations:
-- Releasing a version an `if` produced needs to know which branch made it, so the condition has to stay
-  available until then. That is not modelled yet.
+branch is also analysed as a block of its own (`Liveness.nested`), starting from the entanglement graph at the
+point where the block begins. Its temporaries are released by the end of the block, with one exception:
+releasing what the `if` produced needs to know which branch made it and re-runs the branch's recipe backwards, so
+the temporaries that recipe reads (`Liveness.kept`) stay alive after the `if` and are undone, latest first, by
+the release of the `if`. Everything an `if` produces is released together, as one unit, at the latest point any
+of it needs. The condition is a register (flatten), kept alive until that release because the release reads it.
 - Release of a version an `if` produced reads everything the `if` read, which is conservative.
 Loops never reach this analysis: the unroll pass has already expanded them.
 
@@ -69,6 +71,10 @@ class Liveness(NamedTuple):
     outputs: FrozenSet[str]  # versions that escape the block (returned, or produced by an if); never released here
     reclaim_at: Dict[str, int]  # point at which each temporary can be released; parameters and outputs excluded
     release_order: Tuple[str, ...]  # temporaries ordered by release point, then reverse creation order
+    # In a branch of an `if`: the temporaries kept alive because releasing what the `if` produced reads them, and
+    # everything the release of the `if` undoes in this branch (those, plus the results it releases).
+    kept: FrozenSet[str]
+    release_later: FrozenSet[str]
     # for each `if` statement (by index), the analysis of its two blocks (then, else); points are relative to
     # each block
     nested: Dict[int, Tuple["Liveness", ...]]
@@ -118,20 +124,9 @@ def _release(edges: Set[FrozenSet[str]], released: str) -> Set[FrozenSet[str]]:
     return kept | {frozenset((a, b)) for i, a in enumerate(neighbours) for b in neighbours[i + 1:]}
 
 
-def _reclaim_points(body: Sequence[Node], effects: Sequence[_Effects], outputs: FrozenSet[str]) -> Dict[str, int]:
-    """
-    Point at which each temporary (a version defined in the block that is not an output) can be released:
-    after its last use, and after the release of every temporary whose release reads it.
-    Versions the programmer already released with `~=` keep that point.
-    """
-    defined_at = {name: k for k, e in enumerate(effects) for name in e.defs}
-    last_use: Dict[str, int] = {}
-    for k, e in enumerate(effects):
-        for name in e.uses:
-            last_use[name] = k
-    explicit = {e.releases: k + 1 for k, e in enumerate(effects) if e.releases}
-
-    reads: Dict[str, FrozenSet[str]] = {}  # versions that must still exist when a version is released
+def _reads(body: Sequence[Node], effects: Sequence[_Effects]) -> Dict[str, FrozenSet[str]]:
+    """The versions that must still exist when each version is released."""
+    reads: Dict[str, FrozenSet[str]] = {}
     for statement, e in zip(body, effects):
         if isinstance(statement, Assign):
             reads[statement.name] = e.uses
@@ -139,6 +134,44 @@ def _reclaim_points(body: Sequence[Node], effects: Sequence[_Effects], outputs: 
             reads.update({target: e.uses for target in e.defs})
         elif isinstance(statement, Unassign):
             reads[statement.name] = _variables(statement.witness) - {statement.name}
+    return reads
+
+
+def _kept(
+    roots: FrozenSet[str], permanent: FrozenSet[str], reads: Dict[str, FrozenSet[str]],
+    groups: Dict[str, FrozenSet[str]], defined: Set[str],
+) -> FrozenSet[str]:
+    """
+    Versions in a branch that the release of `roots` (versions the `if` produced and the parent will release)
+    depends on, directly or through other kept versions. They have to stay until that release. An `if` inside the
+    branch stays whole: if one of its results is kept, so are the others.
+    """
+    kept: Set[str] = set()
+    pending = list(roots)
+    while pending:
+        version = pending.pop()
+        for other in set(reads.get(version, ())) | set(groups.get(version, ())):
+            if other in defined and other not in kept and other not in roots and other not in permanent:
+                kept.add(other)
+                pending.append(other)
+    return frozenset(kept)
+
+
+def _reclaim_points(
+    body: Sequence[Node], effects: Sequence[_Effects], outputs: FrozenSet[str], reads: Dict[str, FrozenSet[str]],
+) -> Dict[str, int]:
+    """
+    Point at which each temporary (a version defined in the block that is not an output) can be released:
+    after its last use, and after the release of every temporary whose release reads it.
+    Versions the programmer already released with `~=` keep that point. Everything an `if` produces is
+    released together, at the latest point any of it needs.
+    """
+    defined_at = {name: k for k, e in enumerate(effects) for name in e.defs}
+    last_use: Dict[str, int] = {}
+    for k, e in enumerate(effects):
+        for name in e.uses:
+            last_use[name] = k
+    explicit = {e.releases: k + 1 for k, e in enumerate(effects) if e.releases}
 
     reclaim: Dict[str, int] = {}
     candidates = (n for n in defined_at if n not in outputs)
@@ -149,6 +182,12 @@ def _reclaim_points(body: Sequence[Node], effects: Sequence[_Effects], outputs: 
         earliest = max(last_use.get(name, defined_at[name]), defined_at[name]) + 1
         after_dependents = [p for other, p in reclaim.items() if name in reads.get(other, ())]
         reclaim[name] = max([earliest, *after_dependents])
+    for statement, e in zip(body, effects):
+        if isinstance(statement, If):
+            produced = [name for name in e.defs if name in reclaim]
+            if produced:
+                together = max(reclaim[name] for name in produced)
+                reclaim.update({name: together for name in produced if name not in explicit})
     return reclaim
 
 
@@ -159,6 +198,7 @@ def _analyse(
     entry_edges: FrozenSet[FrozenSet[str]],
     live_after: FrozenSet[str],
     escaping: FrozenSet[str],
+    keep_for: FrozenSet[str],
 ) -> Liveness:
     effects = [_effects(s) for s in body]
     n = len(body)
@@ -179,7 +219,12 @@ def _analyse(
             if effects[k].releases:
                 edges = _release(edges, effects[k].releases)
 
-    outputs = escaping.union(*(e.uses for s, e in zip(body, effects) if isinstance(s, Return)))
+    returned = frozenset().union(*(e.uses for s, e in zip(body, effects) if isinstance(s, Return)))
+    permanent = (escaping - keep_for) | returned  # versions that are never released
+    reads = _reads(body, effects)
+    groups = {name: e.defs for s, e in zip(body, effects) if isinstance(s, If) for name in e.defs}
+    kept = _kept(keep_for, permanent, reads, groups, {name for e in effects for name in e.defs})
+    outputs = escaping | kept | returned
     defined_at = {p: 0 for p in params}
     defined_at.update({name: k + 1 for k, e in enumerate(effects) for name in e.defs})
     dies_at = {}
@@ -193,13 +238,14 @@ def _analyse(
         if isinstance(statement, If):
             leaving = effects[k].defs  # both branches produce these
             nested[k] = tuple(
-                _analyse(block, (), entanglement, edges_before[k], live[k + 1] | leaving, leaving)
+                _analyse(block, (), entanglement, edges_before[k], live[k + 1] | leaving, leaving, leaving - permanent)
                 for block in (statement.body, statement.orelse)
             )
 
-    reclaim_at = _reclaim_points(body, effects, outputs)
+    reclaim_at = _reclaim_points(body, effects, outputs, reads)
     order = sorted(reclaim_at, key=lambda v: (reclaim_at[v], -defined_at[v]))
-    return Liveness(tuple(live), dies_at, outputs, reclaim_at, tuple(order), nested)
+    release_later = (keep_for | kept) - permanent
+    return Liveness(tuple(live), dies_at, outputs, reclaim_at, tuple(order), kept, release_later, nested)
 
 
 def analyse(body: Sequence[Node], params: Sequence[str] = (), entanglement: bool = True) -> Liveness:
@@ -208,7 +254,7 @@ def analyse(body: Sequence[Node], params: Sequence[str] = (), entanglement: bool
     liveness), which is not the paper's algorithm (it would let an operand die before a temporary computed
     from it) and exists only as a baseline for comparison.
     """
-    return _analyse(tuple(body), params, entanglement, frozenset(), _NONE, _NONE)
+    return _analyse(tuple(body), params, entanglement, frozenset(), _NONE, _NONE, _NONE)
 
 
 def analyse_program(program: Sequence[Node], entanglement: bool = True) -> Dict[str, Liveness]:

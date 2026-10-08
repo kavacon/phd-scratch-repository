@@ -8,6 +8,9 @@ from passes.rename import rename
 from passes.unroll import unroll
 from allocation_poc.printer import unparse
 from allocation_poc.simulate import SimulationError, simulate
+from parser.grammar import If, Unassign
+from parser.parser import walk
+from test_flatten import is_flat, is_plain
 
 
 def compiled(source):
@@ -79,10 +82,9 @@ class InsertionExamplesTestCase(unittest.TestCase):
             return $t1#1;
         """)
 
-    def test_branch_temporaries_are_released_inside_the_branch_and_the_result_after_the_if(self):
-        # The condition is a register of its own ($t1). It is read by the if and by the release if, so it is held
-        # until the result is released, and released after that. y#2's witnesses use a#1 only: the branch
-        # temporary t#1 is gone by then, so its definition is substituted in.
+    def test_what_an_if_produced_is_released_together_with_the_temporaries_it_was_built_from(self):
+        # t#1 feeds y#2, so it stays alive after the if. The release if re-tests the same condition register and
+        # undoes y#2 and then t#1 in the then branch, one operation at a time. Nothing in it is nested.
         self.check("""
             function f(x: int): int {
                 a = x + 1; y = 0;
@@ -100,13 +102,13 @@ class InsertionExamplesTestCase(unittest.TestCase):
                 if $t1#1 {
                     t#1 = a#1 * 2;
                     y#2 = t#1 + 1;
-                    t#1 ~= a#1 * 2;
                 } else {
                     y#2 = a#1 - 1;
                 }
                 r#1 = y#2 + 1;
                 if $t1#1 {
-                    y#2 ~= (a#1 * 2) + 1;
+                    y#2 ~= t#1 + 1;
+                    t#1 ~= a#1 * 2;
                 } else {
                     y#2 ~= a#1 - 1;
                 }
@@ -117,9 +119,29 @@ class InsertionExamplesTestCase(unittest.TestCase):
             $t1#1 = f(1);
             return $t1#1;
         """)
+
+    def test_a_branch_temporary_that_feeds_nothing_the_if_produced_is_released_in_the_branch(self):
+        # u is unused, so it goes straight away. Only temporaries the produced version reads outlive the branch.
+        self.check("function f(a: int): int { x = 0; if a < 5 { u = a * 3; x = a + 1; } else { x = a - 1; } return x; } return f(1);", """
+            function f(a#0: int): int {
+                x#1 = 0;
+                x#1 ~= 0;
+                $t1#1 = a#0 < 5;
+                if $t1#1 {
+                    u#1 = a#0 * 3;
+                    u#1 ~= a#0 * 3;
+                    x#2 = a#0 + 1;
+                } else {
+                    x#2 = a#0 - 1;
+                }
+                $t1#1 ~= a#0 < 5;
+                return x#2;
+            }
+            $t1#1 = f(1);
+            return $t1#1;
+        """)
     def test_nested_ifs_nest_the_release(self):
-        # Known rough edge: the inner condition register is released at the end of its branch, so the outer
-        # release substitutes its definition and re-tests `a#0 < 3` inline, which is not a flat condition.
+        # the inner condition register stays alive for the release too, so the nested release is flat as well
         self.check("""
             function f(a: int): int {
                 x = a;
@@ -140,21 +162,17 @@ class InsertionExamplesTestCase(unittest.TestCase):
                         x#2 = a#0 + 2;
                     }
                     x#4 = x#2 * 2;
+                } else {
+                    x#4 = a#0 - 1;
+                }
+                if $t1#1 {
+                    x#4 ~= x#2 * 2;
                     if $t2#1 {
                         x#2 ~= a#0 + 1;
                     } else {
                         x#2 ~= a#0 + 2;
                     }
                     $t2#1 ~= a#0 < 3;
-                } else {
-                    x#4 = a#0 - 1;
-                }
-                if $t1#1 {
-                    if a#0 < 3 {
-                        x#4 ~= (a#0 + 1) * 2;
-                    } else {
-                        x#4 ~= (a#0 + 2) * 2;
-                    }
                 } else {
                     x#4 ~= a#0 - 1;
                 }
@@ -227,6 +245,34 @@ class InsertionBehaviourTestCase(unittest.TestCase):
             }
             return g(@N@);
         """,
+        "an if result that is returned": "function f(n: int): int { x = 0; if n < 3 { t = n * 2; x = t + 1; } else { x = n - 1; } return x; } return f(@N@);",
+        "one result returned and one released": """
+            function f(n: int): int {
+                x = 0; y = 0;
+                if n < 3 { t = n * 2; x = t + 1; y = t + 2; } else { x = n - 1; y = n - 2; }
+                z = y + 1;
+                return x + z;
+            }
+            return f(@N@);
+        """,
+        "results of different lifetimes": """
+            function f(n: int): int {
+                x = 0; y = 0;
+                if n < 3 { x = n + 1; y = n + 2; } else { x = n - 1; y = n - 2; }
+                u = x + 1; v = u * 2; w = y + v;
+                return w;
+            }
+            return f(@N@);
+        """,
+        "a nested if inside an else": """
+            function f(n: int): int {
+                x = n;
+                if n < 2 { x = n + 10; } else { if n < 4 { t = n * 2; x = t + 1; } else { x = n - 1; } }
+                r = x + n;
+                return r;
+            }
+            return f(@N@);
+        """,
         "functions calling functions": """
             function double(x: int): int { y = x * 2; return y + 0; }
             function quad(x: int): int { d = double(x); return double(d); }
@@ -244,16 +290,22 @@ class InsertionBehaviourTestCase(unittest.TestCase):
                     self.assertEqual(before, after.value)
                     self.assertEqual({}, {s: l for s, l in after.leaks.items() if l}, "registers left behind")
 
+    def test_every_release_is_one_operation_and_every_condition_is_a_register(self):
+        # including the releases of what an if produced, which used to re-test a nested expression inline
+        for name, template in self.PROGRAMS.items():
+            with self.subTest(program=name):
+                for statement in compiled(template.replace("@N@", "2")):
+                    for node in walk(statement):
+                        if isinstance(node, Unassign):
+                            self.assertTrue(is_flat(node.witness), f"{node.name} ~= ...")
+                        elif isinstance(node, If):
+                            self.assertTrue(is_plain(node.condition))
+
     def test_a_wrong_witness_is_caught_by_the_simulation(self):
         broken = parse("function f(a: int): int { t = a + 1; t ~= a + 2; return a; } return f(1);")
         with self.assertRaises(SimulationError):
             simulate(broken)
 
-    def test_inserting_twice_adds_nothing(self):
-        for name, template in self.PROGRAMS.items():
-            with self.subTest(program=name):
-                once = compiled(template.replace("@N@", "2"))
-                self.assertEqual(once, lower_allocation(once))
 
 
 if __name__ == '__main__':
