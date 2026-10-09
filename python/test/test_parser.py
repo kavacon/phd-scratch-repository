@@ -277,7 +277,7 @@ class RenameInvariantsTestCase(unittest.TestCase):
         with self.assertRaises(RenameError):
             parse("x = y; return x;")
         with self.assertRaises(RenameError):
-            parse("x = 1; function f(): int { return x; } return x;")  # functions cannot see outer variables
+            parse("x = 1; function f(): int { return x; } y = f(); return y;")  # functions cannot see outer variables
 
     def test_original_program_is_untouched(self):
         source = "x = 1; x = x + 1; return x;"

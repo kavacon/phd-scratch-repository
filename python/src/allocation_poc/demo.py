@@ -32,6 +32,7 @@ from parser.parser import parse
 from passes.allocation import lower_allocation, prepare
 from passes.balance import balance
 from passes.flatten import flatten
+from passes.inline import inline
 from passes.isa import lower_to_isa
 from passes.liveness import Liveness
 from passes.names import results
@@ -54,6 +55,13 @@ class PassInfo:
 
 # In the order the compiler runs them.
 PASSES = [
+    PassInfo(
+        "inline", "Inline functions",
+        "A circuit has no calls, so every call is replaced by a copy of the function body and the definitions are "
+        "dropped. The copy's locals get their own names (area1.p, area2.p) and a plain variable or literal argument "
+        "stands in for its parameter with no copy. The release pass then treats the callee's locals like any other.",
+        (), inline,
+    ),
     PassInfo(
         "unroll", "Unroll loops",
         "Loop bounds are fixed numbers, so each for loop is replaced by one copy of its body per iteration, with "
@@ -89,9 +97,9 @@ PASSES = [
         "Each assignment becomes ALLOC plus one instruction that XORs the value into the clean register, and each "
         "release is the same instruction again plus FREE. An if becomes a CTRL region and an INVCTRL region "
         "(controlled on the condition and on its negation), each closed by ENDCTRL, with registers allocated before "
-        "them and freed after. Main and each function become "
-        "their own flat list of instructions, and a call stays a CALL that names the list it runs.",
-        ("allocation",), lower_to_isa, unparse_isa, simulate_isa,
+        "them and freed after. The "
+        "program becomes one flat list of instructions. Functions were inlined earlier, so there are no calls.",
+        ("allocation", "inline"), lower_to_isa, unparse_isa, simulate_isa,
     ),
 ]
 

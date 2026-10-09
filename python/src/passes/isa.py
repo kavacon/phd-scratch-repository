@@ -1,9 +1,8 @@
 """
 Lowering to the instruction set (parser.instructions), after the passes up to and including release insertion.
 
-The result is several instruction sets: one for `main` and one for each function, each a flat list of instructions
-with no blocks. A call stays a `CALL` that names the set it runs, as a jump to a memory location would, because it
-is not yet known how a QPU or a hybrid device would run a call; inlining, if wanted, belongs to circuit generation.
+The result is one flat list of instructions with no blocks, and the value it returns. Calls were descoped for this
+version: the inline pass must have run, so there are no functions and no calls to lower.
 
 Each assignment is `ALLOC r` followed by one instruction that XORs the value into it, and each `~=` is the same
 instruction again followed by `FREE r`. An `if` becomes a `CTRL c` region and an `INVCTRL c` region, each closed by
@@ -21,7 +20,7 @@ from parser.grammar import (
     Unassign, Variable,
 )
 from parser.instructions import (
-    Alloc, Call, Const, Ctrl, EndCtrl, Free, Instruction, InstructionSet, InvCtrl, IsaProgram, Op, Operand, Reg,
+    Alloc, Const, Ctrl, EndCtrl, Free, Instruction, InvCtrl, IsaProgram, Op, Operand, Reg,
 )
 
 _BINARY = {"+": "add", "-": "sub", "*": "mul", "/": "div", "<": "lt", ">": "gt", "!=": "ne", "&&": "and", "||": "or"}
@@ -50,7 +49,7 @@ def _compute(dst: str, value: Node) -> Instruction:
             raise IsaError("an equality chain must be flattened first")
         return Op("eq", dst, tuple(_operand(o) for o in value.operands))
     if isinstance(value, CallNode):
-        return Call(value.name, dst, tuple(_operand(a) for a in value.args))
+        raise IsaError("calls must be inlined first")
     return Op("copy", dst, (_operand(value),))
 
 
@@ -85,8 +84,7 @@ class _Lowerer:
             else:
                 hoisted.frees.append(node.name)
         elif isinstance(node, ExprStmt):
-            if isinstance(node.expr, CallNode):
-                out.append(Call(node.expr.name, None, tuple(_operand(a) for a in node.expr.args)))
+            pass  # a value that is not used leaves nothing behind
         elif isinstance(node, If):
             self.if_statement(node, out, hoisted)
         else:
@@ -111,19 +109,16 @@ class _Lowerer:
         else:
             out.extend(blocks)
 
-    def instruction_set(self, name: str, params: Tuple[str, ...], body: Tuple[Node, ...]) -> InstructionSet:
+    def program(self, body: Tuple[Node, ...]) -> IsaProgram:
         *statements, last = body
         if not isinstance(last, Return):
-            raise IsaError(f"{name} does not end with a return")
+            raise IsaError("the program does not end with a return")
         out: List[Instruction] = []
-        self.block(tuple(s for s in statements if not isinstance(s, FunctionDef)), out, None)
-        return InstructionSet(name, params, tuple(out), _operand(last.value))
+        self.block(tuple(statements), out, None)
+        return IsaProgram(tuple(out), _operand(last.value))
 
 
 def lower_to_isa(program: List[Node]) -> IsaProgram:
-    lowerer = _Lowerer()
-    functions = tuple(
-        lowerer.instruction_set(s.name, tuple(p.name for p in s.params), s.body)
-        for s in program if isinstance(s, FunctionDef)
-    )
-    return IsaProgram(functions, lowerer.instruction_set("main", (), tuple(program)))
+    if any(isinstance(s, FunctionDef) for s in program):
+        raise IsaError("functions must be inlined first")
+    return _Lowerer().program(tuple(program))

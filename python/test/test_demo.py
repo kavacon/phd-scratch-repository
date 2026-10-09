@@ -8,7 +8,7 @@ from allocation_poc.demo import PASSES, Handler, diff_lines, run_pipeline
 from allocation_poc.programs import PROGRAMS
 
 ALL = [p.id for p in PASSES]
-RELEASES = [i for i in ALL if i != "isa"]  # the pipeline up to the point releases are inserted
+RELEASES = [i for i in ALL if i not in ("inline", "isa")]  # up to releases, with functions kept as scopes
 
 
 class DiffTestCase(unittest.TestCase):
@@ -29,6 +29,19 @@ class DiffTestCase(unittest.TestCase):
 
     def test_lines_that_are_too_different_are_not_called_modified(self):
         self.assertEqual((["removed"], ["added"]), self.kinds(["return a;"], ["    p#1 ~= w#0 * h#0;"]))
+
+
+class InlineStageTestCase(unittest.TestCase):
+    def test_the_inline_stage_removes_functions_and_keeps_the_result(self):
+        for program in PROGRAMS:
+            stages = {s["id"]: s for s in run_pipeline(program["source"], ALL)["stages"]}
+            self.assertNotIn("function", stages["inline"]["text"], program["id"])
+            self.assertEqual(stages["source"]["run"]["value"], stages["inline"]["run"]["value"], program["id"])
+            self.assertEqual(["source", "inline"], [s for s in stages][:2])
+
+    def test_turning_inline_off_makes_the_instruction_stage_say_functions_must_be_inlined(self):
+        stages = run_pipeline(PROGRAMS[0]["source"], [i for i in ALL if i != "inline"])["stages"]
+        self.assertIn("inlined", stages[-1]["error"])
 
 
 class PipelineTestCase(unittest.TestCase):

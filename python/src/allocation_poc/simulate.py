@@ -16,7 +16,7 @@ from parser.grammar import (
     Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not, Number, Return,
     Unassign, Variable,
 )
-from parser.instructions import Alloc, Call as CallInstruction, Const, Ctrl, EndCtrl, Free, InvCtrl, IsaProgram, Op, Reg
+from parser.instructions import Alloc, Const, Ctrl, EndCtrl, Free, InvCtrl, IsaProgram, Op, Reg
 
 
 class SimulationError(AssertionError):
@@ -156,38 +156,29 @@ def _xor(register, value):
 
 
 class _IsaMachine:
-    """Runs instruction sets. `FREE` must find the register at zero, which checks every release."""
+    """Runs a program of instructions. `FREE` must find the register at zero, which checks every release."""
 
-    def __init__(self, program: IsaProgram):
-        self.sets = {f.name: f for f in program.functions}
-        self.leaks: Dict[str, set] = {}
-        self.peak: Dict[str, int] = {}
+    def __init__(self) -> None:
+        self.registers: Dict[str, Any] = {}
+        self.peak = 0
         self.steps = 0
 
-    def run(self, instruction_set, args, scope: str):
-        registers: Dict[str, Any] = dict(zip(instruction_set.params, args))
-        self.peak[scope] = max(self.peak.get(scope, 0), len(registers))
-        self.block(instruction_set.body, registers, scope)
-        result = self.read(instruction_set.result, registers)
-        keep = set(instruction_set.params) | ({instruction_set.result.name} if isinstance(instruction_set.result, Reg) else set())
-        self.leaks.setdefault(scope, set()).update(set(registers) - keep)
-        return result
-
-    def read(self, operand, registers):
+    def read(self, operand):
         if isinstance(operand, Const):
             return operand.value
-        if operand.name not in registers:
+        if operand.name not in self.registers:
             raise SimulationError(f"{operand.name} read but not held")
-        return registers[operand.name]
+        return self.registers[operand.name]
 
-    def block(self, body, registers, scope: str) -> None:
+    def run(self, body) -> None:
+        registers = self.registers
         regions = []  # for each open region, whether it is active (its control holds)
         for instruction in body:
             self.steps += 1
             if self.steps > MAX_STEPS:
                 raise SimulationError("step limit reached")
             if isinstance(instruction, (Ctrl, InvCtrl)):
-                holds = bool(self.read(instruction.control, registers)) == isinstance(instruction, Ctrl)
+                holds = bool(self.read(instruction.control)) == isinstance(instruction, Ctrl)
                 regions.append(holds)
                 continue
             if isinstance(instruction, EndCtrl):
@@ -203,7 +194,7 @@ class _IsaMachine:
                 if instruction.register in registers:
                     raise SimulationError(f"{instruction.register} allocated twice")
                 registers[instruction.register] = 0
-                self.peak[scope] = max(self.peak.get(scope, 0), len(registers))
+                self.peak = max(self.peak, len(registers))
             elif isinstance(instruction, Free):
                 name = instruction.register
                 if name not in registers:
@@ -212,26 +203,18 @@ class _IsaMachine:
                     raise SimulationError(f"{name} freed while holding {registers[name]}")
                 del registers[name]
             elif isinstance(instruction, Op):
-                value = _OPCODES[instruction.opcode](*(self.read(s, registers) for s in instruction.sources))
-                self.write(instruction.dst, value, registers)
-            elif isinstance(instruction, CallInstruction):
-                target = self.sets.get(instruction.function)
-                if target is None:
-                    raise SimulationError(f"instruction set {instruction.function} is not defined")
-                value = self.run(target, [self.read(a, registers) for a in instruction.args], instruction.function)
-                if instruction.dst is not None:
-                    self.write(instruction.dst, value, registers)
+                value = _OPCODES[instruction.opcode](*(self.read(s) for s in instruction.sources))
+                if instruction.dst not in registers:
+                    raise SimulationError(f"{instruction.dst} written but not allocated")
+                registers[instruction.dst] = _xor(registers[instruction.dst], value)
         if regions:
             raise SimulationError("a controlled region is never closed")
 
-    def write(self, name: str, value, registers) -> None:
-        if name not in registers:
-            raise SimulationError(f"{name} written but not allocated")
-        registers[name] = _xor(registers[name], value)
-
 
 def simulate_isa(program: IsaProgram) -> Result:
-    """Run `main`; returns its value, the registers left held in each instruction set and each set's peak."""
-    machine = _IsaMachine(program)
-    value = machine.run(program.main, [], "<program>")
-    return Result(value, machine.leaks, machine.peak)
+    """Run a program; returns its value, the registers left held and the most held at once."""
+    machine = _IsaMachine()
+    machine.run(program.body)
+    value = machine.read(program.result)
+    held = set(machine.registers) - ({program.result.name} if isinstance(program.result, Reg) else set())
+    return Result(value, {"<program>": held}, {"<program>": machine.peak})

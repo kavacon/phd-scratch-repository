@@ -10,19 +10,18 @@ no widths yet) and an instruction becomes a circuit fragment directly.
   negation of `c`. `EndCtrl` ends the most recent one that is still open, so regions nest and each extra open one
   adds a control. There are no jumps and no blocks: an `if` is a `Ctrl` region and an `InvCtrl` region, and both
   are always in the circuit. A controlled region never allocates or frees; those are placed before and after it.
-- `Call function, dst, args` is `dst ^= function(args)`: it names another instruction set, the way a call jumps to
-  a memory location. It is kept as an instruction because it is not yet known how a QPU or hybrid device would run
-  a call, so inlining and the like are left to circuit generation.
 
-A program is several instruction sets, one for `main` and one for each function. Each is a flat list of these
-instructions, with registers of its own, and ends in the value it returns.
+A program is one flat list of these instructions and the value it returns. There is no call instruction: calls were
+descoped for this version, and the inline pass has already copied every callee into its call sites, so a program
+reaches this level with no functions. A `CALL` to a separate instruction set could return if a target needs
+subroutines to stay first-class.
 
 Each instruction has an inverse (`inverse`), which is what reversing a history uses. Instructions carry no
 flags: whether one is an undo is a fact about the history, not about the circuit. In-place forms (`x += y`,
 inverse `x -= y`) are not defined yet.
 """
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import Tuple, Union
 
 
 @dataclass(frozen=True)
@@ -80,25 +79,9 @@ class EndCtrl(Instruction):
 
 
 @dataclass(frozen=True)
-class Call(Instruction):
-    function: str
-    dst: Optional[str]
-    args: Tuple[Operand, ...]
-
-
-@dataclass(frozen=True)
-class InstructionSet:
-    """One flat list of instructions (`main`, or a function) and the value it returns."""
-    name: str
-    params: Tuple[str, ...]
+class IsaProgram:
     body: Tuple[Instruction, ...]
     result: Operand
-
-
-@dataclass(frozen=True)
-class IsaProgram:
-    functions: Tuple[InstructionSet, ...]
-    main: InstructionSet
 
 
 def inverse(instruction: Instruction) -> Instruction:
@@ -107,7 +90,7 @@ def inverse(instruction: Instruction) -> Instruction:
         return Free(instruction.register)
     if isinstance(instruction, Free):
         return Alloc(instruction.register)
-    if isinstance(instruction, (Op, Call)):
+    if isinstance(instruction, Op):
         return instruction  # XOR into a register is its own inverse
     raise TypeError(f"no inverse for {type(instruction).__name__} on its own")
 

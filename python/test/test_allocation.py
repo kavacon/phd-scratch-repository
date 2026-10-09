@@ -4,6 +4,7 @@ import unittest
 from parser.parser import parse
 from passes.allocation import lower_allocation
 from passes.balance import balance
+from passes.flatten import flatten
 from passes.rename import rename
 from passes.unroll import unroll
 from allocation_poc.printer import unparse
@@ -14,8 +15,8 @@ from test_flatten import is_flat, is_plain
 
 
 def compiled(source):
-    """The default pipeline."""
-    return parse(source)
+    """The default pipeline without inlining, so functions stay and the release pass is tested on them as scopes."""
+    return parse(source, passes=(unroll, flatten, balance, rename, lower_allocation))
 
 
 def prepared(source):
