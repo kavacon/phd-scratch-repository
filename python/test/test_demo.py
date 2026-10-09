@@ -8,6 +8,7 @@ from allocation_poc.demo import PASSES, Handler, diff_lines, run_pipeline
 from allocation_poc.programs import PROGRAMS
 
 ALL = [p.id for p in PASSES]
+RELEASES = [i for i in ALL if i != "isa"]  # the pipeline up to the point releases are inserted
 
 
 class DiffTestCase(unittest.TestCase):
@@ -31,6 +32,15 @@ class DiffTestCase(unittest.TestCase):
 
 
 class PipelineTestCase(unittest.TestCase):
+    def test_the_instruction_stage_is_printed_as_instructions_and_run_on_the_instruction_machine(self):
+        for program in PROGRAMS:
+            stages = run_pipeline(program["source"], ALL)["stages"]
+            isa, allocation = stages[-1], stages[-2]
+            self.assertEqual(("isa", "allocation"), (isa["id"], allocation["id"]), program["id"])
+            self.assertIn("ALLOC", isa["text"])
+            self.assertEqual(allocation["run"]["value"], isa["run"]["value"], program["id"])
+            self.assertEqual([], isa["run"]["leaked"], program["id"])
+
     def test_stages_follow_compiler_order_and_skip_passes_that_are_off(self):
         stages = run_pipeline(PROGRAMS[0]["source"], ["allocation", "balance"])["stages"]
         self.assertEqual(["source", "balance", "allocation"], [s["id"] for s in stages])
@@ -41,7 +51,7 @@ class PipelineTestCase(unittest.TestCase):
         self.assertTrue(all(line["kind"] == "same" for line in source["after"]))
 
     def test_each_pass_reports_what_it_changed(self):
-        stages = {s["id"]: s for s in run_pipeline(PROGRAMS[0]["source"], ALL)["stages"]}
+        stages = {s["id"]: s for s in run_pipeline(PROGRAMS[0]["source"], RELEASES)["stages"]}
         self.assertEqual((1, 1), (stages["flatten"]["stats"]["changed"], stages["flatten"]["stats"]["added"]))  # the call is returned through a temporary
         self.assertEqual(8, stages["rename"]["stats"]["changed"])
         self.assertEqual(3, stages["allocation"]["stats"]["releases"])  # p in area, then y and x in the caller
@@ -49,7 +59,7 @@ class PipelineTestCase(unittest.TestCase):
     def test_every_preloaded_program_keeps_its_result_and_ends_without_leftovers(self):
         for program in PROGRAMS:
             with self.subTest(program=program["id"]):
-                stages = run_pipeline(program["source"], ALL)["stages"]
+                stages = run_pipeline(program["source"], RELEASES)["stages"]
                 self.assertEqual(["source", "unroll", "flatten", "balance", "rename", "allocation"], [s["id"] for s in stages])
                 self.assertFalse(any(s.get("error") for s in stages))
                 self.assertEqual(1, len({s["run"]["value"] for s in stages}))
@@ -57,7 +67,7 @@ class PipelineTestCase(unittest.TestCase):
 
     def test_early_release_lowers_peak_width(self):
         width = next(p for p in PROGRAMS if p["id"] == "width")
-        stages = run_pipeline(width["source"], ALL)["stages"]
+        stages = run_pipeline(width["source"], RELEASES)["stages"]
         self.assertLess(stages[-1]["run"]["peak"], stages[-2]["run"]["peak"])
 
     def test_a_pass_that_fails_stops_the_pipeline_and_says_why(self):
@@ -86,11 +96,11 @@ class PipelineTestCase(unittest.TestCase):
 class LivenessViewTestCase(unittest.TestCase):
     def view(self, program_id):
         program = next(p for p in PROGRAMS if p["id"] == program_id)
-        stages = run_pipeline(program["source"], ALL)["stages"]
+        stages = run_pipeline(program["source"], RELEASES)["stages"]
         return stages[-1]
 
     def test_only_the_release_stage_carries_a_liveness_view(self):
-        stages = run_pipeline(PROGRAMS[0]["source"], ALL)["stages"]
+        stages = run_pipeline(PROGRAMS[0]["source"], RELEASES)["stages"]
         self.assertEqual([None] * 5, [s["liveness"] for s in stages[:5]])
         self.assertIsNotNone(stages[5]["liveness"])
 
@@ -117,7 +127,7 @@ class LivenessViewTestCase(unittest.TestCase):
         # the view and the inserted code come from separate steps, so this checks they agree
         for program in PROGRAMS:
             with self.subTest(program=program["id"]):
-                stage = run_pipeline(program["source"], ALL)["stages"][-1]
+                stage = run_pipeline(program["source"], RELEASES)["stages"][-1]
                 released = [line for line in stage["text"].splitlines() if "~=" in line]
                 for scope in stage["liveness"]["scopes"]:
                     for column in scope["columns"]:
@@ -153,7 +163,7 @@ class ServerTestCase(unittest.TestCase):
     def test_runs_a_program(self):
         request = urllib.request.Request(
             self.url + "/api/run",
-            json.dumps({"source": PROGRAMS[0]["source"], "passes": ALL}).encode(),
+            json.dumps({"source": PROGRAMS[0]["source"], "passes": RELEASES}).encode(),
             {"Content-Type": "application/json"},
         )
         with urllib.request.urlopen(request) as response:
