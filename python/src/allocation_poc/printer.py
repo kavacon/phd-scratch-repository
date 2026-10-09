@@ -86,6 +86,11 @@ def _instruction_lines(instruction, depth: int) -> List[str]:
     raise TypeError(f"Cannot print {type(instruction).__name__}")
 
 
+def unparse_instruction(instruction) -> str:
+    """One instruction as text, with no indentation."""
+    return "\n".join(_instruction_lines(instruction, 0))
+
+
 def unparse_isa(program) -> str:
     """The instructions in order, then the returned value. Instructions inside a control region are indented, which
     is only for reading: the list itself is flat."""

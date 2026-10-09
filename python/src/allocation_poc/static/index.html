@@ -117,6 +117,41 @@
   .line.pointer { cursor: default; }
   .legend .bar { display: inline-block; width: 8px; height: 13px; margin-right: 5px; vertical-align: -2px; border-radius: 2px; }
   .muted { color: var(--muted); }
+  .machine { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .machine label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--muted); }
+  .machine input { font: 14px var(--mono); color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; width: 100%; }
+  .machine input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .alloc { margin-top: 14px; }
+  .alloc-bar { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 10px; font-size: 13.5px; }
+  .alloc-bar .fact b { font-size: 16px; }
+  .alloc-ctl { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .alloc-ctl input[type=range] { flex: 1; accent-color: var(--accent); }
+  .alloc-ctl button { border: 1px solid var(--border); background: var(--panel); border-radius: 8px; width: 34px; height: 30px; }
+  .alloc-ctl button:disabled { opacity: .35; cursor: default; }
+  .alloc-ctl .where { font-size: 12.5px; color: var(--muted); min-width: 120px; text-align: right; font-family: var(--mono); }
+  .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .slot { border: 1px solid var(--border); border-radius: 10px; padding: 6px 9px; min-height: 64px; background: var(--panel); }
+  .slot .id { font: 700 12px var(--mono); color: var(--muted); display: flex; justify-content: space-between; }
+  .slot .reg { font: 13px var(--mono); margin-top: 2px; word-break: break-all; }
+  .slot .var { font-size: 12px; color: var(--muted); }
+  .slot.held { background: var(--accent-soft); border-color: var(--accent); }
+  .slot.empty .reg { color: var(--muted); font-style: italic; font-family: inherit; }
+  .slot.changed { outline: 3px solid var(--chg-strong); outline-offset: 1px; }
+  .slot.over { border-color: var(--bad); border-style: dashed; }
+  .slot.over .id { color: var(--bad); }
+  .slot.scratch { border-style: dotted; background: transparent; }
+  .tag.soft { background: var(--chg); }
+  .tag { font-size: 11px; border-radius: 999px; padding: 0 6px; background: var(--rem); color: var(--text); }
+  .src .line { grid-template-columns: 38px 1fr; }
+  .src .line.has { background: var(--accent-soft); }
+  .src .line.now { background: var(--chg); outline: 2px solid var(--chg-strong); outline-offset: -2px; }
+  .steps-list { max-height: 360px; overflow: auto; }
+  .steps-list .line { grid-template-columns: 38px 1fr; cursor: pointer; }
+  .steps-list .line:hover { background: var(--accent-soft); }
+  .steps-list .line.now { background: var(--chg); outline: 2px solid var(--chg-strong); outline-offset: -2px; }
+  .steps-list .line .dim { color: var(--muted); margin-left: 14px; }
+  .now-box { font: 13px var(--mono); margin-bottom: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+  .now-box .dim { color: var(--muted); }
   kbd { font: 12px var(--mono); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
 </style>
 </head>
@@ -131,6 +166,14 @@
       <h2>Programs</h2>
       <div class="programs" id="programs"></div>
       <p class="hint" id="program-hint"></p>
+    </section>
+    <section class="panel">
+      <h2>Machine</h2>
+      <div class="machine">
+        <label>Qubits per register<input type="number" id="width" min="1" max="64" step="1" aria-label="Qubits per register"></label>
+        <label>Total qubits<input type="number" id="qubits" min="0" max="4096" step="1" aria-label="Total qubits"></label>
+      </div>
+      <p class="hint" id="slots-hint"></p>
     </section>
     <section class="panel">
       <h2>Source</h2>
@@ -163,7 +206,8 @@ function h(tag, props = {}, ...children) {
   return node;
 }
 
-const state = { programs: [], passes: [], enabled: new Set(), source: "", activeProgram: null, data: null, index: 0, focus: null, mode: "diff" };
+const state = { programs: [], passes: [], enabled: new Set(), source: "", activeProgram: null, data: null, index: 0, focus: null, mode: "diff",
+                options: { register_width: 1, qubits: 16 }, step: 0 };
 
 async function api(path, body) {
   const response = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : undefined);
@@ -174,7 +218,7 @@ let timer;
 function schedule() { clearTimeout(timer); timer = setTimeout(run, 250); }
 
 async function run() {
-  state.data = await api("/api/run", { source: state.source, passes: [...state.enabled] });
+  state.data = await api("/api/run", { source: state.source, passes: [...state.enabled], options: state.options });
   const stages = state.data.stages || [];
   const focused = stages.findIndex((s) => s.id === state.focus);
   state.index = focused >= 0 ? focused : Math.min(state.index, Math.max(stages.length - 1, 0));
@@ -284,6 +328,92 @@ function renderMetrics(stage, previous, first) {
   );
 }
 
+
+function slotsHint() {
+  const { register_width: w, qubits: n } = state.options;
+  const slots = Math.max(Math.floor(n / w) - 1, 0);
+  $("#slots-hint").textContent = `${slots} register slot${slots === 1 ? "" : "s"} available, plus one register (${w} qubit${w === 1 ? "" : "s"}) kept for scratch: ${n} ÷ ${w} rounded down, minus 1.`;
+}
+
+function readOptions() {
+  const clamp = (value, low, high, fallback) => { const n = parseInt(value, 10); return Number.isFinite(n) ? Math.min(Math.max(n, low), high) : fallback; };
+  state.options = { register_width: clamp($("#width").value, 1, 64, 1), qubits: clamp($("#qubits").value, 0, 4096, 16) };
+  slotsHint();
+  schedule();
+}
+
+function sourcePane(lines, held, focus) {
+  const have = new Set(held.flatMap((entry) => entry.lines));
+  const now = new Set(focus.lines);
+  return h("div", { class: "pane src" }, h("h4", {}, h("span", {}, "Source · where the registers came from"), h("span", {}, "tinted: a register for that variable is held")),
+    h("div", { class: "code" }, lines.map((text, i) =>
+      h("div", { class: `line${now.has(i + 1) ? " now" : have.has(i + 1) ? " has" : ""}` }, h("span", { class: "no" }, i + 1), h("span", {}, text || " ")))));
+}
+
+function allocationPanel(alloc) {
+  const total = alloc.steps.length;
+  const root = h("section", { class: "panel alloc" });
+  const dynamic = h("div", {});
+  const slider = h("input", { type: "range", min: 0, max: Math.max(total - 1, 0), value: state.step, "aria-label": "Step through the program" });
+  const back = h("button", { "aria-label": "Previous step" }, "‹");
+  const forward = h("button", { "aria-label": "Next step" }, "›");
+  const where = h("span", { class: "where" });
+
+  function refresh() {
+    state.step = Math.min(Math.max(state.step, 0), Math.max(total - 1, 0));
+    slider.value = state.step;
+    back.disabled = state.step <= 0;
+    forward.disabled = state.step >= total - 1;
+    const step = alloc.steps[state.step];
+    where.textContent = total ? `step ${state.step + 1} of ${total}` : "no steps";
+    if (!step) { dynamic.replaceChildren(h("div", { class: "empty" }, "This program has no instructions.")); return; }
+    const cells = Math.max(alloc.slots, alloc.needed);
+    const byslot = new Map(step.held.map((entry) => [entry.slot, entry]));
+    const slots = h("div", { class: "slots" }, Array.from({ length: cells }, (_, i) => {
+      const entry = byslot.get(i);
+      const over = i >= alloc.slots;
+      const where = entry ? (entry.function === "main" ? "" : `from ${entry.function} · `) : "";
+      return h("div", { class: `slot ${entry ? "held" : "empty"}${step.changed === i ? " changed" : ""}${over ? " over" : ""}`,
+                        title: entry ? `${entry.register}${entry.lines.length ? `, source line ${entry.lines.join(", ")}` : ""}` : "free" },
+        h("div", { class: "id" }, h("span", {}, `R${i}`), over ? h("span", { class: "tag" }, "over budget") : null),
+        h("div", { class: "reg" }, entry ? entry.register : "free"),
+        h("div", { class: "var" }, entry ? where + (entry.variable ? `variable ${entry.variable}` : "compiler temporary") : ""));
+    }));
+    const pad = "";
+    const scratch = h("div", { class: "slot scratch", title: "Reserved for the ancilla qubits operations such as ADD and MUL use while they run. Each operation returns it to zero." },
+      h("div", { class: "id" }, h("span", {}, "scratch"), h("span", { class: "tag soft" }, "reserved")),
+      h("div", { class: "reg" }, `${alloc.scratch} qubit${alloc.scratch === 1 ? "" : "s"}`),
+      h("div", { class: "var" }, "shared by every operation"));
+    slots.append(scratch);
+    const now = h("div", { class: "now-box" },
+      h("div", {}, pad, step.physical.replace(/\n/g, " ")),
+      h("div", { class: "dim" }, pad, `logical: ${step.logical.replace(/\n/g, " ")}`));
+    const list = h("div", { class: "pane" }, h("h4", {}, h("span", {}, "Instructions · click to jump"), h("span", {}, "")),
+      h("div", { class: "code steps-list" }, alloc.steps.map((s, i) =>
+        h("div", { class: `line${i === state.step ? " now" : ""}`, onclick: () => { state.step = i; refresh(); } },
+          h("span", { class: "no" }, i + 1), h("span", {}, s.physical.replace(/\n/g, " "), h("span", { class: "dim" }, s.logical.replace(/\n/g, " ") === s.physical.replace(/\n/g, " ") ? "" : `  ← ${s.logical.replace(/\n/g, " ")}`))))));
+    dynamic.replaceChildren(slots, now,
+      h("div", { class: "panes" }, sourcePane(state.source.split("\n"), step.held, step.focus), list));
+    const current = list.querySelector(".line.now");
+    if (current) { const box = list.querySelector(".steps-list"); box.scrollTop = Math.max(current.offsetTop - box.clientHeight / 2, 0); }
+  }
+
+  slider.addEventListener("input", () => { state.step = parseInt(slider.value, 10); refresh(); });
+  back.addEventListener("click", () => { state.step -= 1; refresh(); });
+  forward.addEventListener("click", () => { state.step += 1; refresh(); });
+  const used = alloc.qubits_used;
+  root.append(
+    h("h2", {}, "Physical qubits"),
+    h("div", { class: "alloc-bar" },
+      h("span", { class: "fact" }, h("b", {}, alloc.slots), ` slot${alloc.slots === 1 ? "" : "s"} available (${alloc.qubits} qubits ÷ ${alloc.register_width}, less a scratch register)`),
+      h("span", { class: `fact ${alloc.fits ? "good" : "bad"}` }, h("b", {}, alloc.needed), ` needed${alloc.fits ? "" : ", too many"}`),
+      h("span", { class: "fact" }, h("b", {}, used), ` of ${alloc.qubits} qubits used, including ${alloc.scratch} for scratch`)),
+    h("div", { class: "alloc-ctl" }, back, slider, forward, where),
+    dynamic);
+  refresh();
+  return root;
+}
+
 function renderStage() {
   const stages = state.data.stages;
   const stage = stages[state.index];
@@ -316,6 +446,7 @@ function renderStage() {
   if (stage.error) parts.push(h("div", { class: "note err" }, stage.error));
   for (const note of stage.notes) parts.push(h("div", { class: "note" }, note));
   parts.push(renderMetrics(stage, previous, stages[0]));
+  if (stage.allocation) parts.push(allocationPanel(stage.allocation));
   return parts;
 }
 
@@ -371,6 +502,7 @@ function choose(program) {
   state.source = program.source;
   $("#source").value = program.source;
   state.index = 0;
+  state.step = 0;
   state.focus = null;
   renderPrograms();
   run();
@@ -408,6 +540,8 @@ $("#source").addEventListener("input", (event) => {
   renderPrograms();
   schedule();
 });
+$("#width").addEventListener("input", readOptions);
+$("#qubits").addEventListener("input", readOptions);
 $("#all-on").addEventListener("click", () => setAll(true));
 $("#all-off").addEventListener("click", () => setAll(false));
 document.addEventListener("keydown", (event) => {
@@ -423,6 +557,9 @@ document.addEventListener("keydown", (event) => {
 (async function init() {
   [state.programs, state.passes] = await Promise.all([api("/api/programs"), api("/api/passes")]);
   state.enabled = new Set(state.passes.map((p) => p.id));
+  $("#width").value = state.options.register_width;
+  $("#qubits").value = state.options.qubits;
+  slotsHint();
   renderPasses();
   choose(state.programs[0]);
 })();

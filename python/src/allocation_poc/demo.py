@@ -20,15 +20,17 @@ import webbrowser
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Callable, Dict, List, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from lark.exceptions import UnexpectedCharacters, UnexpectedEOF, UnexpectedInput, UnexpectedToken
 
-from allocation_poc.printer import unparse, unparse_isa, unparse_statement
+from allocation_poc.printer import unparse, unparse_instruction, unparse_isa, unparse_statement
 from allocation_poc.programs import PROGRAMS
 from allocation_poc.simulate import simulate, simulate_isa
 from parser.grammar import Assign, FunctionDef, If, Node
+from parser.instructions import Alloc, Free, IOp, Op
 from parser.parser import parse
+from passes.allocate import Allocation, WidthExceeded, allocate
 from passes.allocation import lower_allocation, prepare
 from passes.balance import balance
 from passes.flatten import flatten
@@ -51,6 +53,7 @@ class PassInfo:
     apply: Callable
     render: Callable = unparse  # how the pass's output is printed
     run: Callable = simulate  # how the pass's output is executed
+    takes_options: bool = False  # whether the pass is also given the machine settings
 
 
 # In the order the compiler runs them.
@@ -101,7 +104,30 @@ PASSES = [
         "program becomes one flat list of instructions. Functions were inlined earlier, so there are no calls.",
         ("allocation", "inline"), lower_to_isa, unparse_isa, simulate_isa,
     ),
+    PassInfo(
+        "allocate", "Assign physical qubits",
+        "Maps every logical register onto a numbered slot of the machine, reusing a slot as soon as its register is "
+        "freed. The machine is set by two numbers: qubits per register and total qubits. One register is set aside as "
+        "scratch for the operations' ancillae, and the rest are the slots available. Step through to see which register holds each slot, and where it came from in the source.",
+        ("isa",), allocate, lambda allocation: unparse_isa(allocation.program),
+        lambda allocation: simulate_isa(allocation.program), True,
+    ),
 ]
+
+DEFAULT_OPTIONS = {"register_width": 1, "qubits": 16}
+
+
+def clean_options(raw) -> Dict[str, int]:
+    """The machine settings from a request, with defaults for anything missing or out of range."""
+    options = dict(DEFAULT_OPTIONS)
+    limits = {"register_width": (1, 64), "qubits": (0, 4096)}
+    for key, (low, high) in limits.items():
+        try:
+            value = int((raw or {}).get(key, options[key]))
+        except (TypeError, ValueError):
+            continue
+        options[key] = min(max(value, low), high)
+    return options
 
 
 # --- highlighting ---------------------------------------------------------------------------------------------
@@ -292,8 +318,99 @@ def _describe(error: Exception) -> Dict:
     return {"message": str(error)}
 
 
-def run_pipeline(source: str, pass_ids: Sequence[str]) -> Dict:
+# --- allocation view --------------------------------------------------------------------------------------------
+
+class _SourceIndex:
+    """Where each variable is assigned in the source, by function, so a register can point back at its lines."""
+
+    _FUNCTION = re.compile(r"^\s*function\s+(\w+)\s*\(")
+
+    def __init__(self, source: str) -> None:
+        self.lines = source.splitlines()
+        self.scope_of: List[str] = []
+        scope, depth = "main", 0
+        for line in self.lines:
+            code = line.split("//")[0]
+            match = self._FUNCTION.match(code)
+            if match and depth == 0:
+                scope = match.group(1)
+            self.scope_of.append(scope)
+            depth += code.count("{") - code.count("}")
+            if depth <= 0:
+                depth, scope = 0, "main"
+        self.cache: Dict[Tuple[str, str], List[int]] = {}
+
+    def lines_for(self, scope: str, variable: str) -> List[int]:
+        key = (scope.split("@")[0], variable)
+        if key not in self.cache:
+            name = re.escape(variable)
+            pattern = re.compile(rf"\b{name}\s*~?=(?!=)|\b{name}\s*:|\bfor\s+{name}\b")
+            self.cache[key] = [
+                number for number, line in enumerate(self.lines, 1)
+                if self.scope_of[number - 1] == key[0] and pattern.search(line.split("//")[0])
+            ]
+        return self.cache[key]
+
+
+def source_origin(register: str) -> Tuple[Optional[str], str]:
+    """
+    Where a logical register came from in the source, as (variable, function): x#2 is (x, main), area1.p#1 is
+    (p, area) because it was inlined from area, and h1.g1.m#1 is (m, g). Loop copies (t@1) are the variable t.
+    Compiler temporaries ($t1#1) have no variable.
+    """
+    base = register.split("#")[0]
+    if base.startswith("$"):
+        return None, "main"
+    parts = base.split(".")
+    function = re.sub(r"\d+$", "", parts[-2]) if len(parts) > 1 else "main"
+    return parts[-1].split("@")[0], function
+
+
+def _acted_on(instruction) -> str:
+    if isinstance(instruction, (Alloc, Free)):
+        return instruction.register
+    if isinstance(instruction, (Op, IOp)):
+        return instruction.dst
+    return ""
+
+
+def allocation_view(allocation: Allocation, source: str) -> Dict:
+    """The allocation as data for the viewer: the machine, and for every step what each slot held."""
+    index = _SourceIndex(source)
+
+    def label(register: str) -> Dict:
+        variable, function = source_origin(register) if register else (None, "main")
+        return {
+            "register": register,
+            "function": function,
+            "variable": variable,
+            "lines": index.lines_for(function, variable) if variable else [],
+        }
+
+    steps = []
+    for step in allocation.trace:
+        steps.append({
+            "logical": unparse_instruction(step.logical),
+            "physical": unparse_instruction(step.physical),
+            "held": [{"slot": h.slot, **label(h.register)} for h in step.held],
+            "changed": step.changed,
+            "focus": label(_acted_on(step.logical)),
+        })
+    return {
+        "register_width": allocation.register_width,
+        "qubits": allocation.qubits,
+        "slots": allocation.slots,
+        "scratch": allocation.scratch_qubits,
+        "qubits_used": allocation.qubits_used,
+        "needed": allocation.needed,
+        "fits": allocation.fits,
+        "steps": steps,
+    }
+
+
+def run_pipeline(source: str, pass_ids: Sequence[str], options=None) -> Dict:
     """Parse `source` and apply the chosen passes in compiler order, returning every stage."""
+    options = clean_options(options)
     try:
         nodes = parse(source, passes=())
     except UnexpectedInput as error:
@@ -302,6 +419,7 @@ def run_pipeline(source: str, pass_ids: Sequence[str]) -> Dict:
         return {"error": {"message": str(error)}}
 
     text = unparse(nodes)
+    run = simulate
     stages = [_stage({"id": "source", "name": "Source", "summary": "Your program, parsed and printed back out."}, nodes, "", text)]
     for info in PASSES:
         if info.id not in pass_ids:
@@ -313,23 +431,32 @@ def run_pipeline(source: str, pass_ids: Sequence[str]) -> Dict:
                 liveness = liveness_view(nodes)
             except Exception:
                 liveness = None
+        failure = None
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             try:
-                lowered = info.apply(nodes)
+                lowered = info.apply(nodes, options["register_width"], options["qubits"]) if info.takes_options else info.apply(nodes)
+            except WidthExceeded as error:  # still show the packing it would have needed
+                lowered, failure = error.allocation, f"{error} ({options['qubits']} qubits ÷ {options['register_width']} per register)"
             except Exception as error:
                 lowered, failure = nodes, f"{type(error).__name__}: {error}"
-            else:
-                failure = None
-        if failure:
+        if failure and lowered is nodes:
             hint = [f"This pass expects {', '.join(info.requires)} to have run first."] if info.requires else []
-            stage = _stage(details, nodes, text, text, hint)
+            stage = _stage(details, nodes, text, text, hint, run=run)
             stage["error"] = failure
             stages.append(stage)
             break
         nodes, previous, text = lowered, text, info.render(lowered)
-        stages.append(_stage(details, nodes, previous, text, [str(w.message) for w in caught], liveness, info.run))
-    return {"stages": stages}
+        run = info.run
+        stage = _stage(details, nodes, previous, text, [str(w.message) for w in caught], liveness, run)
+        if isinstance(lowered, Allocation):
+            stage["allocation"] = allocation_view(lowered, source)
+        if failure:
+            stage["error"] = failure
+        stages.append(stage)
+        if failure:
+            break
+    return {"stages": stages, "options": options}
 
 
 # --- server -----------------------------------------------------------------------------------------------------
@@ -369,9 +496,10 @@ class Handler(BaseHTTPRequestHandler):
             request = json.loads(self.rfile.read(length) or b"{}")
             source = str(request.get("source", ""))
             passes = [p for p in request.get("passes", []) if isinstance(p, str)]
+            options = request.get("options")
         except (ValueError, AttributeError):
             return self.json({"error": "bad request"}, 400)
-        self.json(run_pipeline(source, passes))
+        self.json(run_pipeline(source, passes, options if isinstance(options, dict) else None))
 
 
 def main() -> None:
