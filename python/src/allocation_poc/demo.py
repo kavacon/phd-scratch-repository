@@ -94,8 +94,8 @@ PASSES = [
     ),
     PassInfo(
         "isa", "Lower to instructions",
-        "Each assignment becomes ALLOC plus one instruction that XORs the value into the clean register, and each "
-        "release is the same instruction again plus FREE. An if becomes a CTRL region and an INVCTRL region "
+        "Each assignment becomes ALLOC plus one instruction that computes the value into the clean register, and each "
+        "release is its explicit inverse (IMUL undoes MUL) plus FREE. An if becomes a CTRL region and an ICTRL region "
         "(controlled on the condition and on its negation), each closed by ENDCTRL, with registers allocated before "
         "them and freed after. The "
         "program becomes one flat list of instructions. Functions were inlined earlier, so there are no calls.",
