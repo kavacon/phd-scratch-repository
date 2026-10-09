@@ -24,14 +24,15 @@ from typing import Callable, Dict, List, Sequence, Tuple
 
 from lark.exceptions import UnexpectedCharacters, UnexpectedEOF, UnexpectedInput, UnexpectedToken
 
-from allocation_poc.printer import unparse, unparse_statement
+from allocation_poc.printer import unparse, unparse_isa, unparse_statement
 from allocation_poc.programs import PROGRAMS
-from allocation_poc.simulate import simulate
+from allocation_poc.simulate import simulate, simulate_isa
 from parser.grammar import Assign, FunctionDef, If, Node
 from parser.parser import parse
 from passes.allocation import lower_allocation, prepare
 from passes.balance import balance
 from passes.flatten import flatten
+from passes.isa import lower_to_isa
 from passes.liveness import Liveness
 from passes.names import results
 from passes.rename import rename
@@ -47,6 +48,8 @@ class PassInfo:
     summary: str
     requires: Tuple[str, ...]
     apply: Callable
+    render: Callable = unparse  # how the pass's output is printed
+    run: Callable = simulate  # how the pass's output is executed
 
 
 # In the order the compiler runs them.
@@ -80,6 +83,15 @@ PASSES = [
         "Works out where each temporary last matters, following Faro, Marino and Messina's liveness, and inserts "
         "a release there. x ~= e; means x currently equals e, so it can be uncomputed and freed.",
         ("rename",), lower_allocation,
+    ),
+    PassInfo(
+        "isa", "Lower to instructions",
+        "Each assignment becomes ALLOC plus one instruction that XORs the value into the clean register, and each "
+        "release is the same instruction again plus FREE. An if becomes a CTRL region and an INVCTRL region "
+        "(controlled on the condition and on its negation), each closed by ENDCTRL, with registers allocated before "
+        "them and freed after. Main and each function become "
+        "their own flat list of instructions, and a call stays a CALL that names the list it runs.",
+        ("allocation",), lower_to_isa, unparse_isa, simulate_isa,
     ),
 ]
 
@@ -140,10 +152,10 @@ def diff_lines(before: List[str], after: List[str]) -> Tuple[List[Dict], List[Di
 
 # --- running the pipeline ---------------------------------------------------------------------------------------
 
-def _measure(nodes) -> Dict:
+def _measure(nodes, run: Callable = simulate) -> Dict:
     """Run the program on the register machine."""
     try:
-        result = simulate(nodes)
+        result = run(nodes)
     except RecursionError:
         return {"error": "recursion went too deep"}
     except Exception as error:  # a user program can fail in many ways; show it instead of crashing the demo
@@ -231,7 +243,7 @@ def liveness_view(nodes: Sequence[Node]) -> Dict:
     return {"scopes": scopes}
 
 
-def _stage(info: Dict, nodes, previous: str, text: str, notes: Sequence[str] = (), liveness=None) -> Dict:
+def _stage(info: Dict, nodes, previous: str, text: str, notes: Sequence[str] = (), liveness=None, run: Callable = simulate) -> Dict:
     if previous:
         before, after = diff_lines(previous.splitlines(), text.splitlines())
     else:  # the first stage has nothing to compare against
@@ -247,11 +259,11 @@ def _stage(info: Dict, nodes, previous: str, text: str, notes: Sequence[str] = (
             "added": count(after, "added"),
             "changed": count(after, "changed"),
             "removed": count(before, "removed"),
-            "releases": sum(1 for line in after if "~=" in line["text"]),
+            "releases": sum(1 for line in after if "~=" in line["text"] or line["text"].strip().startswith("FREE")),
         },
         "notes": list(notes),
         "liveness": liveness,
-        "run": _measure(nodes),
+        "run": _measure(nodes, run),
     }
 
 
@@ -307,8 +319,8 @@ def run_pipeline(source: str, pass_ids: Sequence[str]) -> Dict:
             stage["error"] = failure
             stages.append(stage)
             break
-        nodes, previous, text = lowered, text, unparse(lowered)
-        stages.append(_stage(details, nodes, previous, text, [str(w.message) for w in caught], liveness))
+        nodes, previous, text = lowered, text, info.render(lowered)
+        stages.append(_stage(details, nodes, previous, text, [str(w.message) for w in caught], liveness, info.run))
     return {"stages": stages}
 
 

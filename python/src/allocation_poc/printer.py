@@ -1,4 +1,4 @@
-"""Renders an AST back to readable source-like text, for inspecting what passes produce."""
+"""Renders an AST, or an instruction program, as readable text, for inspecting what passes produce."""
 from typing import List, Sequence
 
 from parser.grammar import (
@@ -56,3 +56,53 @@ def _stmt(node: Node, depth: int) -> List[str]:
         returns = f": {node.return_type}" if node.return_type else ""
         return [f"{pad}function {node.name}({params}){returns} {{"] + _block(node.body, depth + 1) + [f"{pad}}}"]
     raise TypeError(f"Cannot print {type(node).__name__}")
+
+
+def _operand_text(operand) -> str:
+    from parser.instructions import Reg
+    if isinstance(operand, Reg):
+        return operand.name
+    value = operand.value
+    return "true" if value is True else "false" if value is False else str(value)
+
+
+def _instruction_lines(instruction, depth: int) -> List[str]:
+    from parser.instructions import Alloc, Call as CallInstruction, Ctrl, EndCtrl, Free, InvCtrl, Op
+    pad = "    " * depth
+    if isinstance(instruction, Alloc):
+        return [f"{pad}ALLOC {instruction.register}"]
+    if isinstance(instruction, Free):
+        return [f"{pad}FREE  {instruction.register}"]
+    if isinstance(instruction, Op):
+        sources = ", ".join(_operand_text(s) for s in instruction.sources)
+        return [f"{pad}{instruction.opcode.upper():<5} {instruction.dst}, {sources}"]
+    if isinstance(instruction, CallInstruction):
+        args = ", ".join(_operand_text(a) for a in instruction.args)
+        target = f"{instruction.dst}, " if instruction.dst else ""
+        return [f"{pad}CALL  {target}{instruction.function}({args})"]
+    if isinstance(instruction, Ctrl):
+        return [f"{pad}CTRL    {_operand_text(instruction.control)}"]
+    if isinstance(instruction, InvCtrl):
+        return [f"{pad}INVCTRL {_operand_text(instruction.control)}"]
+    if isinstance(instruction, EndCtrl):
+        return [f"{pad}ENDCTRL"]
+    raise TypeError(f"Cannot print {type(instruction).__name__}")
+
+
+def unparse_isa(program) -> str:
+    """Each instruction set under a label, `main` last. A call names the label of the set it runs.
+    Instructions inside a control region are indented, which is only for reading: the list itself is flat."""
+    from parser.instructions import Ctrl, EndCtrl, InvCtrl
+    lines: List[str] = []
+    for instruction_set in list(program.functions) + [program.main]:
+        lines.append(f"{instruction_set.name}({', '.join(instruction_set.params)}):" if instruction_set.params
+                     else f"{instruction_set.name}:")
+        depth = 1
+        for instruction in instruction_set.body:
+            if isinstance(instruction, EndCtrl):
+                depth -= 1
+            lines += _instruction_lines(instruction, depth)
+            if isinstance(instruction, (Ctrl, InvCtrl)):
+                depth += 1
+        lines += [f"    RETURN {_operand_text(instruction_set.result)}", ""]
+    return "\n".join(lines).rstrip()
