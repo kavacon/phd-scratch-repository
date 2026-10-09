@@ -4,11 +4,11 @@ import unittest
 import urllib.request
 from http.server import ThreadingHTTPServer
 
-from allocation_poc.demo import PASSES, Handler, diff_lines, run_pipeline
+from allocation_poc.demo import PASSES, Handler, clean_options, diff_lines, run_pipeline, source_origin
 from allocation_poc.programs import PROGRAMS
 
 ALL = [p.id for p in PASSES]
-RELEASES = [i for i in ALL if i not in ("inline", "isa")]  # up to releases, with functions kept as scopes
+RELEASES = [i for i in ALL if i not in ("inline", "isa", "allocate")]  # up to releases, with functions kept as scopes
 
 
 class DiffTestCase(unittest.TestCase):
@@ -43,12 +43,60 @@ class InlineStageTestCase(unittest.TestCase):
         stages = run_pipeline(PROGRAMS[0]["source"], [i for i in ALL if i != "inline"])["stages"]
         self.assertIn("inlined", stages[-1]["error"])
 
+class AllocationStageTestCase(unittest.TestCase):
+    def stage(self, program_id, width=1, qubits=16):
+        source = next(p for p in PROGRAMS if p["id"] == program_id)["source"]
+        return run_pipeline(source, ALL, {"register_width": width, "qubits": qubits})["stages"][-1]
+
+    def test_the_last_stage_is_the_allocation_with_the_machine_it_was_given(self):
+        stage = self.stage("if-else", width=2, qubits=14)
+        self.assertEqual("allocate", stage["id"])
+        view = stage["allocation"]
+        self.assertEqual((2, 14, 6, 5, True), (view["register_width"], view["qubits"], view["slots"], view["needed"], view["fits"]))
+        self.assertEqual((2, 12), (view["scratch"], view["qubits_used"]))  # 5 registers of 2, and 2 for scratch
+        self.assertIn("R0", stage["text"])
+        self.assertEqual([], stage["run"]["leaked"])
+        self.assertNotIn("error", stage)
+
+    def test_the_result_is_unchanged_by_allocation_for_every_program(self):
+        for program in PROGRAMS:
+            stages = {s["id"]: s for s in run_pipeline(program["source"], ALL)["stages"]}
+            self.assertEqual(stages["isa"]["run"]["value"], stages["allocate"]["run"]["value"], program["id"])
+
+    def test_too_few_qubits_is_reported_but_the_packing_is_still_shown(self):
+        stage = self.stage("if-else", width=4, qubits=16)
+        self.assertIn("needs 5 register slots but only 3 are available", stage["error"])
+        self.assertFalse(stage["allocation"]["fits"])
+        self.assertTrue(stage["allocation"]["steps"])
+
+    def test_every_step_says_what_each_slot_held_and_where_it_came_from_in_the_source(self):
+        steps = self.stage("area")["allocation"]["steps"]
+        inlined = [h for step in steps for h in step["held"] if h["register"].startswith("area1.p#")]
+        self.assertTrue(inlined)
+        self.assertEqual(("p", "area", [2]), (inlined[0]["variable"], inlined[0]["function"], inlined[0]["lines"]))  # `p = w * h;`
+        caller = [h for step in steps for h in step["held"] if h["register"] == "x#1"]
+        self.assertEqual(("x", "main"), (caller[0]["variable"], caller[0]["function"]))
+        temporary = [h for step in steps for h in step["held"] if h["register"].startswith("$t")]
+        self.assertTrue(not temporary or all(h["variable"] is None and h["lines"] == [] for h in temporary))
+
+    def test_a_registers_origin_is_read_from_its_name(self):
+        self.assertEqual(("x", "main"), source_origin("x#2"))
+        self.assertEqual(("p", "area"), source_origin("area1.p#1"))
+        self.assertEqual(("m", "g"), source_origin("h1.g2.m#1"))
+        self.assertEqual(("t", "main"), source_origin("t@3#1"))
+        self.assertEqual((None, "main"), source_origin("$t4#1"))
+
+    def test_settings_outside_the_allowed_range_are_pulled_back(self):
+        self.assertEqual({"register_width": 1, "qubits": 16}, clean_options(None))
+        self.assertEqual({"register_width": 64, "qubits": 0}, clean_options({"register_width": 999, "qubits": -5}))
+        self.assertEqual({"register_width": 1, "qubits": 16}, clean_options({"register_width": "x", "qubits": None}))
+
 
 class PipelineTestCase(unittest.TestCase):
     def test_the_instruction_stage_is_printed_as_instructions_and_run_on_the_instruction_machine(self):
         for program in PROGRAMS:
             stages = run_pipeline(program["source"], ALL)["stages"]
-            isa, allocation = stages[-1], stages[-2]
+            isa, allocation = stages[-2], stages[-3]
             self.assertEqual(("isa", "allocation"), (isa["id"], allocation["id"]), program["id"])
             self.assertIn("ALLOC", isa["text"])
             self.assertEqual(allocation["run"]["value"], isa["run"]["value"], program["id"])
