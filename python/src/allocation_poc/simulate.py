@@ -16,7 +16,7 @@ from parser.grammar import (
     Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not, Number, Return,
     Unassign, Variable,
 )
-from parser.instructions import Alloc, Const, Ctrl, EndCtrl, Free, InvCtrl, IsaProgram, Op, Reg
+from parser.instructions import Alloc, Const, Ctrl, EndCtrl, Free, ICtrl, IOp, IsaProgram, Op, Reg
 
 
 class SimulationError(AssertionError):
@@ -144,17 +144,6 @@ _OPCODES = {
 }
 
 
-def _xor(register, value):
-    """`register ^= value`. Whole numbers and booleans use real XOR; other values only support write and cancel."""
-    if isinstance(register, (int, bool)) and isinstance(value, (int, bool)):
-        return register ^ value
-    if register == 0:
-        return value
-    if register == value:
-        return 0
-    raise SimulationError(f"cannot xor {value} into a register holding {register}")
-
-
 class _IsaMachine:
     """Runs a program of instructions. `FREE` must find the register at zero, which checks every release."""
 
@@ -177,7 +166,7 @@ class _IsaMachine:
             self.steps += 1
             if self.steps > MAX_STEPS:
                 raise SimulationError("step limit reached")
-            if isinstance(instruction, (Ctrl, InvCtrl)):
+            if isinstance(instruction, (Ctrl, ICtrl)):
                 holds = bool(self.read(instruction.control)) == isinstance(instruction, Ctrl)
                 regions.append(holds)
                 continue
@@ -202,11 +191,19 @@ class _IsaMachine:
                 if registers[name] != 0:
                     raise SimulationError(f"{name} freed while holding {registers[name]}")
                 del registers[name]
-            elif isinstance(instruction, Op):
+            elif isinstance(instruction, (Op, IOp)):
                 value = _OPCODES[instruction.opcode](*(self.read(s) for s in instruction.sources))
-                if instruction.dst not in registers:
-                    raise SimulationError(f"{instruction.dst} written but not allocated")
-                registers[instruction.dst] = _xor(registers[instruction.dst], value)
+                name = instruction.dst
+                if name not in registers:
+                    raise SimulationError(f"{name} written but not allocated")
+                if isinstance(instruction, Op):  # computes into a register that is zero
+                    if registers[name] != 0:
+                        raise SimulationError(f"{instruction.opcode.upper()} writes {name}, which holds {registers[name]}, not zero")
+                    registers[name] = value
+                else:  # undoes it: the register must hold exactly what the instruction computes
+                    if registers[name] != value:
+                        raise SimulationError(f"I{instruction.opcode.upper()} expected {name} to hold {value} but it holds {registers[name]}")
+                    registers[name] = 0
         if regions:
             raise SimulationError("a controlled region is never closed")
 

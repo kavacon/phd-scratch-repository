@@ -5,7 +5,7 @@ from allocation_poc.printer import unparse_isa
 from allocation_poc.programs import PROGRAMS
 from allocation_poc.simulate import SimulationError, simulate, simulate_isa
 from parser.instructions import (
-    Alloc, Const, Ctrl, EndCtrl, Free, InvCtrl, IsaProgram, Op, Reg, inverse, inverse_block,
+    Alloc, Const, Ctrl, EndCtrl, Free, ICtrl, IOp, IsaProgram, Op, Reg, inverse, inverse_block,
 )
 from parser.parser import parse
 from passes.balance import balance
@@ -37,11 +37,11 @@ class LoweringExamplesTestCase(unittest.TestCase):
             MUL   area1.p#1, x#1, y#1
             ALLOC area1.q#1
             ADD   area1.q#1, area1.p#1, 1
-            MUL   area1.p#1, x#1, y#1
+            IMUL  area1.p#1, x#1, y#1
             FREE  area1.p#1
-            COPY  y#1, 4
+            ICOPY y#1, 4
             FREE  y#1
-            COPY  x#1, 3
+            ICOPY x#1, 3
             FREE  x#1
             RETURN area1.q#1
         """)
@@ -58,13 +58,13 @@ class LoweringExamplesTestCase(unittest.TestCase):
             MUL   h1.g2.m#1, h1.a#1, 2
             ALLOC h1.b#1
             ADD   h1.b#1, h1.g2.m#1, 1
-            MUL   h1.g2.m#1, h1.a#1, 2
+            IMUL  h1.g2.m#1, h1.a#1, 2
             FREE  h1.g2.m#1
-            ADD   h1.a#1, h1.g1.m#1, 1
+            IADD  h1.a#1, h1.g1.m#1, 1
             FREE  h1.a#1
-            MUL   h1.g1.m#1, x#1, 2
+            IMUL  h1.g1.m#1, x#1, 2
             FREE  h1.g1.m#1
-            COPY  x#1, 3
+            ICOPY x#1, 3
             FREE  x#1
             RETURN h1.b#1
         """)
@@ -75,7 +75,7 @@ class LoweringExamplesTestCase(unittest.TestCase):
             COPY  x#1, 3
             ALLOC y#1
             COPY  y#1, 0
-            COPY  y#1, 0
+            ICOPY y#1, 0
             FREE  y#1
             ALLOC $t1#1
             LT    $t1#1, x#1, 5
@@ -84,15 +84,15 @@ class LoweringExamplesTestCase(unittest.TestCase):
             CTRL    $t1#1
                 MUL   g1.m#1, x#1, 2
                 ADD   y#2, g1.m#1, 1
-                MUL   g1.m#1, x#1, 2
+                IMUL  g1.m#1, x#1, 2
             ENDCTRL
-            INVCTRL $t1#1
+            ICTRL   $t1#1
                 COPY  y#2, 1
             ENDCTRL
             FREE  g1.m#1
-            LT    $t1#1, x#1, 5
+            ILT   $t1#1, x#1, 5
             FREE  $t1#1
-            COPY  x#1, 3
+            ICOPY x#1, 3
             FREE  x#1
             RETURN y#2
         """)
@@ -107,7 +107,7 @@ class LoweringExamplesTestCase(unittest.TestCase):
             ADD   a#1, x#1, 1
             ALLOC y#1
             COPY  y#1, 0
-            COPY  y#1, 0
+            ICOPY y#1, 0
             FREE  y#1
             ALLOC $t1#1
             LT    $t1#1, a#1, 5
@@ -117,25 +117,25 @@ class LoweringExamplesTestCase(unittest.TestCase):
                 MUL   t#1, a#1, 2
                 ADD   y#2, t#1, 1
             ENDCTRL
-            INVCTRL $t1#1
+            ICTRL   $t1#1
                 SUB   y#2, a#1, 1
             ENDCTRL
             ALLOC r#1
             ADD   r#1, y#2, 1
             CTRL    $t1#1
-                ADD   y#2, t#1, 1
-                MUL   t#1, a#1, 2
+                IADD  y#2, t#1, 1
+                IMUL  t#1, a#1, 2
             ENDCTRL
-            INVCTRL $t1#1
-                SUB   y#2, a#1, 1
+            ICTRL   $t1#1
+                ISUB  y#2, a#1, 1
             ENDCTRL
             FREE  y#2
             FREE  t#1
-            LT    $t1#1, a#1, 5
+            ILT   $t1#1, a#1, 5
             FREE  $t1#1
-            ADD   a#1, x#1, 1
+            IADD  a#1, x#1, 1
             FREE  a#1
-            COPY  x#1, 2
+            ICOPY x#1, 2
             FREE  x#1
             RETURN r#1
         """)
@@ -144,7 +144,7 @@ class LoweringExamplesTestCase(unittest.TestCase):
         self.check("x = 1; if true { x = 2; } else { x = 3; } return x;", """
             ALLOC x#1
             COPY  x#1, 1
-            COPY  x#1, 1
+            ICOPY x#1, 1
             FREE  x#1
             ALLOC x#2
             COPY  x#2, 2
@@ -204,7 +204,7 @@ class LoweringBehaviourTestCase(unittest.TestCase):
             program = lowered(source)
             open_regions = 0
             for instruction in program.body:
-                if isinstance(instruction, (Ctrl, InvCtrl)):
+                if isinstance(instruction, (Ctrl, ICtrl)):
                     open_regions += 1
                 elif isinstance(instruction, EndCtrl):
                     open_regions -= 1
@@ -217,26 +217,57 @@ class LoweringBehaviourTestCase(unittest.TestCase):
             simulate_isa(IsaProgram((Alloc("p"), Op("copy", "p", (Const(5),)), Free("p")), Const(0)))
 
 
+class PreconditionTestCase(unittest.TestCase):
+    def run_body(self, *body, result=Const(0)):
+        return simulate_isa(IsaProgram(tuple(body), result))
+
+    def test_an_op_needs_a_zero_register_and_its_inverse_needs_the_value_it_computes(self):
+        add = Op("add", "p", (Const(2), Const(3)))
+        self.assertEqual(0, self.run_body(Alloc("p"), add, inverse(add), Free("p")).value)
+        with self.assertRaises(SimulationError):  # writing into a register that already holds a value
+            self.run_body(Alloc("p"), add, add, inverse(add), Free("p"))
+        with self.assertRaises(SimulationError):  # undoing with the wrong operands
+            self.run_body(Alloc("p"), add, IOp("add", "p", (Const(2), Const(4))), Free("p"))
+        with self.assertRaises(SimulationError):  # undoing something that was never computed
+            self.run_body(Alloc("p"), inverse(add), Free("p"))
+
+    def test_a_manually_written_release_with_the_wrong_witness_is_caught_at_the_instructions(self):
+        for witness, ok in (("1 + 2", True), ("1 + 3", False)):
+            program = lower_to_isa(parse(f"a = 1; b = a + 2; b ~= {witness}; return a;", passes=(unroll, flatten, balance, rename)))
+            if ok:
+                self.assertEqual(1, simulate_isa(program).value)
+            else:
+                with self.assertRaises(SimulationError):
+                    simulate_isa(program)
+
+    def test_a_release_is_written_as_the_inverse_instruction(self):
+        text = unparse_isa(lowered("a = 3; b = a * 2; c = b + a; return c;"))
+        self.assertIn("IMUL", text)
+        self.assertIn("ICOPY", text)
+        self.assertNotIn("IADD", text)  # c is returned, so it is not released
+
+
 class InverseTestCase(unittest.TestCase):
-    def test_each_instruction_has_an_inverse_and_the_inverse_of_the_inverse_is_itself(self):
+    def test_each_instruction_has_an_explicit_inverse_and_the_inverse_of_the_inverse_is_itself(self):
         block = (
             Alloc("p"), Op("add", "p", (Reg("w"), Const(1))),
-            InvCtrl(Reg("c")), Op("mul", "p", (Reg("w"), Reg("w"))), Op("copy", "q", (Const(True),)), EndCtrl(),
+            ICtrl(Reg("c")), Op("mul", "p", (Reg("w"), Reg("w"))), IOp("copy", "q", (Const(True),)), EndCtrl(),
             Free("p"),
         )
         self.assertEqual(Free("p"), inverse(Alloc("p")))
         self.assertEqual(Alloc("p"), inverse(Free("p")))
-        self.assertEqual(block[1], inverse(block[1]))  # an operation XORs into a register, so it undoes itself
+        self.assertEqual(IOp("add", "p", (Reg("w"), Const(1))), inverse(block[1]))
+        self.assertEqual(block[1], inverse(inverse(block[1])))
         self.assertEqual(block, inverse_block(inverse_block(block)))
 
-    def test_a_controlled_region_is_undone_with_the_same_control_and_reversed_body(self):
+    def test_a_controlled_region_is_undone_with_the_same_control_and_reversed_inverted_body(self):
         a, b = Op("add", "y", (Reg("a"), Const(1))), Op("mul", "t", (Reg("a"), Const(2)))
-        self.assertEqual((Ctrl(Reg("c")), b, a, EndCtrl()), inverse_block((Ctrl(Reg("c")), a, b, EndCtrl())))
+        self.assertEqual((Ctrl(Reg("c")), inverse(b), inverse(a), EndCtrl()), inverse_block((Ctrl(Reg("c")), a, b, EndCtrl())))
 
     def test_nested_regions_are_undone_innermost_last_opened_first(self):
         a, b = Op("add", "y", (Reg("a"), Const(1))), Op("mul", "t", (Reg("a"), Const(2)))
-        block = (Ctrl(Reg("c")), a, InvCtrl(Reg("d")), b, EndCtrl(), EndCtrl())
-        self.assertEqual((Ctrl(Reg("c")), InvCtrl(Reg("d")), b, EndCtrl(), a, EndCtrl()), inverse_block(block))
+        block = (Ctrl(Reg("c")), a, ICtrl(Reg("d")), b, EndCtrl(), EndCtrl())
+        self.assertEqual((Ctrl(Reg("c")), ICtrl(Reg("d")), inverse(b), EndCtrl(), inverse(a), EndCtrl()), inverse_block(block))
 
     def test_unbalanced_regions_are_rejected(self):
         with self.assertRaises(ValueError):
@@ -248,7 +279,7 @@ class InverseTestCase(unittest.TestCase):
         # y ^= 1 only where c holds and d does not
         def run(c, d):
             body = (Alloc("c"), Op("copy", "c", (Const(c),)), Alloc("d"), Op("copy", "d", (Const(d),)), Alloc("y"),
-                    Ctrl(Reg("c")), InvCtrl(Reg("d")), Op("copy", "y", (Const(1),)), EndCtrl(), EndCtrl())
+                    Ctrl(Reg("c")), ICtrl(Reg("d")), Op("copy", "y", (Const(1),)), EndCtrl(), EndCtrl())
             return simulate_isa(IsaProgram(body, Reg("y"))).value
         self.assertEqual([0, 1, 0, 0], [run(0, 0), run(1, 0), run(0, 1), run(1, 1)])
 

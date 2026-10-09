@@ -67,19 +67,20 @@ def _operand_text(operand) -> str:
 
 
 def _instruction_lines(instruction, depth: int) -> List[str]:
-    from parser.instructions import Alloc, Ctrl, EndCtrl, Free, InvCtrl, Op
+    from parser.instructions import Alloc, Ctrl, EndCtrl, Free, ICtrl, IOp, Op
     pad = "    " * depth
     if isinstance(instruction, Alloc):
         return [f"{pad}ALLOC {instruction.register}"]
     if isinstance(instruction, Free):
         return [f"{pad}FREE  {instruction.register}"]
-    if isinstance(instruction, Op):
+    if isinstance(instruction, (Op, IOp)):
         sources = ", ".join(_operand_text(s) for s in instruction.sources)
-        return [f"{pad}{instruction.opcode.upper():<5} {instruction.dst}, {sources}"]
+        mnemonic = ("I" if isinstance(instruction, IOp) else "") + instruction.opcode.upper()
+        return [f"{pad}{mnemonic:<5} {instruction.dst}, {sources}"]
     if isinstance(instruction, Ctrl):
         return [f"{pad}CTRL    {_operand_text(instruction.control)}"]
-    if isinstance(instruction, InvCtrl):
-        return [f"{pad}INVCTRL {_operand_text(instruction.control)}"]
+    if isinstance(instruction, ICtrl):
+        return [f"{pad}ICTRL   {_operand_text(instruction.control)}"]
     if isinstance(instruction, EndCtrl):
         return [f"{pad}ENDCTRL"]
     raise TypeError(f"Cannot print {type(instruction).__name__}")
@@ -88,13 +89,13 @@ def _instruction_lines(instruction, depth: int) -> List[str]:
 def unparse_isa(program) -> str:
     """The instructions in order, then the returned value. Instructions inside a control region are indented, which
     is only for reading: the list itself is flat."""
-    from parser.instructions import Ctrl, EndCtrl, InvCtrl
+    from parser.instructions import Ctrl, EndCtrl, ICtrl
     lines: List[str] = []
     depth = 0
     for instruction in program.body:
         if isinstance(instruction, EndCtrl):
             depth -= 1
         lines += _instruction_lines(instruction, depth)
-        if isinstance(instruction, (Ctrl, InvCtrl)):
+        if isinstance(instruction, (Ctrl, ICtrl)):
             depth += 1
     return "\n".join(lines + [f"RETURN {_operand_text(program.result)}"])

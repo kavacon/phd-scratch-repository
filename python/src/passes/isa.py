@@ -4,8 +4,8 @@ Lowering to the instruction set (parser.instructions), after the passes up to an
 The result is one flat list of instructions with no blocks, and the value it returns. Calls were descoped for this
 version: the inline pass must have run, so there are no functions and no calls to lower.
 
-Each assignment is `ALLOC r` followed by one instruction that XORs the value into it, and each `~=` is the same
-instruction again followed by `FREE r`. An `if` becomes a `CTRL c` region and an `INVCTRL c` region, each closed by
+Each assignment is `ALLOC r` followed by one instruction that computes the value into it, and each `~=` is the
+inverse instruction (`IMUL` undoes `MUL`) followed by `FREE r`. An `if` becomes a `CTRL c` region and an `ICTRL c` region, each closed by
 `ENDCTRL`, and both are always in the circuit (the second is controlled on the negation, so no negation is
 computed). A controlled region may not allocate or free, so every register an `if` touches is allocated before
 the outermost `if` that contains it and freed after. A register shared by both branches is allocated once. An `if`
@@ -20,7 +20,7 @@ from parser.grammar import (
     Unassign, Variable,
 )
 from parser.instructions import (
-    Alloc, Const, Ctrl, EndCtrl, Free, Instruction, InvCtrl, IsaProgram, Op, Operand, Reg,
+    Alloc, Const, Ctrl, EndCtrl, Free, ICtrl, Instruction, IsaProgram, Op, Operand, Reg, inverse,
 )
 
 _BINARY = {"+": "add", "-": "sub", "*": "mul", "/": "div", "<": "lt", ">": "gt", "!=": "ne", "&&": "and", "||": "or"}
@@ -78,7 +78,7 @@ class _Lowerer:
                 hoisted.allocs.append(node.name)
             out.append(_compute(node.name, node.value))
         elif isinstance(node, Unassign):
-            out.append(_compute(node.name, node.witness))
+            out.append(inverse(_compute(node.name, node.witness)))
             if hoisted is None:
                 out.append(Free(node.name))
             else:
@@ -97,7 +97,7 @@ class _Lowerer:
             return
         inner = hoisted if hoisted is not None else _Hoisted()
         blocks: List[Instruction] = []
-        for opener, branch in ((Ctrl, node.body), (InvCtrl, node.orelse)):
+        for opener, branch in ((Ctrl, node.body), (ICtrl, node.orelse)):
             body: List[Instruction] = []
             self.block(branch, body, inner)
             if body:
