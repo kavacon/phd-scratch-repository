@@ -5,7 +5,7 @@ from allocation_poc.printer import unparse_isa
 from allocation_poc.programs import PROGRAMS
 from allocation_poc.simulate import SimulationError, simulate, simulate_isa
 from parser.instructions import (
-    Alloc, Call, Const, Ctrl, EndCtrl, Free, InstructionSet, InvCtrl, IsaProgram, Op, Reg, inverse, inverse_block,
+    Alloc, Const, Ctrl, EndCtrl, Free, InvCtrl, IsaProgram, Op, Reg, inverse, inverse_block,
 )
 from parser.parser import parse
 from passes.balance import balance
@@ -27,158 +27,142 @@ class LoweringExamplesTestCase(unittest.TestCase):
     def check(self, source, text):
         self.assertEqual(expected(text), unparse_isa(lowered(source)))
 
-    def test_each_function_and_main_is_its_own_instruction_set_and_a_call_stays_a_call(self):
+    def test_a_call_is_inlined_so_the_program_is_one_flat_list_with_the_callee_registers_under_its_own_names(self):
         self.check('function area(w: int, h: int): int { p = w * h; q = p + 1; return q; } x = 3; y = 4; return area(x, y);', """
-            area(w#0, h#0):
-                ALLOC p#1
-                MUL   p#1, w#0, h#0
-                ALLOC q#1
-                ADD   q#1, p#1, 1
-                MUL   p#1, w#0, h#0
-                FREE  p#1
-                RETURN q#1
-
-            main:
-                ALLOC x#1
-                COPY  x#1, 3
-                ALLOC y#1
-                COPY  y#1, 4
-                ALLOC $t1#1
-                CALL  $t1#1, area(x#1, y#1)
-                COPY  y#1, 4
-                FREE  y#1
-                COPY  x#1, 3
-                FREE  x#1
-                RETURN $t1#1
+            ALLOC x#1
+            COPY  x#1, 3
+            ALLOC y#1
+            COPY  y#1, 4
+            ALLOC area1.p#1
+            MUL   area1.p#1, x#1, y#1
+            ALLOC area1.q#1
+            ADD   area1.q#1, area1.p#1, 1
+            MUL   area1.p#1, x#1, y#1
+            FREE  area1.p#1
+            COPY  y#1, 4
+            FREE  y#1
+            COPY  x#1, 3
+            FREE  x#1
+            RETURN area1.q#1
         """)
 
-    def test_a_function_that_calls_another_keeps_the_call_and_releasing_its_result_is_the_same_call_again(self):
+    def test_a_function_that_calls_another_is_inlined_all_the_way_down_and_each_copy_has_its_own_registers(self):
         self.check('function g(n: int): int { m = n * 2; return m + 1; } function h(n: int): int { a = g(n); b = g(a); return b; } x = 3; return h(x);', """
-            g(n#0):
-                ALLOC m#1
-                MUL   m#1, n#0, 2
-                ALLOC $t1#1
-                ADD   $t1#1, m#1, 1
-                MUL   m#1, n#0, 2
-                FREE  m#1
-                RETURN $t1#1
-
-            h(n#0):
-                ALLOC a#1
-                CALL  a#1, g(n#0)
-                ALLOC b#1
-                CALL  b#1, g(a#1)
-                CALL  a#1, g(n#0)
-                FREE  a#1
-                RETURN b#1
-
-            main:
-                ALLOC x#1
-                COPY  x#1, 3
-                ALLOC $t1#1
-                CALL  $t1#1, h(x#1)
-                COPY  x#1, 3
-                FREE  x#1
-                RETURN $t1#1
+            ALLOC x#1
+            COPY  x#1, 3
+            ALLOC h1.g1.m#1
+            MUL   h1.g1.m#1, x#1, 2
+            ALLOC h1.a#1
+            ADD   h1.a#1, h1.g1.m#1, 1
+            ALLOC h1.g2.m#1
+            MUL   h1.g2.m#1, h1.a#1, 2
+            ALLOC h1.b#1
+            ADD   h1.b#1, h1.g2.m#1, 1
+            MUL   h1.g2.m#1, h1.a#1, 2
+            FREE  h1.g2.m#1
+            ADD   h1.a#1, h1.g1.m#1, 1
+            FREE  h1.a#1
+            MUL   h1.g1.m#1, x#1, 2
+            FREE  h1.g1.m#1
+            COPY  x#1, 3
+            FREE  x#1
+            RETURN h1.b#1
         """)
 
-    def test_a_call_inside_an_if_is_an_ordinary_instruction_in_the_controlled_block(self):
+    def test_a_call_inside_an_if_has_its_registers_allocated_before_and_freed_after_the_controlled_regions(self):
         self.check('function g(n: int): int { m = n * 2; return m + 1; } x = 3; y = 0; if x < 5 { y = g(x); } else { y = 1; } return y;', """
-            g(n#0):
-                ALLOC m#1
-                MUL   m#1, n#0, 2
-                ALLOC $t1#1
-                ADD   $t1#1, m#1, 1
-                MUL   m#1, n#0, 2
-                FREE  m#1
-                RETURN $t1#1
-
-            main:
-                ALLOC x#1
-                COPY  x#1, 3
-                ALLOC y#1
-                COPY  y#1, 0
-                COPY  y#1, 0
-                FREE  y#1
-                ALLOC $t1#1
-                LT    $t1#1, x#1, 5
-                ALLOC y#2
-                CTRL    $t1#1
-                    CALL  y#2, g(x#1)
-                ENDCTRL
-                INVCTRL $t1#1
-                    COPY  y#2, 1
-                ENDCTRL
-                LT    $t1#1, x#1, 5
-                FREE  $t1#1
-                COPY  x#1, 3
-                FREE  x#1
-                RETURN y#2
+            ALLOC x#1
+            COPY  x#1, 3
+            ALLOC y#1
+            COPY  y#1, 0
+            COPY  y#1, 0
+            FREE  y#1
+            ALLOC $t1#1
+            LT    $t1#1, x#1, 5
+            ALLOC g1.m#1
+            ALLOC y#2
+            CTRL    $t1#1
+                MUL   g1.m#1, x#1, 2
+                ADD   y#2, g1.m#1, 1
+                MUL   g1.m#1, x#1, 2
+            ENDCTRL
+            INVCTRL $t1#1
+                COPY  y#2, 1
+            ENDCTRL
+            FREE  g1.m#1
+            LT    $t1#1, x#1, 5
+            FREE  $t1#1
+            COPY  x#1, 3
+            FREE  x#1
+            RETURN y#2
         """)
 
     def test_an_if_is_two_controlled_blocks_with_allocation_before_and_free_after(self):
         # t#1 and y#2 are allocated before the controlled blocks; the release is the same two blocks with the
         # same controls, in reverse, and the frees come after it. Nothing is allocated or freed inside a block.
         self.check("x = 2; a = x + 1; y = 0; if a < 5 { t = a * 2; y = t + 1; } else { y = a - 1; } r = y + 1; return r;", """
-            main:
-                ALLOC x#1
-                COPY  x#1, 2
-                ALLOC a#1
-                ADD   a#1, x#1, 1
-                ALLOC y#1
-                COPY  y#1, 0
-                COPY  y#1, 0
-                FREE  y#1
-                ALLOC $t1#1
-                LT    $t1#1, a#1, 5
-                ALLOC t#1
-                ALLOC y#2
-                CTRL    $t1#1
-                    MUL   t#1, a#1, 2
-                    ADD   y#2, t#1, 1
-                ENDCTRL
-                INVCTRL $t1#1
-                    SUB   y#2, a#1, 1
-                ENDCTRL
-                ALLOC r#1
-                ADD   r#1, y#2, 1
-                CTRL    $t1#1
-                    ADD   y#2, t#1, 1
-                    MUL   t#1, a#1, 2
-                ENDCTRL
-                INVCTRL $t1#1
-                    SUB   y#2, a#1, 1
-                ENDCTRL
-                FREE  y#2
-                FREE  t#1
-                LT    $t1#1, a#1, 5
-                FREE  $t1#1
-                ADD   a#1, x#1, 1
-                FREE  a#1
-                COPY  x#1, 2
-                FREE  x#1
-                RETURN r#1
+            ALLOC x#1
+            COPY  x#1, 2
+            ALLOC a#1
+            ADD   a#1, x#1, 1
+            ALLOC y#1
+            COPY  y#1, 0
+            COPY  y#1, 0
+            FREE  y#1
+            ALLOC $t1#1
+            LT    $t1#1, a#1, 5
+            ALLOC t#1
+            ALLOC y#2
+            CTRL    $t1#1
+                MUL   t#1, a#1, 2
+                ADD   y#2, t#1, 1
+            ENDCTRL
+            INVCTRL $t1#1
+                SUB   y#2, a#1, 1
+            ENDCTRL
+            ALLOC r#1
+            ADD   r#1, y#2, 1
+            CTRL    $t1#1
+                ADD   y#2, t#1, 1
+                MUL   t#1, a#1, 2
+            ENDCTRL
+            INVCTRL $t1#1
+                SUB   y#2, a#1, 1
+            ENDCTRL
+            FREE  y#2
+            FREE  t#1
+            LT    $t1#1, a#1, 5
+            FREE  $t1#1
+            ADD   a#1, x#1, 1
+            FREE  a#1
+            COPY  x#1, 2
+            FREE  x#1
+            RETURN r#1
         """)
 
     def test_an_if_on_a_constant_is_resolved_and_only_the_branch_that_runs_is_emitted(self):
         self.check("x = 1; if true { x = 2; } else { x = 3; } return x;", """
-            main:
-                ALLOC x#1
-                COPY  x#1, 1
-                COPY  x#1, 1
-                FREE  x#1
-                ALLOC x#2
-                COPY  x#2, 2
-                RETURN x#2
+            ALLOC x#1
+            COPY  x#1, 1
+            COPY  x#1, 1
+            FREE  x#1
+            ALLOC x#2
+            COPY  x#2, 2
+            RETURN x#2
         """)
 
-    def test_each_instruction_set_is_a_flat_list_and_nothing_is_inlined(self):
-        for program_source in (p["source"] for p in PROGRAMS):
-            program = lowered(program_source)
-            names = [f.name for f in program.functions] + ["main"]
-            self.assertEqual(len(names), len(set(names)))
-            calls = [i for f in list(program.functions) + [program.main] for i in walk_instructions(f.body) if isinstance(i, Call)]
-            self.assertTrue(all(c.function in names for c in calls))  # a call names the set it runs
+    def test_no_function_or_call_survives_to_the_instructions(self):
+        for source in (p["source"] for p in PROGRAMS):
+            program = lowered(source)
+            self.assertFalse(hasattr(program, "functions"))
+            self.assertNotIn("function", unparse_isa(program))
+            self.assertNotIn("CALL", unparse_isa(program))
+
+    def test_functions_and_calls_must_be_inlined_first(self):
+        with self.assertRaises(IsaError):
+            lower_to_isa(parse("function f(): int { return 1; } return 2;", passes=()))
+        with self.assertRaises(IsaError):
+            lower_to_isa(parse("function f(): int { return 1; } return f();", passes=(unroll, flatten, balance, rename)))
 
     def test_a_program_that_is_not_flat_is_rejected(self):
         with self.assertRaises(IsaError):
@@ -218,27 +202,25 @@ class LoweringBehaviourTestCase(unittest.TestCase):
     def test_nothing_is_allocated_or_freed_inside_a_controlled_block(self):
         for source in self.sources():
             program = lowered(source)
-            for function in list(program.functions) + [program.main]:
-                open_regions = 0
-                for instruction in function.body:
-                    if isinstance(instruction, (Ctrl, InvCtrl)):
-                        open_regions += 1
-                    elif isinstance(instruction, EndCtrl):
-                        open_regions -= 1
-                    elif open_regions:
-                        self.assertNotIsInstance(instruction, (Alloc, Free), source[:50])
-                self.assertEqual(0, open_regions, source[:50])
+            open_regions = 0
+            for instruction in program.body:
+                if isinstance(instruction, (Ctrl, InvCtrl)):
+                    open_regions += 1
+                elif isinstance(instruction, EndCtrl):
+                    open_regions -= 1
+                elif open_regions:
+                    self.assertNotIsInstance(instruction, (Alloc, Free), source[:50])
+            self.assertEqual(0, open_regions, source[:50])
 
     def test_a_free_that_finds_a_non_zero_register_is_caught(self):
-        main = InstructionSet("main", (), (Alloc("p"), Op("copy", "p", (Const(5),)), Free("p")), Const(0))
         with self.assertRaises(SimulationError):
-            simulate_isa(IsaProgram((), main))
+            simulate_isa(IsaProgram((Alloc("p"), Op("copy", "p", (Const(5),)), Free("p")), Const(0)))
 
 
 class InverseTestCase(unittest.TestCase):
     def test_each_instruction_has_an_inverse_and_the_inverse_of_the_inverse_is_itself(self):
         block = (
-            Alloc("p"), Op("add", "p", (Reg("w"), Const(1))), Call("f", "p", (Reg("w"),)),
+            Alloc("p"), Op("add", "p", (Reg("w"), Const(1))),
             InvCtrl(Reg("c")), Op("mul", "p", (Reg("w"), Reg("w"))), Op("copy", "q", (Const(True),)), EndCtrl(),
             Free("p"),
         )
@@ -267,7 +249,7 @@ class InverseTestCase(unittest.TestCase):
         def run(c, d):
             body = (Alloc("c"), Op("copy", "c", (Const(c),)), Alloc("d"), Op("copy", "d", (Const(d),)), Alloc("y"),
                     Ctrl(Reg("c")), InvCtrl(Reg("d")), Op("copy", "y", (Const(1),)), EndCtrl(), EndCtrl())
-            return simulate_isa(IsaProgram((), InstructionSet("main", (), body, Reg("y")))).value
+            return simulate_isa(IsaProgram(body, Reg("y"))).value
         self.assertEqual([0, 1, 0, 0], [run(0, 0), run(1, 0), run(0, 1), run(1, 1)])
 
     PROGRAMS = [
@@ -282,9 +264,7 @@ class InverseTestCase(unittest.TestCase):
         for source in self.PROGRAMS:
             with self.subTest(source=source):
                 program = lower_to_isa(parse(source, passes=(unroll, flatten, balance, rename)))
-                body = program.main.body
-                there_and_back = InstructionSet("main", (), body + inverse_block(body), Const(0))
-                result = simulate_isa(IsaProgram(program.functions, there_and_back))
+                result = simulate_isa(IsaProgram(program.body + inverse_block(program.body), Const(0)))
                 self.assertEqual({}, {s: l for s, l in result.leaks.items() if l})
 
 

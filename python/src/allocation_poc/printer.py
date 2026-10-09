@@ -67,7 +67,7 @@ def _operand_text(operand) -> str:
 
 
 def _instruction_lines(instruction, depth: int) -> List[str]:
-    from parser.instructions import Alloc, Call as CallInstruction, Ctrl, EndCtrl, Free, InvCtrl, Op
+    from parser.instructions import Alloc, Ctrl, EndCtrl, Free, InvCtrl, Op
     pad = "    " * depth
     if isinstance(instruction, Alloc):
         return [f"{pad}ALLOC {instruction.register}"]
@@ -76,10 +76,6 @@ def _instruction_lines(instruction, depth: int) -> List[str]:
     if isinstance(instruction, Op):
         sources = ", ".join(_operand_text(s) for s in instruction.sources)
         return [f"{pad}{instruction.opcode.upper():<5} {instruction.dst}, {sources}"]
-    if isinstance(instruction, CallInstruction):
-        args = ", ".join(_operand_text(a) for a in instruction.args)
-        target = f"{instruction.dst}, " if instruction.dst else ""
-        return [f"{pad}CALL  {target}{instruction.function}({args})"]
     if isinstance(instruction, Ctrl):
         return [f"{pad}CTRL    {_operand_text(instruction.control)}"]
     if isinstance(instruction, InvCtrl):
@@ -90,19 +86,15 @@ def _instruction_lines(instruction, depth: int) -> List[str]:
 
 
 def unparse_isa(program) -> str:
-    """Each instruction set under a label, `main` last. A call names the label of the set it runs.
-    Instructions inside a control region are indented, which is only for reading: the list itself is flat."""
+    """The instructions in order, then the returned value. Instructions inside a control region are indented, which
+    is only for reading: the list itself is flat."""
     from parser.instructions import Ctrl, EndCtrl, InvCtrl
     lines: List[str] = []
-    for instruction_set in list(program.functions) + [program.main]:
-        lines.append(f"{instruction_set.name}({', '.join(instruction_set.params)}):" if instruction_set.params
-                     else f"{instruction_set.name}:")
-        depth = 1
-        for instruction in instruction_set.body:
-            if isinstance(instruction, EndCtrl):
-                depth -= 1
-            lines += _instruction_lines(instruction, depth)
-            if isinstance(instruction, (Ctrl, InvCtrl)):
-                depth += 1
-        lines += [f"    RETURN {_operand_text(instruction_set.result)}", ""]
-    return "\n".join(lines).rstrip()
+    depth = 0
+    for instruction in program.body:
+        if isinstance(instruction, EndCtrl):
+            depth -= 1
+        lines += _instruction_lines(instruction, depth)
+        if isinstance(instruction, (Ctrl, InvCtrl)):
+            depth += 1
+    return "\n".join(lines + [f"RETURN {_operand_text(program.result)}"])
