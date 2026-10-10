@@ -75,7 +75,7 @@ class FlattenExamplesTestCase(unittest.TestCase):
             return z;
         """)
 
-    def test_a_returned_expression_is_named_but_a_plain_value_is_not(self):
+    def test_a_returned_expression_or_literal_is_named_but_a_returned_variable_is_not(self):
         self.check("function f(a: int): int { return a * 2 + 1; } return f(1);", """
             function f(a: int): int {
                 $t1 = a * 2;
@@ -89,7 +89,8 @@ class FlattenExamplesTestCase(unittest.TestCase):
             function f(a: int): int {
                 return a;
             }
-            return 7;
+            $t1 = 7;
+            return $t1;
         """)
 
     def test_an_if_condition_is_computed_into_a_register_before_the_if(self):
@@ -168,6 +169,25 @@ class FlattenExamplesTestCase(unittest.TestCase):
             return a;
         """)
 
+    def test_a_returned_literal_is_named_so_every_program_returns_a_variable(self):
+        self.check("return 2;", """
+            $t1 = 2;
+            return $t1;
+        """)
+        self.check("x = 1; return true;", """
+            x = 1;
+            $t1 = true;
+            return $t1;
+        """)
+        self.check("function f(a: int): int { return 3; } return a;" if False else "function f(a: int): int { return 3; } return 1;", """
+            function f(a: int): int {
+                $t1 = 3;
+                return $t1;
+            }
+            $t1 = 1;
+            return $t1;
+        """)
+
     def test_each_function_numbers_its_own_temporaries(self):
         self.check("function f(a: int): int { return a * 2 + 1; } function g(a: int): int { return a * 3 + 1; } return 1;", """
             function f(a: int): int {
@@ -180,7 +200,8 @@ class FlattenExamplesTestCase(unittest.TestCase):
                 $t2 = $t1 + 1;
                 return $t2;
             }
-            return 1;
+            $t1 = 1;
+            return $t1;
         """)
 
     def test_loops_must_be_unrolled_first(self):
