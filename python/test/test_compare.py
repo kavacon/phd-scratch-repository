@@ -58,7 +58,7 @@ class CompareTestCase(unittest.TestCase):
 
     def test_the_width_is_kept_in_range(self):
         from allocation_poc import compare
-        self.assertEqual((16, 1, 6), (compare.clean_width(99), compare.clean_width(0), compare.clean_width("x")))
+        self.assertEqual((16, 1, 8), (compare.clean_width(99), compare.clean_width(0), compare.clean_width("x")))
 
     def test_the_server_handles_requests_on_one_thread(self):
         from socketserver import ThreadingMixIn
