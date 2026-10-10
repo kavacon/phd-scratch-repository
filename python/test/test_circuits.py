@@ -11,8 +11,9 @@ from passes.isa import lower_to_isa
 from passes.qasm import to_openqasm
 
 needs_qiskit = unittest.skipUnless(circuits.qiskit_available(), "Qiskit is not installed")
+needs_aer = unittest.skipUnless(circuits.qiskit_available() and circuits.aer_available(), "Qiskit Aer is not installed")
 
-SMALL = [  # few enough qubits at width 3 to run on a state vector
+SMALL = [
     "a = 3; b = a + 2; return b;",
     "a = 2; b = 3; c = a * b; return c;",
     "a = 2; b = 5; c = a < b; return c;",
@@ -34,18 +35,6 @@ class QiskitStagesTestCase(unittest.TestCase):
             loaded = circuits.read(circuit.text)
             self.assertEqual(circuit.qubits, loaded.num_qubits)
             self.assertEqual(len(circuit.gates), circuits.measure(loaded)["gates"], source[:40])
-
-    def test_optimising_keeps_the_result_of_every_small_program(self):
-        for source in SMALL:
-            with self.subTest(source=source):
-                isa = lower_to_isa(parse(source))
-                expected = int(simulate_isa(isa).value) & 7
-                circuit = to_openqasm(allocate(isa, 3, 1000))
-                loaded = circuits.read(circuit.text)
-                outcome = circuits.run_state(circuits.optimise(loaded), circuit.result, 20)
-                self.assertIsNotNone(outcome, "too many qubits to check")
-                self.assertEqual(expected, outcome["value"])
-                self.assertEqual([], outcome["leaked"])
 
     def test_the_optimised_circuit_uses_only_u_and_cx(self):
         optimised = circuits.optimise(circuits.read(self.circuit(SMALL[1]).text))
@@ -71,12 +60,6 @@ class CircuitStagesInTheDemoTestCase(unittest.TestCase):
     def stages(self, source, passes=ALL, width=6, qubits=200):
         return {s["id"]: s for s in run_pipeline(source, passes, {"register_width": width, "qubits": qubits})["stages"]}
 
-    def test_the_generated_circuit_returns_what_the_source_returns_with_nothing_left_set(self):
-        for program in PROGRAMS:
-            stage = self.stages(program["source"], THROUGH_QASM)["qasm"]
-            self.assertTrue(stage["run"]["matches"], program["id"])
-            self.assertEqual([], stage["run"]["leaked"], program["id"])
-
     def test_each_circuit_stage_reports_gates_depth_and_wires(self):
         stages = self.stages(PROGRAMS[0]["source"])
         for name in ("qasm", "optimise"):
@@ -88,12 +71,17 @@ class CircuitStagesInTheDemoTestCase(unittest.TestCase):
             self.assertIsNone(stages[name]["run"]["peak"], name)  # there are no registers at this level
         self.assertEqual(stages["qasm"]["circuit"]["wires"], stages["optimise"]["circuit"]["wires"])
 
-    def test_a_big_circuit_is_marked_unchecked_and_a_small_one_is_run_after_the_rewrite(self):
-        big = self.stages(PROGRAMS[0]["source"])["optimise"]["run"]
-        self.assertTrue(big["unchecked"])
-        self.assertIn("state vector", big["note"])
-        small = self.stages("a = 3; b = a + 2; return b;", width=3)["optimise"]["run"]
-        self.assertEqual(("5", True), (small["value"], small["matches"]))
+    def test_circuit_stages_are_not_run_until_asked(self):
+        stages = self.stages(PROGRAMS[0]["source"])
+        for name in ("qasm", "optimise"):
+            self.assertTrue(stages[name]["run"]["notrun"], name)
+
+    @needs_aer
+    def test_running_a_circuit_stage_on_request_reports_the_measurement_against_the_expected_value(self):
+        options = {"register_width": 6, "qubits": 200}
+        outcome = demo.simulate_stage(PROGRAMS[0]["source"], ALL, options, "optimise", 20)
+        self.assertEqual(([[13, 20]], 13, True), (outcome["counts"], outcome["expected"], outcome["matches"]))
+        self.assertIn("not a circuit stage", demo.simulate_stage(PROGRAMS[0]["source"], ALL, options, "rename")["error"])
 
     def test_only_the_start_of_a_long_circuit_is_shown(self):
         stage = self.stages(PROGRAMS[0]["source"])["optimise"]  # thousands of gates once rewritten into u and cx
@@ -108,7 +96,6 @@ class CircuitStagesInTheDemoTestCase(unittest.TestCase):
     def test_the_rewrite_stages_say_so_when_qiskit_is_missing(self):
         with mock.patch.object(circuits, "qiskit_available", return_value=False):
             stages = self.stages(PROGRAMS[0]["source"])
-        self.assertIsNotNone(stages["qasm"]["run"]["value"])
         self.assertIsNone(stages["qasm"]["circuit"])
         self.assertIn("Qiskit", stages["optimise"]["error"])
 

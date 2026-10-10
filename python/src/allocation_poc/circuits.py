@@ -109,20 +109,49 @@ def measure(circuit) -> Dict[str, Any]:
     }
 
 
-def run_state(circuit, result: Sequence[Any], limit: int = 16):
+def aer_available() -> bool:
+    try:
+        import qiskit_aer  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def execute(circuit, result_bits: int, shots: int = 8) -> Dict[str, Any]:
     """
-    Run a Qiskit circuit from all zeros on a state vector and read the returned value and any other qubit left
-    set, or None if the circuit has more than `limit` qubits (the state vector would be too big).
+    Run a Qiskit circuit from all zeros on Qiskit Aer and read what it returns. The circuits only ever hold one
+    computational basis state, so the matrix product state method simulates them at any width; the other qubits are
+    measured too (in this copy only), so a qubit left set shows up as a wrong answer.
+
+    Returns the counts of the returned value, the qubits that were ever set outside it, and whether every shot agreed.
     """
-    if circuit.num_qubits > limit:
-        return None
-    from qiskit.quantum_info import Statevector
-    probabilities = Statevector(circuit.remove_final_measurements(inplace=False)).probabilities_dict()
-    bitstring, probability = max(probabilities.items(), key=lambda item: item[1])
-    if probability < 0.999:
-        return {"value": None, "leaked": ["not a single basis state"]}
-    state = [int(c) for c in reversed(bitstring)]  # the string has qubit 0 last
-    return {"value": value_of(state, result), "leaked": leftover_qubits(state, result)}
+    from qiskit import ClassicalRegister, transpile
+    from qiskit_aer import AerSimulator
+
+    if circuit.num_clbits != result_bits:
+        raise ValueError("the circuit must measure exactly the returned register")
+    simulator = AerSimulator(method="matrix_product_state")
+    run = circuit.copy()
+    measured = {run.find_bit(i.qubits[0]).index for i in run.data if i.operation.name == "measure"}
+    rest = [q for q in range(run.num_qubits) if q not in measured]
+    if rest:
+        run.add_register(ClassicalRegister(len(rest), "rest"))
+        for i, q in enumerate(rest):
+            run.measure(q, run.num_clbits - len(rest) + i)
+    gates = transpile(run, basis_gates=BASIS, optimization_level=0)  # the simulator runs u and cx
+    counts = simulator.run(gates, shots=shots).result().get_counts()
+    values: Dict[int, int] = {}
+    leftover = set()
+    for key, count in counts.items():
+        parts = key.split()  # registers are listed last first: "rest result"
+        value = parts[-1]
+        values[int(value, 2)] = values.get(int(value, 2), 0) + count
+        if rest:
+            for position, bit in enumerate(reversed(parts[0])):
+                if bit == "1":
+                    leftover.add(rest[position])
+    return {"counts": values, "value": next(iter(values)) if len(values) == 1 else None,
+            "leaked": sorted(leftover), "deterministic": len(values) == 1}
 
 
 # --- drawing ---------------------------------------------------------------------------------------------------

@@ -7,11 +7,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Reading generated OpenQASM back, counting gates and wires, and the black-box decomposition and optimisation stages.
+# Reading generated OpenQASM back, counting gates and wires, the black-box optimisation stage, and running circuits.
 circuits = [
     "qiskit>=2",
     "qiskit-qasm3-import",
     "openqasm3[parser]",
+    "qiskit-aer",
 ]
 
 [build-system]

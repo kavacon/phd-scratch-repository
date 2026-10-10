@@ -86,18 +86,18 @@
   @media (max-width: 700px) { .metrics { grid-template-columns: 1fr; } }
   .metric { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
   .metric .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 650; }
-  .diagram-wrap { overflow: auto; max-height: 640px; padding: 6px 10px 10px; background: var(--panel); }
-  .diagram text { font: 10px var(--mono); fill: var(--muted); }
-  .diagram text.odd { fill: var(--accent); }
-  .diagram text.glyph { fill: var(--text); text-anchor: middle; dominant-baseline: central; font-size: 9px; font-weight: 700; }
-  .diagram .wire { stroke: var(--border); stroke-width: 1; }
-  .diagram .link { stroke: var(--text); stroke-width: 1.5; }
-  .diagram .ctl { fill: var(--text); stroke: var(--text); stroke-width: 1.5; }
-  .diagram .ctl.neg { fill: var(--panel); }
-  .diagram .tgt { fill: var(--panel); stroke: var(--text); stroke-width: 1.5; }
-  .diagram .meter { fill: var(--chg); stroke: var(--text); stroke-width: 1.2; }
-  .diagram .dial { stroke: var(--text); stroke-width: 1.2; }
-  .diagram .box { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+  .sim { margin-top: 14px; }
+  .sim-bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+  .sim-bar button.run { border: 1px solid var(--accent); background: var(--accent); color: var(--panel); border-radius: 8px; padding: 6px 14px; font-weight: 600; }
+  .sim-bar button.run:disabled { opacity: .6; cursor: wait; }
+  .sim-bar input { width: 80px; font: 13px var(--mono); color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }
+  .sim-verdict { margin: 12px 0 6px; font-weight: 600; }
+  table.counts { border-collapse: collapse; font: 13px var(--mono); min-width: 320px; }
+  table.counts th { text-align: left; color: var(--muted); font-weight: 600; padding: 2px 14px 2px 0; }
+  table.counts td { padding: 2px 14px 2px 0; }
+  table.counts td.barcell { width: 220px; }
+  table.counts td.barcell i { display: block; height: 10px; border-radius: 3px; }
+  table.counts td.barcell i.ok { background: var(--ok); } table.counts td.barcell i.off { background: var(--bad); }
   .metrics.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   @media (max-width: 900px) { .metrics.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .mix { color: var(--muted); font-size: 13px; margin: 8px 2px 0; word-break: break-word; }
@@ -208,6 +208,7 @@
     </section>
   </main>
 </div>
+<script src="/circuit.js"></script>
 <script>
 const $ = (selector) => document.querySelector(selector);
 function h(tag, props = {}, ...children) {
@@ -222,7 +223,7 @@ function h(tag, props = {}, ...children) {
 }
 
 const state = { programs: [], passes: [], enabled: new Set(), source: "", activeProgram: null, data: null, index: 0, focus: null, mode: "diff",
-                options: { register_width: 6, qubits: 100 }, step: 0, view: "text" };
+                options: { register_width: 6, qubits: 100 }, step: 0, view: "text", sims: {} };
 
 async function api(path, body) {
   const response = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : undefined);
@@ -233,6 +234,7 @@ let timer;
 function schedule() { clearTimeout(timer); timer = setTimeout(run, 250); }
 
 async function run() {
+  state.sims = {};  // a measurement belongs to the program and machine it was run for
   state.data = await api("/api/run", { source: state.source, passes: [...state.enabled], options: state.options });
   const stages = state.data.stages || [];
   const focused = stages.findIndex((s) => s.id === state.focus);
@@ -337,11 +339,11 @@ function renderMetrics(stage, previous, first) {
   const same = run.matches !== undefined ? run.matches : first && !first.run.error ? run.value === first.run.value : true;
   const left = run.leaked.length;
   const cards = [
-    run.unchecked
-      ? metric("Result", "not checked", run.note || "")
+    run.notrun
+      ? metric("Result", "not run", "circuits are only run on request: use the simulator below")
       : metric("Result", run.value, first === stage ? "what the program returns" : same ? "same as the source" : "differs from the source!", same ? "" : "bad"),
   ];
-  if (!run.unchecked) {
+  if (!run.notrun) {
     const what = stage.circuit ? "Qubits left set" : "Registers not released";
     cards.push(metric(what, left, left ? run.leaked.join(", ") : "nothing left over when it returns", left ? "" : "good"));
   }
@@ -456,53 +458,29 @@ function allocationPanel(alloc) {
   return root;
 }
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-function svg(tag, props = {}, ...children) {
-  const node = document.createElementNS(SVG_NS, tag);
-  for (const [key, value] of Object.entries(props)) node.setAttribute(key, value);
-  for (const child of children.flat()) if (child != null) node.append(child);
-  return node;
-}
-
-function circuitDiagram(picture) {
-  const row = 22, col = 22, left = 84, top = 14;
-  const width = left + (picture.layers + 1) * col + 16;
-  const height = top * 2 + picture.wires.length * row;
-  const y = (q) => top + q * row + row / 2;
-  const x = (layer) => left + (layer - 0.5) * col;
-  const root = svg("svg", { class: "diagram", width, height, viewBox: `0 0 ${width} ${height}`, role: "img",
-                            "aria-label": "The circuit, one wire per qubit with time running left to right" });
-  picture.wires.forEach((label, q) => {
-    const odd = !label.startsWith("scratch") && Math.floor(q / picture.register_width) % 2 === 1;
-    root.append(svg("line", { class: "wire", x1: left - 6, x2: width - 8, y1: y(q), y2: y(q) }));
-    const text = svg("text", { class: odd ? "odd" : "", x: left - 10, y: y(q) + 3, "text-anchor": "end" });
-    text.textContent = label;
-    root.append(text);
-  });
-  for (const gate of picture.gates) {
-    const gx = x(gate.layer);
-    const wires = [gate.target, ...gate.controls.map(([q]) => q)];
-    const low = Math.min(...wires), high = Math.max(...wires);
-    const part = svg("g", {}, svg("title", {}, gate.detail || `${gate.label}${gate.controls.length ? `, ${gate.controls.length} control${gate.controls.length === 1 ? "" : "s"}` : ""}`));
-    if (high > low) part.append(svg("line", { class: "link", x1: gx, x2: gx, y1: y(low), y2: y(high) }));
-    for (const [q, positive] of gate.controls) part.append(svg("circle", { class: `ctl${positive ? "" : " neg"}`, cx: gx, cy: y(q), r: 3.5 }));
-    if (gate.kind === "meter") {
-      const cy = y(gate.target);
-      part.append(svg("rect", { class: "meter", x: gx - 8, y: cy - 7, width: 16, height: 14, rx: 2 }),
-                  svg("path", { class: "dial", d: `M ${gx - 5} ${cy + 3} A 5 5 0 0 1 ${gx + 5} ${cy + 3}`, fill: "none" }),
-                  svg("line", { class: "dial", x1: gx, y1: cy + 3, x2: gx + 3, y2: cy - 3 }));
-    } else if (gate.kind === "box") {
-      part.append(svg("rect", { class: "box", x: gx - 8, y: y(gate.target) - 7, width: 16, height: 14, rx: 3 }));
-      const text = svg("text", { class: "glyph", x: gx, y: y(gate.target) });
-      text.textContent = gate.label;
-      part.append(text);
-    } else {
-      const cy = y(gate.target);
-      part.append(svg("circle", { class: "tgt", cx: gx, cy, r: 7 }), svg("line", { class: "link", x1: gx - 7, x2: gx + 7, y1: cy, y2: cy }), svg("line", { class: "link", x1: gx, x2: gx, y1: cy - 7, y2: cy + 7 }));
-    }
-    root.append(part);
+function simulatorPanel(stage) {
+  const result = state.sims[stage.id];
+  const shots = h("input", { type: "number", id: "shots", min: 1, max: 4096, value: (result && result.shots) || 100, "aria-label": "Shots" });
+  const button = h("button", { class: "run", onclick: async () => {
+    button.disabled = true; button.textContent = "Running…";
+    const body = { source: state.source, passes: [...state.enabled], options: state.options, stage: stage.id, shots: parseInt(shots.value, 10) || 100 };
+    state.sims[stage.id] = await api("/api/simulate", body);
+    render();
+  } }, result ? "Run again" : "Run on simulator");
+  const parts = [h("div", { class: "sim-bar" }, button, h("label", {}, "shots ", shots),
+    h("span", { class: "muted" }, "Qiskit Aer, matrix product state. Runs the circuit as shown and measures the returned register."))];
+  if (result && result.error) parts.push(h("div", { class: "note err" }, result.error));
+  else if (result) {
+    const top = Math.max(...result.counts.map(([, n]) => n));
+    parts.push(h("div", { class: `sim-verdict ${result.matches ? "good" : "bad"}` },
+      result.expected == null ? "No expected value to compare with." :
+      result.matches ? `Every shot returned ${result.expected}, the value the program should return.` : `Expected ${result.expected}, but the measurement differs.`));
+    if (result.leaked.length) parts.push(h("div", { class: "note err" }, `Qubits left set at the end: ${result.leaked.join(", ")}.`));
+    parts.push(h("table", { class: "counts" }, h("thead", {}, h("tr", {}, h("th", {}, "measured"), h("th", {}, "shots"), h("th", {}, ""))),
+      h("tbody", {}, result.counts.map(([value, n]) => h("tr", {}, h("td", { class: value === result.expected ? "good" : "bad" }, String(value)), h("td", {}, n),
+        h("td", { class: "barcell" }, h("i", { class: value === result.expected ? "ok" : "off", style: `width:${Math.round(100 * n / top)}%` })))))));
   }
-  return root;
+  return h("section", { class: "panel sim" }, h("h2", {}, "Simulator"), ...parts);
 }
 
 function diagramPane(stage) {
@@ -553,7 +531,7 @@ function renderStage() {
   if (stage.error) parts.push(h("div", { class: "note err" }, stage.error));
   for (const note of stage.notes) parts.push(h("div", { class: "note" }, note));
   parts.push(renderMetrics(stage, previous, stages[0]));
-  if (stage.circuit) parts.push(renderCircuit(stage, stages));
+  if (stage.circuit) parts.push(renderCircuit(stage, stages), simulatorPanel(stage));
   if (stage.allocation) parts.push(allocationPanel(stage.allocation));
   return parts;
 }
