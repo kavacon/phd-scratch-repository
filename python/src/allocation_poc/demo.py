@@ -61,9 +61,8 @@ class PassInfo:
 # --- circuit stages ---------------------------------------------------------------------------------------------
 
 MAX_CIRCUIT_LINES = 600  # a circuit can run to thousands of lines, so only the start is shown
-MAX_CHECK_QUBITS = 18  # a circuit Qiskit has rewritten is checked on a state vector, which needs 2^n numbers
 
-NEEDS_QISKIT = "This stage uses Qiskit, which is not installed: pip install qiskit qiskit-qasm3-import 'openqasm3[parser]'"
+NEEDS_QISKIT = "This stage uses Qiskit, which is not installed: pip install qiskit qiskit-qasm3-import 'openqasm3[parser]' qiskit-aer"
 
 
 @dataclass(frozen=True)
@@ -88,18 +87,9 @@ def _rewrite(rewrite: Callable) -> Callable:
     return apply
 
 
-def _run_circuit(stage: CircuitStage) -> Result:
-    """The value and leftover qubits of a circuit. The generated gates are run exactly; a Qiskit circuit on a state vector."""
-    names = lambda qubits: {f"q[{q}]" for q in qubits}
-    if stage.qiskit is None or stage.text == stage.circuit.text:
-        state = circuits.run_gates(stage.circuit.gates, stage.circuit.qubits)
-        return Result(circuits.value_of(state, stage.circuit.result),
-                      {"<program>": names(circuits.leftover_qubits(state, stage.circuit.result))}, {"<program>": 0})
-    outcome = circuits.run_state(stage.qiskit, stage.circuit.result, MAX_CHECK_QUBITS)
-    if outcome is None:
-        return Result(None, {"<program>": set()}, {"<program>": 0})
-    qubits = outcome["leaked"]
-    return Result(outcome["value"], {"<program>": {q if isinstance(q, str) else f"q[{q}]" for q in qubits}}, {"<program>": 0})
+def _not_run(stage: CircuitStage) -> Result:
+    """A circuit is only run when asked (see `simulate_stage`), so a circuit stage reports no result of its own."""
+    return Result(None, {"<program>": set()}, {"<program>": 0})
 
 
 def circuit_metrics(stage: CircuitStage) -> Optional[Dict]:
@@ -169,15 +159,16 @@ PASSES = [
         "qasm", "Generate OpenQASM",
         "Writes each slot as w qubits of one register (least significant bit first) with the scratch register last, "
         "and each instruction as gates: X, CNOT, Toffoli and multi-controlled X. An inverse instruction is the reversed "
-        "gates, and a CTRL region puts its control on every gate inside it. The counts are Qiskit's reading of the text.",
-        ("allocate",), _generate, lambda stage: stage.text, _run_circuit,
+        "gates, and a CTRL region puts its control on every gate inside it. The returned register is measured, and the "
+        "circuit is run on Qiskit Aer to check it returns the program's value. The counts are Qiskit's reading of the text.",
+        ("allocate",), _generate, lambda stage: stage.text, _not_run,
     ),
     PassInfo(
         "optimise", "Optimise (Qiskit)",
         "Qiskit's own optimiser at its highest level. It also rewrites every gate into one- and two-qubit gates (u and cx), "
         "since a multi-controlled X cannot be counted as one gate on a device. It is treated as a black box here: the "
         "point is what it does to the gate and wire counts.",
-        ("qasm",), _rewrite(circuits.optimise), lambda stage: stage.text, _run_circuit,
+        ("qasm",), _rewrite(circuits.optimise), lambda stage: stage.text, _not_run,
     ),
 ]
 
@@ -266,8 +257,8 @@ def _measure(nodes, run: Callable = simulate) -> Dict:
         for scope, names in result.leaks.items() for name in names
     )
     value = result.value
-    if value is None:  # a circuit too big to run on a state vector
-        return {"value": "unchecked", "unchecked": True, "leaked": [], "peak": None}
+    if value is None:  # a circuit, which is only run on request
+        return {"value": "not run", "notrun": True, "leaked": [], "peak": None}
     return {
         "value": "true" if value is True else "false" if value is False else str(value),
         "leaked": leaked,
@@ -368,23 +359,6 @@ def _stage(info: Dict, nodes, previous: str, text: str, notes: Sequence[str] = (
         "liveness": liveness,
         "run": _measure(nodes, run),
     }
-
-
-def _check_circuit(stage: Dict, stages: List[Dict], circuit: CircuitStage) -> None:
-    """Say whether a circuit stage returns what the source returns. The value is the register's, modulo 2 to its width."""
-    run = stage["run"]
-    if "error" in run or run.get("unchecked"):
-        if run.get("unchecked"):
-            run["note"] = f"more than {MAX_CHECK_QUBITS} qubits, too many to run on a state vector"
-        return
-    source = stages[0]["run"].get("value")
-    expected = {"true": 1, "false": 0}.get(source)
-    if expected is None:
-        try:
-            expected = int(float(source))
-        except (TypeError, ValueError):
-            return
-    run["matches"] = int(run["value"]) == expected & ((1 << circuit.circuit.register_width) - 1)
 
 
 def _describe(error: Exception) -> Dict:
@@ -494,15 +468,16 @@ def allocation_view(allocation: Allocation, source: str) -> Dict:
     }
 
 
-def run_pipeline(source: str, pass_ids: Sequence[str], options=None) -> Dict:
-    """Parse `source` and apply the chosen passes in compiler order, returning every stage."""
+def _pipeline(source: str, pass_ids: Sequence[str], options=None) -> Tuple[Dict, Dict]:
+    """Every stage as data for the viewer, and what each pass produced (by pass id), for anything that needs the objects."""
     options = clean_options(options)
+    outputs: Dict[str, object] = {}
     try:
         nodes = parse(source, passes=())
     except UnexpectedInput as error:
-        return {"error": _describe(error)}
+        return {"error": _describe(error)}, outputs
     except Exception as error:
-        return {"error": {"message": str(error)}}
+        return {"error": {"message": str(error)}}, outputs
 
     text = unparse(nodes)
     run = simulate
@@ -533,6 +508,7 @@ def run_pipeline(source: str, pass_ids: Sequence[str], options=None) -> Dict:
             stages.append(stage)
             break
         nodes, previous, text = lowered, text, info.render(lowered)
+        outputs[info.id] = lowered
         run = info.run
         is_circuit = isinstance(lowered, CircuitStage)
         if is_circuit:  # thousands of lines are not worth a line by line comparison, or showing in full
@@ -543,7 +519,6 @@ def run_pipeline(source: str, pass_ids: Sequence[str], options=None) -> Dict:
             stage["run"]["peak"] = None  # registers do not exist at this level; the wire counts replace it
             stage["circuit"] = circuit_metrics(lowered)
             stage["diagram"] = circuits.diagram(lowered.circuit, None if lowered.text == lowered.circuit.text else lowered.qiskit)
-            _check_circuit(stage, stages, lowered)
         else:
             stage = _stage(details, nodes, previous, text, [str(w.message) for w in caught], liveness, run)
         if isinstance(lowered, Allocation):
@@ -553,7 +528,44 @@ def run_pipeline(source: str, pass_ids: Sequence[str], options=None) -> Dict:
         stages.append(stage)
         if failure:
             break
-    return {"stages": stages, "options": options}
+    return {"stages": stages, "options": options}, outputs
+
+
+def run_pipeline(source: str, pass_ids: Sequence[str], options=None) -> Dict:
+    """Parse `source` and apply the chosen passes in compiler order, returning every stage."""
+    return _pipeline(source, pass_ids, options)[0]
+
+
+def simulate_stage(source: str, pass_ids: Sequence[str], options, stage_id: str, shots: int = 100) -> Dict:
+    """
+    Run one circuit stage on Qiskit Aer, on request, and report what was measured next to what the program should
+    return. The circuit is rebuilt from the source, so the answer is for exactly what the viewer shows.
+    """
+    result, outputs = _pipeline(source, pass_ids, options)
+    stage = outputs.get(stage_id)
+    if not isinstance(stage, CircuitStage):
+        return {"error": f"{stage_id} is not a circuit stage that was produced"}
+    if stage.qiskit is None or not circuits.aer_available():
+        return {"error": "Running a circuit needs Qiskit and Qiskit Aer: pip install qiskit qiskit-aer qiskit-qasm3-import"}
+    shots = min(max(int(shots), 1), 4096)
+    outcome = circuits.execute(stage.qiskit, len(stage.circuit.measured), shots)
+    source_value = result["stages"][0]["run"].get("value")
+    expected = {"true": 1, "false": 0}.get(source_value)
+    if expected is None:
+        try:
+            expected = int(float(source_value))
+        except (TypeError, ValueError):
+            expected = None
+    if expected is not None:
+        expected &= (1 << stage.circuit.register_width) - 1
+    return {
+        "stage": stage_id,
+        "shots": shots,
+        "counts": sorted(([value, count] for value, count in outcome["counts"].items()), key=lambda item: -item[1]),
+        "leaked": [f"q[{q}]" for q in outcome["leaked"]],
+        "expected": expected,
+        "matches": expected is not None and outcome["deterministic"] and outcome["value"] == expected,
+    }
 
 
 # --- server -----------------------------------------------------------------------------------------------------
@@ -576,6 +588,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             self.reply(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
+        elif self.path == "/circuit.js":
+            self.reply(200, (STATIC / "circuit.js").read_bytes(), "application/javascript; charset=utf-8")
         elif self.path == "/api/programs":
             self.json(PROGRAMS)
         elif self.path == "/api/passes":
@@ -584,7 +598,7 @@ class Handler(BaseHTTPRequestHandler):
             self.json({"error": "not found"}, 404)
 
     def do_POST(self):
-        if self.path != "/api/run":
+        if self.path not in ("/api/run", "/api/simulate"):
             return self.json({"error": "not found"}, 404)
         length = int(self.headers.get("Content-Length") or 0)
         if length > 200_000:
@@ -594,9 +608,14 @@ class Handler(BaseHTTPRequestHandler):
             source = str(request.get("source", ""))
             passes = [p for p in request.get("passes", []) if isinstance(p, str)]
             options = request.get("options")
-        except (ValueError, AttributeError):
+            stage_id = str(request.get("stage", ""))
+            shots = int(request.get("shots", 100))
+        except (ValueError, AttributeError, TypeError):
             return self.json({"error": "bad request"}, 400)
-        self.json(run_pipeline(source, passes, options if isinstance(options, dict) else None))
+        options = options if isinstance(options, dict) else None
+        if self.path == "/api/simulate":
+            return self.json(simulate_stage(source, passes, options, stage_id, shots))
+        self.json(run_pipeline(source, passes, options))
 
 
 def make_server(port: int) -> HTTPServer:
