@@ -164,7 +164,7 @@ def _layered(gates: Sequence[Dict[str, Any]], wires: int) -> Dict[str, Any]:
     busy = [0] * wires
     placed, layers = [], 0
     for gate in gates:
-        touched = [gate["target"]] + [q for q, _ in gate["controls"]]
+        touched = gate.get("qubits") or [gate["target"]] + [q for q, _ in gate["controls"]]
         low, high = min(touched), max(touched)
         layer = 1 + max(busy[low:high + 1])
         if layer > MAX_LAYERS:
@@ -203,3 +203,37 @@ def diagram(circuit: Circuit, rewritten=None) -> Dict[str, Any]:
                 gates.append({"kind": "box", "target": qubits[0], "controls": [], "label": name.upper(),
                               "detail": f"{name}({params})"})
     return {"wires": labels, "register_width": width, **_layered(gates, circuit.qubits)}
+
+
+def qiskit_diagram(circuit, labels: Optional[Sequence[str]] = None, groups: Optional[Sequence[int]] = None) -> Dict[str, Any]:
+    """
+    Data for drawing any Qiskit circuit (for example one built by Qrisp). X gates with controls, positive or negative,
+    are drawn as such; other single-qubit gates as a box; anything wider as one tall box.
+    """
+    gates = []
+    for instruction in circuit.data:
+        operation = instruction.operation
+        qubits = [circuit.find_bit(q).index for q in instruction.qubits]
+        if operation.name == "measure":
+            gates.append({"kind": "meter", "target": qubits[0], "controls": [], "label": "M", "detail": f"measure q[{qubits[0]}]"})
+            continue
+        if operation.name == "barrier":
+            continue
+        base = getattr(operation, "base_gate", None)
+        if operation.name == "x" or (base is not None and base.name == "x"):
+            count = getattr(operation, "num_ctrl_qubits", 0)
+            state = getattr(operation, "ctrl_state", (1 << count) - 1) if count else 0
+            controls = [[qubits[i], bool((state >> i) & 1)] for i in range(count)]
+            gates.append({"kind": "x", "target": qubits[-1], "controls": controls, "label": operation.name})
+        elif len(qubits) == 1:
+            params = ", ".join(f"{float(p):.3g}" for p in operation.params if isinstance(p, (int, float)))
+            gates.append({"kind": "box", "target": qubits[0], "controls": [], "label": operation.name.upper(),
+                          "detail": f"{operation.name}({params})" if params else operation.name})
+        else:
+            gates.append({"kind": "block", "qubits": qubits, "target": qubits[0], "controls": [], "label": operation.name,
+                          "detail": operation.name})
+    picture = {"wires": list(labels) if labels is not None else [f"q{i}" for i in range(circuit.num_qubits)],
+               "register_width": 0, **_layered(gates, circuit.num_qubits)}
+    if groups is not None:
+        picture["groups"] = list(groups)
+    return picture

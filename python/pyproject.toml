@@ -14,6 +14,10 @@ circuits = [
     "openqasm3[parser]",
     "qiskit-aer",
 ]
+# The Qrisp comparison app (allocation_poc.compare), which also needs the circuits extra.
+compare = [
+    "qrisp",
+]
 
 [build-system]
 requires = ["setuptools>=69", "wheel"]
