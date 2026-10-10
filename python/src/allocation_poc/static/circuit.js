@@ -36,7 +36,7 @@ function circuitDiagram(picture) {
   const root = svg("svg", { class: "diagram", width, height, viewBox: `0 0 ${width} ${height}`, role: "img",
                             "aria-label": "The circuit, one wire per qubit with time running left to right" });
   picture.wires.forEach((label, q) => {
-    const odd = !label.startsWith("scratch") && Math.floor(q / picture.register_width) % 2 === 1;
+    const odd = picture.groups ? picture.groups[q] % 2 === 1 : !label.startsWith("scratch") && Math.floor(q / picture.register_width) % 2 === 1;
     root.append(svg("line", { class: "wire", x1: left - 6, x2: width - 8, y1: y(q), y2: y(q) }));
     const text = svg("text", { class: odd ? "odd" : "", x: left - 10, y: y(q) + 3, "text-anchor": "end" });
     text.textContent = label;
@@ -44,12 +44,17 @@ function circuitDiagram(picture) {
   });
   for (const gate of picture.gates) {
     const gx = x(gate.layer);
-    const wires = [gate.target, ...gate.controls.map(([q]) => q)];
+    const wires = gate.kind === "block" ? gate.qubits : [gate.target, ...gate.controls.map(([q]) => q)];
     const low = Math.min(...wires), high = Math.max(...wires);
     const part = svg("g", {}, svg("title", {}, gate.detail || `${gate.label}${gate.controls.length ? `, ${gate.controls.length} control${gate.controls.length === 1 ? "" : "s"}` : ""}`));
     if (high > low) part.append(svg("line", { class: "link", x1: gx, x2: gx, y1: y(low), y2: y(high) }));
     for (const [q, positive] of gate.controls) part.append(svg("circle", { class: `ctl${positive ? "" : " neg"}`, cx: gx, cy: y(q), r: 3.5 }));
-    if (gate.kind === "meter") {
+    if (gate.kind === "block") {
+      part.append(svg("rect", { class: "box", x: gx - 9, y: y(low) - 8, width: 18, height: y(high) - y(low) + 16, rx: 3 }));
+      const text = svg("text", { class: "glyph", x: gx, y: (y(low) + y(high)) / 2 });
+      text.textContent = gate.label.length > 3 ? gate.label.slice(0, 2) + "…" : gate.label;
+      part.append(text);
+    } else if (gate.kind === "meter") {
       const cy = y(gate.target);
       part.append(svg("rect", { class: "meter", x: gx - 8, y: cy - 7, width: 16, height: 14, rx: 2 }),
                   svg("path", { class: "dial", d: `M ${gx - 5} ${cy + 3} A 5 5 0 0 1 ${gx + 5} ${cy + 3}`, fill: "none" }),
