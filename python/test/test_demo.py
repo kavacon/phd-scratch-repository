@@ -8,7 +8,9 @@ from allocation_poc.demo import PASSES, Handler, clean_options, diff_lines, run_
 from allocation_poc.programs import PROGRAMS
 
 ALL = [p.id for p in PASSES]
-RELEASES = [i for i in ALL if i not in ("inline", "isa", "allocate")]  # up to releases, with functions kept as scopes
+RELEASES = [i for i in ALL if i not in ("inline", "isa", "allocate", "qasm", "optimise")]  # up to releases, with functions kept as scopes
+UPTO_ALLOCATE = ALL[:ALL.index("allocate") + 1]
+CIRCUIT = ALL[:ALL.index("qasm") + 1]  # through the generated circuit, without the Qiskit rewrites
 
 
 class DiffTestCase(unittest.TestCase):
@@ -46,7 +48,7 @@ class InlineStageTestCase(unittest.TestCase):
 class AllocationStageTestCase(unittest.TestCase):
     def stage(self, program_id, width=1, qubits=16):
         source = next(p for p in PROGRAMS if p["id"] == program_id)["source"]
-        return run_pipeline(source, ALL, {"register_width": width, "qubits": qubits})["stages"][-1]
+        return run_pipeline(source, UPTO_ALLOCATE, {"register_width": width, "qubits": qubits})["stages"][-1]
 
     def test_the_last_stage_is_the_allocation_with_the_machine_it_was_given(self):
         stage = self.stage("if-else", width=2, qubits=14)
@@ -87,17 +89,16 @@ class AllocationStageTestCase(unittest.TestCase):
         self.assertEqual((None, "main"), source_origin("$t4#1"))
 
     def test_settings_outside_the_allowed_range_are_pulled_back(self):
-        self.assertEqual({"register_width": 1, "qubits": 16}, clean_options(None))
+        self.assertEqual({"register_width": 6, "qubits": 100}, clean_options(None))
         self.assertEqual({"register_width": 64, "qubits": 0}, clean_options({"register_width": 999, "qubits": -5}))
-        self.assertEqual({"register_width": 1, "qubits": 16}, clean_options({"register_width": "x", "qubits": None}))
+        self.assertEqual({"register_width": 6, "qubits": 100}, clean_options({"register_width": "x", "qubits": None}))
 
 
 class PipelineTestCase(unittest.TestCase):
     def test_the_instruction_stage_is_printed_as_instructions_and_run_on_the_instruction_machine(self):
         for program in PROGRAMS:
-            stages = run_pipeline(program["source"], ALL)["stages"]
-            isa, allocation = stages[-2], stages[-3]
-            self.assertEqual(("isa", "allocation"), (isa["id"], allocation["id"]), program["id"])
+            stages = {s["id"]: s for s in run_pipeline(program["source"], ALL[:ALL.index("isa") + 1])["stages"]}
+            isa, allocation = stages["isa"], stages["allocation"]
             self.assertIn("ALLOC", isa["text"])
             self.assertEqual(allocation["run"]["value"], isa["run"]["value"], program["id"])
             self.assertEqual([], isa["run"]["leaked"], program["id"])

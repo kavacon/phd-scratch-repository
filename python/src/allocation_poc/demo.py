@@ -18,15 +18,16 @@ import re
 import warnings
 import webbrowser
 from dataclasses import dataclass
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from lark.exceptions import UnexpectedCharacters, UnexpectedEOF, UnexpectedInput, UnexpectedToken
 
+from allocation_poc import circuits
 from allocation_poc.printer import unparse, unparse_instruction, unparse_isa, unparse_statement
 from allocation_poc.programs import PROGRAMS
-from allocation_poc.simulate import simulate, simulate_isa
+from allocation_poc.simulate import Result, simulate, simulate_isa
 from parser.grammar import Assign, FunctionDef, If, Node
 from parser.instructions import Alloc, Free, IOp, Op
 from parser.parser import parse
@@ -38,6 +39,7 @@ from passes.inline import inline
 from passes.isa import lower_to_isa
 from passes.liveness import Liveness
 from passes.names import results
+from passes.qasm import Circuit, to_openqasm
 from passes.rename import rename
 from passes.unroll import unroll
 
@@ -54,6 +56,57 @@ class PassInfo:
     render: Callable = unparse  # how the pass's output is printed
     run: Callable = simulate  # how the pass's output is executed
     takes_options: bool = False  # whether the pass is also given the machine settings
+
+
+# --- circuit stages ---------------------------------------------------------------------------------------------
+
+MAX_CIRCUIT_LINES = 600  # a circuit can run to thousands of lines, so only the start is shown
+MAX_CHECK_QUBITS = 18  # a circuit Qiskit has rewritten is checked on a state vector, which needs 2^n numbers
+
+NEEDS_QISKIT = "This stage uses Qiskit, which is not installed: pip install qiskit qiskit-qasm3-import 'openqasm3[parser]'"
+
+
+@dataclass(frozen=True)
+class CircuitStage:
+    """The circuit as generated, and the same circuit as Qiskit currently has it."""
+    circuit: Circuit
+    qiskit: object
+    text: str
+
+
+def _generate(allocation: Allocation) -> CircuitStage:
+    circuit = to_openqasm(allocation)
+    return CircuitStage(circuit, circuits.read(circuit.text) if circuits.qiskit_available() else None, circuit.text)
+
+
+def _rewrite(rewrite: Callable) -> Callable:
+    def apply(stage: CircuitStage) -> CircuitStage:
+        if stage.qiskit is None:
+            raise RuntimeError(NEEDS_QISKIT)
+        rewritten = rewrite(stage.qiskit)
+        return CircuitStage(stage.circuit, rewritten, circuits.write(rewritten))
+    return apply
+
+
+def _run_circuit(stage: CircuitStage) -> Result:
+    """The value and leftover qubits of a circuit. The generated gates are run exactly; a Qiskit circuit on a state vector."""
+    names = lambda qubits: {f"q[{q}]" for q in qubits}
+    if stage.qiskit is None or stage.text == stage.circuit.text:
+        state = circuits.run_gates(stage.circuit.gates, stage.circuit.qubits)
+        return Result(circuits.value_of(state, stage.circuit.result),
+                      {"<program>": names(circuits.leftover_qubits(state, stage.circuit.result))}, {"<program>": 0})
+    outcome = circuits.run_state(stage.qiskit, stage.circuit.result, MAX_CHECK_QUBITS)
+    if outcome is None:
+        return Result(None, {"<program>": set()}, {"<program>": 0})
+    qubits = outcome["leaked"]
+    return Result(outcome["value"], {"<program>": {q if isinstance(q, str) else f"q[{q}]" for q in qubits}}, {"<program>": 0})
+
+
+def circuit_metrics(stage: CircuitStage) -> Optional[Dict]:
+    """Gate and wire counts, from Qiskit's reading of the circuit, so every circuit stage is counted the same way."""
+    if stage.qiskit is None:
+        return None
+    return circuits.measure(stage.qiskit)
 
 
 # In the order the compiler runs them.
@@ -112,9 +165,23 @@ PASSES = [
         ("isa",), allocate, lambda allocation: unparse_isa(allocation.program),
         lambda allocation: simulate_isa(allocation.program), True,
     ),
+    PassInfo(
+        "qasm", "Generate OpenQASM",
+        "Writes each slot as w qubits of one register (least significant bit first) with the scratch register last, "
+        "and each instruction as gates: X, CNOT, Toffoli and multi-controlled X. An inverse instruction is the reversed "
+        "gates, and a CTRL region puts its control on every gate inside it. The counts are Qiskit's reading of the text.",
+        ("allocate",), _generate, lambda stage: stage.text, _run_circuit,
+    ),
+    PassInfo(
+        "optimise", "Optimise (Qiskit)",
+        "Qiskit's own optimiser at its highest level. It also rewrites every gate into one- and two-qubit gates (u and cx), "
+        "since a multi-controlled X cannot be counted as one gate on a device. It is treated as a black box here: the "
+        "point is what it does to the gate and wire counts.",
+        ("qasm",), _rewrite(circuits.optimise), lambda stage: stage.text, _run_circuit,
+    ),
 ]
 
-DEFAULT_OPTIONS = {"register_width": 1, "qubits": 16}
+DEFAULT_OPTIONS = {"register_width": 6, "qubits": 100}  # room for every preloaded program, and values up to 63
 
 
 def clean_options(raw) -> Dict[str, int]:
@@ -199,6 +266,8 @@ def _measure(nodes, run: Callable = simulate) -> Dict:
         for scope, names in result.leaks.items() for name in names
     )
     value = result.value
+    if value is None:  # a circuit too big to run on a state vector
+        return {"value": "unchecked", "unchecked": True, "leaked": [], "peak": None}
     return {
         "value": "true" if value is True else "false" if value is False else str(value),
         "leaked": leaked,
@@ -299,6 +368,23 @@ def _stage(info: Dict, nodes, previous: str, text: str, notes: Sequence[str] = (
         "liveness": liveness,
         "run": _measure(nodes, run),
     }
+
+
+def _check_circuit(stage: Dict, stages: List[Dict], circuit: CircuitStage) -> None:
+    """Say whether a circuit stage returns what the source returns. The value is the register's, modulo 2 to its width."""
+    run = stage["run"]
+    if "error" in run or run.get("unchecked"):
+        if run.get("unchecked"):
+            run["note"] = f"more than {MAX_CHECK_QUBITS} qubits, too many to run on a state vector"
+        return
+    source = stages[0]["run"].get("value")
+    expected = {"true": 1, "false": 0}.get(source)
+    if expected is None:
+        try:
+            expected = int(float(source))
+        except (TypeError, ValueError):
+            return
+    run["matches"] = int(run["value"]) == expected & ((1 << circuit.circuit.register_width) - 1)
 
 
 def _describe(error: Exception) -> Dict:
@@ -448,7 +534,18 @@ def run_pipeline(source: str, pass_ids: Sequence[str], options=None) -> Dict:
             break
         nodes, previous, text = lowered, text, info.render(lowered)
         run = info.run
-        stage = _stage(details, nodes, previous, text, [str(w.message) for w in caught], liveness, run)
+        is_circuit = isinstance(lowered, CircuitStage)
+        if is_circuit:  # thousands of lines are not worth a line by line comparison, or showing in full
+            lines = text.splitlines()
+            shown = lines[:MAX_CIRCUIT_LINES] + ([f"// ... {len(lines) - MAX_CIRCUIT_LINES} more lines"] if len(lines) > MAX_CIRCUIT_LINES else [])
+            stage = _stage(details, nodes, "", "\n".join(shown), [str(w.message) for w in caught], liveness, run)
+            stage["single"] = True
+            stage["run"]["peak"] = None  # registers do not exist at this level; the wire counts replace it
+            stage["circuit"] = circuit_metrics(lowered)
+            stage["diagram"] = circuits.diagram(lowered.circuit, None if lowered.text == lowered.circuit.text else lowered.qiskit)
+            _check_circuit(stage, stages, lowered)
+        else:
+            stage = _stage(details, nodes, previous, text, [str(w.message) for w in caught], liveness, run)
         if isinstance(lowered, Allocation):
             stage["allocation"] = allocation_view(lowered, source)
         if failure:
@@ -502,12 +599,21 @@ class Handler(BaseHTTPRequestHandler):
         self.json(run_pipeline(source, passes, options if isinstance(options, dict) else None))
 
 
+def make_server(port: int) -> HTTPServer:
+    """
+    One request at a time, all on the main thread. A server thread per request crashes the whole process: the
+    Qiskit wheel's native allocator segfaults when a thread starts after an earlier thread has used Qiskit and
+    finished (reproduced on Python 3.14 with qiskit 2.5.2), which is exactly one request after another.
+    """
+    return HTTPServer(("127.0.0.1", port), Handler)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--no-browser", action="store_true", help="do not open a browser window")
     args = parser.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    server = make_server(args.port)
     url = f"http://127.0.0.1:{args.port}/"
     print(f"Pipeline demo running at {url} (Ctrl+C to stop)")
     if not args.no_browser:

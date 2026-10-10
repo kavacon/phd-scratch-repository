@@ -11,7 +11,8 @@ computed). A controlled region may not allocate or free, so every register an `i
 the outermost `if` that contains it and freed after. A register shared by both branches is allocated once. An `if`
 on a constant is resolved here and only the branch that runs is emitted.
 
-The program must be flat: each assignment a plain value or one operation on plain values (see passes.flatten).
+The program must be flat: each assignment a plain value or one operation on plain values, and it returns a
+variable (see passes.flatten).
 """
 from typing import List, Optional, Tuple
 
@@ -113,6 +114,8 @@ class _Lowerer:
         *statements, last = body
         if not isinstance(last, Return):
             raise IsaError("the program does not end with a return")
+        if not isinstance(last.value, Variable):
+            raise IsaError("the program must return a variable; run flatten first")
         out: List[Instruction] = []
         self.block(tuple(statements), out, None)
         return IsaProgram(tuple(out), _operand(last.value))

@@ -11,7 +11,9 @@ intermediate is a temporary that liveness and release insertion see and release 
 
 - The outermost operation keeps the name the programmer chose, so `y` is not copied from a temporary.
 - Return values, `if` conditions, call arguments and `~=` witnesses are flattened the same way. A returned
-  expression is named so what it reads can be released, and a condition lives in a register of its own.
+  expression is named so what it reads can be released, and a condition lives in a register of its own. A returned
+  literal is named too (`return 2;` becomes `$t1 = 2; return $t1;`), so every program returns a variable and a
+  later stage never has to deliver a bare constant.
 - A chain `a == b == c` becomes pairwise comparisons joined with `&&`. Both sides of `&&` and `||` are
   evaluated, as they would be in a circuit.
 - Temporaries are `$t1`, `$t2`, ... numbered from 1 in each function and in the top-level program. `$` cannot
@@ -84,7 +86,12 @@ class _Flattener:
         elif isinstance(node, ExprStmt):
             out.append(ExprStmt(self.operation(node.expr, out)))
         elif isinstance(node, Return):
-            out.append(Return(self.atom(node.value, out)))
+            value = self.atom(node.value, out)
+            if not isinstance(value, Variable):  # a literal has no register, so give it one
+                name = self.fresh()
+                out.append(Assign(name, value))
+                value = Variable(name)
+            out.append(Return(value))
         elif isinstance(node, Unassign):
             out.append(Unassign(node.name, self.operation(node.witness, out)))
         elif isinstance(node, If):

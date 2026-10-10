@@ -164,6 +164,11 @@ class LoweringExamplesTestCase(unittest.TestCase):
         with self.assertRaises(IsaError):
             lower_to_isa(parse("function f(): int { return 1; } return f();", passes=(unroll, flatten, balance, rename)))
 
+    def test_a_program_must_return_a_variable_and_a_returned_literal_is_one_after_flatten(self):
+        with self.assertRaises(IsaError):
+            lower_to_isa(parse("return 7;", passes=(unroll,)))
+        self.assertEqual("ALLOC $t1#1\nCOPY  $t1#1, 7\nRETURN $t1#1", unparse_isa(lowered("return 7;")))
+
     def test_a_program_that_is_not_flat_is_rejected(self):
         with self.assertRaises(IsaError):
             lower_to_isa(parse("a = 1; b = (a + 1) * 2; return b;", passes=()))
