@@ -150,7 +150,7 @@ function h(tag, props = {}, ...children) {
   return node;
 }
 
-const state = { programs: [], active: null, width: 6, data: null, variant: "built", view: "diagram", sims: {}, shots: 100, loading: false };
+const state = { programs: [], active: null, width: 8, data: null, variant: "built", view: "diagram", sims: {}, shots: 100, loading: false };
 const SIDES = [["ours", "Ours"], ["qrisp", "Qrisp"]];
 
 async function api(path, body) {

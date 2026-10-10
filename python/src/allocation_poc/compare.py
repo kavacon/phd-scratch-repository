@@ -37,7 +37,7 @@ def clean_width(raw) -> int:
     try:
         return min(max(int(raw), 1), MAX_WIDTH)
     except (TypeError, ValueError):
-        return 6
+        return 8
 
 
 def _text(circuit, limit: int = MAX_CIRCUIT_LINES) -> str:
