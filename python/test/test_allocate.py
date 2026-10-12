@@ -4,7 +4,7 @@ import unittest
 from allocation_poc.printer import unparse_isa
 from allocation_poc.programs import PROGRAMS
 from allocation_poc.simulate import SimulationError, simulate_isa
-from parser.instructions import Alloc, Const, Free, IsaProgram, Op
+from parser.instructions import Alloc, Const, Free, IsaProgram
 from parser.parser import parse
 from passes.allocate import WidthExceeded, allocate
 from passes.isa import lower_to_isa
@@ -110,7 +110,7 @@ class BehaviourTestCase(unittest.TestCase):
                 program = isa(source)
                 after = simulate_isa(allocate(program, 3, 3000).program)
                 self.assertEqual(simulate_isa(program).value, after.value)
-                self.assertEqual({}, {s: l for s, l in after.leaks.items() if l})
+                self.assertEqual({}, {s: held for s, held in after.leaks.items() if held})
 
     def test_the_machine_catches_two_live_registers_sharing_a_slot(self):
         with self.assertRaises(SimulationError):

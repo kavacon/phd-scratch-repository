@@ -29,14 +29,15 @@ def _block(body: Sequence[Node], visible: Set[str]) -> tuple:
     visible = set(visible)  # names first assigned in this block stay local to it
     result = []
     for statement in body:
+        kept = statement
         if isinstance(statement, Assign):
             visible.add(statement.name)
         elif isinstance(statement, If):
-            statement = _if(statement, visible)
+            kept = _if(statement, visible)
         elif isinstance(statement, FunctionDef):
             scope = {p.name for p in statement.params}
-            statement = replace(statement, body=_block(statement.body, scope))
-        result.append(statement)
+            kept = replace(statement, body=_block(statement.body, scope))
+        result.append(kept)
     return tuple(result)
 
 

@@ -4,8 +4,10 @@ import unittest
 import urllib.request
 from http.server import ThreadingHTTPServer
 
-from allocation_poc.demo import PASSES, Handler, clean_options, diff_lines, run_pipeline, source_origin
+from allocation_poc.demo import PASSES, Handler, clean_options, run_pipeline
 from allocation_poc.programs import PROGRAMS
+from allocation_poc.views import source_origin
+from utils.text_diff import diff_lines
 
 ALL = [p.id for p in PASSES]
 RELEASES = [i for i in ALL if i not in ("inline", "isa", "allocate", "qasm", "optimise")]  # up to releases, with functions kept as scopes
@@ -16,7 +18,7 @@ CIRCUIT = ALL[:ALL.index("qasm") + 1]  # through the generated circuit, without 
 class DiffTestCase(unittest.TestCase):
     def kinds(self, before, after):
         old, new = diff_lines(before, after)
-        return [l["kind"] for l in old], [l["kind"] for l in new]
+        return [entry["kind"] for entry in old], [entry["kind"] for entry in new]
 
     def test_unchanged_added_and_removed_lines(self):
         self.assertEqual((["same", "same"], ["same", "added", "same"]), self.kinds(["a", "c"], ["a", "b", "c"]))
@@ -39,7 +41,7 @@ class InlineStageTestCase(unittest.TestCase):
             stages = {s["id"]: s for s in run_pipeline(program["source"], ALL)["stages"]}
             self.assertNotIn("function", stages["inline"]["text"], program["id"])
             self.assertEqual(stages["source"]["run"]["value"], stages["inline"]["run"]["value"], program["id"])
-            self.assertEqual(["source", "inline"], [s for s in stages][:2])
+            self.assertEqual(["source", "inline"], list(stages)[:2])
 
     def test_turning_inline_off_makes_the_instruction_stage_say_functions_must_be_inlined(self):
         stages = run_pipeline(PROGRAMS[0]["source"], [i for i in ALL if i != "inline"])["stages"]

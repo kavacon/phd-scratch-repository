@@ -1,12 +1,26 @@
-from dataclasses import fields, replace
+"""Parsing source text into the typed AST, and running the passes over it in order."""
 from importlib.resources import files
-from typing import Callable, Iterator, List, Sequence
+from typing import Callable, List, Sequence
 
 from lark import Lark, Transformer, v_args
 
 from parser.grammar import (
-    Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not,
-    Number, Param, Return, Unassign, Variable,
+    Assign,
+    BinOp,
+    Boolean,
+    Call,
+    Equals,
+    ExprStmt,
+    ForLoop,
+    FunctionDef,
+    If,
+    Node,
+    Not,
+    Number,
+    Param,
+    Return,
+    Unassign,
+    Variable,
 )
 from passes.allocation import lower_allocation
 from passes.balance import balance
@@ -15,60 +29,97 @@ from passes.inline import inline
 from passes.rename import rename
 from passes.unroll import unroll
 
-# Define lark based AST parsing for grammar file.
-_grammar = (
-    files("parser")
-    .joinpath("resources/grammar_v1.lark")
-    .read_text(encoding="utf-8")
-)
-
+_grammar = files("parser").joinpath("resources/grammar_v1.lark").read_text(encoding="utf-8")
 _parser = Lark(_grammar, parser="lalr", start="start")
 
 Pass = Callable[[List[Node]], List[Node]]
 
+# The compiler's passes in the order they run (see the pipeline notes for why this order).
+DEFAULT_PASSES: Sequence[Pass] = (inline, unroll, flatten, balance, rename, lower_allocation)
+
+
 class _Params(tuple):
-    pass
+    """Marks the parameter list among a function definition's optional children."""
 
 
 class _ReturnType(str):
-    pass
+    """Marks the return type among a function definition's optional children."""
+
+
+def _binary(op: str):
+    def build(_transformer, left, right):
+        return BinOp(op, left, right)
+    return build
 
 
 @v_args(inline=True)
 class _ToGrammar(Transformer):
     """Lark parse tree -> typed AST nodes."""
 
-    start = lambda self, *nodes: list(nodes)
-    block = args = function_body = lambda self, *items: tuple(items)
-    params = lambda self, *items: _Params(items)
-    return_type = lambda self, t: _ReturnType(t)
-    type = lambda self, name: str(name)
-    param = lambda self, name, t: Param(str(name), t)
-    assignment = lambda self, name, value: Assign(str(name), value)
-    return_stmt = lambda self, value: Return(value)
-    unassign_stmt = lambda self, name, witness: Unassign(str(name), witness)
-    expr_statement = lambda self, expr: ExprStmt(expr)
-    for_loop = lambda self, var, start, stop, body: ForLoop(str(var), Number(int(start)), Number(int(stop)), body)
-    if_stmt = lambda self, cond, body, orelse=(): If(cond, body, orelse)
-    else_clause = lambda self, block: block
-    function_call = lambda self, name, args=(): Call(str(name), args)
-    equality = lambda self, *operands: Equals(operands)
-    add = lambda self, l, r: BinOp("+", l, r)
-    sub = lambda self, l, r: BinOp("-", l, r)
-    mul = lambda self, l, r: BinOp("*", l, r)
-    div = lambda self, l, r: BinOp("/", l, r)
-    and_ = lambda self, l, r: BinOp("&&", l, r)
-    or_ = lambda self, l, r: BinOp("||", l, r)
-    not_ = lambda self, x: Not(x)
-    ne = lambda self, l, r: BinOp("!=", l, r)
-    lt = lambda self, l, r: BinOp("<", l, r)
-    gt = lambda self, l, r: BinOp(">", l, r)
-    true = lambda self: Boolean(True)
-    false = lambda self: Boolean(False)
-    variable = lambda self, name: Variable(str(name))
+    add, sub, mul, div = _binary("+"), _binary("-"), _binary("*"), _binary("/")
+    and_, or_, ne, lt, gt = _binary("&&"), _binary("||"), _binary("!="), _binary("<"), _binary(">")
 
-    def number(self, n):
-        return Number(int(n)) if str(n).isdigit() else Number(float(n))
+    def start(self, *nodes):
+        return list(nodes)
+
+    def block(self, *items):
+        return tuple(items)
+
+    args = function_body = block
+
+    def params(self, *items):
+        return _Params(items)
+
+    def return_type(self, name):
+        return _ReturnType(name)
+
+    def type(self, name):
+        return str(name)
+
+    def param(self, name, type_):
+        return Param(str(name), type_)
+
+    def assignment(self, name, value):
+        return Assign(str(name), value)
+
+    def return_stmt(self, value):
+        return Return(value)
+
+    def unassign_stmt(self, name, witness):
+        return Unassign(str(name), witness)
+
+    def expr_statement(self, expr):
+        return ExprStmt(expr)
+
+    def for_loop(self, var, start, stop, body):
+        return ForLoop(str(var), Number(int(start)), Number(int(stop)), body)
+
+    def if_stmt(self, condition, body, orelse=()):
+        return If(condition, body, orelse)
+
+    def else_clause(self, block):
+        return block
+
+    def function_call(self, name, args=()):
+        return Call(str(name), args)
+
+    def equality(self, *operands):
+        return Equals(operands)
+
+    def not_(self, operand):
+        return Not(operand)
+
+    def true(self):
+        return Boolean(True)
+
+    def false(self):
+        return Boolean(False)
+
+    def variable(self, name):
+        return Variable(str(name))
+
+    def number(self, text):
+        return Number(int(text)) if str(text).isdigit() else Number(float(text))
 
     def function_def(self, name, *rest):
         params = next((p for p in rest if isinstance(p, _Params)), ())
@@ -76,35 +127,9 @@ class _ToGrammar(Transformer):
         return FunctionDef(str(name), tuple(params), return_type, rest[-1])
 
 
-def map_children(node: Node, fn: Callable[[Node], Node]) -> Node:
-    """Rebuild `node` with `fn` applied to each direct child."""
-    changes = {}
-    for f in fields(node):
-        value = getattr(node, f.name)
-        if isinstance(value, Node):
-            changes[f.name] = fn(value)
-        elif isinstance(value, tuple):
-            changes[f.name] = tuple(fn(v) if isinstance(v, Node) else v for v in value)
-    return replace(node, **changes)
-
-
-def rewrite(node: Node, fn: Callable[[Node], Node]) -> Node:
-    """Bottom-up rewrite: children first, then `fn` on the rebuilt node."""
-    return fn(map_children(node, lambda child: rewrite(child, fn)))
-
-
-def walk(node: Node) -> Iterator[Node]:
-    """Pre-order traversal."""
-    yield node
-    children: List[Node] = []
-    map_children(node, lambda child: children.append(child) or child)
-    for child in children:
-        yield from walk(child)
-
-
-def parse(program: str, passes: Sequence[Pass] = (inline, unroll, flatten, balance, rename, lower_allocation)) -> List[Node]:
+def parse(program: str, passes: Sequence[Pass] = DEFAULT_PASSES) -> List[Node]:
     """Parse source into the typed AST, then apply each pass in order. Use `passes=()` for the raw AST."""
     nodes = _ToGrammar().transform(_parser.parse(program))
-    for p in passes:
-        nodes = p(nodes)
+    for apply_pass in passes:
+        nodes = apply_pass(nodes)
     return nodes

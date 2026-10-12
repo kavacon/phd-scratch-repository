@@ -2,9 +2,9 @@
 Comparison app: our circuits next to Qrisp's for the same task.
 
 Each demo program goes through our compiler as usual (inline, allocate, generate OpenQASM). The same task, written by
-hand as an ordinary Qrisp program using only Qrisp's own operators (qrisp_programs.py), goes through Qrisp's own compiler. Both are measured the same way, as built
-and after the same Qiskit optimisation into `u` and `cx`, with gate and wire counts and a drawing, and either can be run on
-Qiskit Aer on request (nothing runs on its own).
+hand as an ordinary Qrisp program using only Qrisp's own operators (qrisp_programs.py), goes through Qrisp's own compiler.
+Both are measured the same way, as built and after the same Qiskit optimisation into `u` and `cx`, with gate and wire
+counts and a drawing, and either can be run on Qiskit Aer on request (nothing runs on its own).
 
 Run it from the python directory:
 
@@ -12,200 +12,168 @@ Run it from the python directory:
 
 It needs the optional dependencies: pip install '.[circuits,compare]'
 """
-import argparse
-import json
-import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict
 
-from allocation_poc import circuits
-from allocation_poc.demo import MAX_CIRCUIT_LINES
+from allocation_poc import circuits, qrisp_programs
+from allocation_poc.drawing import diagram, qiskit_diagram
 from allocation_poc.programs import PROGRAMS
 from allocation_poc.simulate import simulate_isa
 from parser.parser import parse
 from passes.allocate import allocate
 from passes.isa import lower_to_isa
 from passes.qasm import to_openqasm
+from utils import http_server, qiskit_tools
+from utils.text import shorten
 
 STATIC = Path(__file__).parent / "static"
 MAX_WIDTH = 16
-_cache: Dict[Any, Dict[str, Any]] = {}  # built circuits by (program, width), so running one does not rebuild everything
+DEFAULT_WIDTH = 8
+SIDES = ("ours", "qrisp")
+VARIANTS = ("built", "optimised")
+_PROGRAMS = {program["id"]: program for program in PROGRAMS}
 
 
 def clean_width(raw) -> int:
     try:
         return min(max(int(raw), 1), MAX_WIDTH)
     except (TypeError, ValueError):
-        return 8
+        return DEFAULT_WIDTH
 
 
-def _text(circuit, limit: int = MAX_CIRCUIT_LINES) -> str:
+@dataclass(frozen=True)
+class Side:
+    """One compiler's circuit for a program, as built and as optimised, with what is needed to draw and run it."""
+    built: Any
+    optimised: Any
+    result_bits: int
+    exponent: int  # a Qrisp QuantumFloat holds mantissa * 2 ** exponent
+    text: Dict[str, str]  # the OpenQASM of each variant
+    drawings: Dict[str, Dict[str, Any]]
+
+    def variant(self, name: str):
+        return self.built if name == "built" else self.optimised
+
+
+@dataclass(frozen=True)
+class Built:
+    expected: int
+    sources: Dict[str, str]
+    sides: Dict[str, Side]
+
+
+def _text(circuit) -> str:
     try:
-        lines = circuits.write(circuit).splitlines()
+        return qiskit_tools.write(circuit)
     except Exception as error:  # a circuit with gates OpenQASM cannot name
         return f"// this circuit cannot be written as OpenQASM: {error}"
-    return "\n".join(lines[:limit] + ([f"// ... {len(lines) - limit} more lines"] if len(lines) > limit else []))
 
 
-def _program(program_id: str) -> Dict[str, Any]:
-    for program in PROGRAMS:
-        if program["id"] == program_id:
-            return program
-    raise KeyError(f"unknown program {program_id}")
+def _ours(source: str, width: int):
+    isa = lower_to_isa(parse(source))
+    generated = to_openqasm(allocate(isa, width, 100_000))
+    built = qiskit_tools.read(generated.text)
+    optimised = qiskit_tools.optimise(built)
+    side = Side(
+        built, optimised, len(generated.measured), 0,
+        {"built": generated.text, "optimised": _text(optimised)},
+        {"built": diagram(generated), "optimised": diagram(generated, optimised)},
+    )
+    return side, circuits.wrap(simulate_isa(isa).value, width)
 
 
-def build(program_id: str, width: int) -> Dict[str, Any]:
-    """Both circuits for a program, as built and optimised."""
-    key = (program_id, width)
-    if key in _cache:
-        return _cache[key]
-    from allocation_poc import qrisp_programs
-
-    program = _program(program_id)
-    isa = lower_to_isa(parse(program["source"]))
-    expected = int(simulate_isa(isa).value) & ((1 << width) - 1)
-    ours = to_openqasm(allocate(isa, width, 100_000))
-    ours_built = circuits.read(ours.text)
+def _qrisp(program_id: str, width: int) -> Side:
     qrisp = qrisp_programs.run(program_id, width)
-    built = {
-        "ours": {"built": ours_built, "optimised": circuits.optimise(ours_built), "result_bits": len(ours.measured), "exponent": 0},
-        "qrisp": {"built": qrisp.circuit, "optimised": circuits.optimise(qrisp.circuit), "result_bits": len(qrisp.result), "exponent": qrisp.exponent},
-        "expected": expected,
-        "ours_circuit": ours,
-        "qrisp_circuit": qrisp,
-    }
-    if len(_cache) >= 6:
-        _cache.pop(next(iter(_cache)))
-    _cache[key] = built
-    return built
+    optimised = qiskit_tools.optimise(qrisp.circuit)
+    return Side(
+        qrisp.circuit, optimised, len(qrisp.result), qrisp.exponent,
+        {"built": _text(qrisp.circuit), "optimised": _text(optimised)},
+        {"built": qiskit_diagram(qrisp.circuit, qrisp.labels, qrisp.groups),
+         "optimised": qiskit_diagram(optimised, qrisp.labels, qrisp.groups)},
+    )
+
+
+@lru_cache(maxsize=6)  # so running one circuit does not rebuild everything
+def build(program_id: str, width: int) -> Built:
+    """Both circuits for a program, as built and optimised."""
+    if program_id not in _PROGRAMS:
+        raise KeyError(f"unknown program {program_id}")
+    ours, expected = _ours(_PROGRAMS[program_id]["source"], width)
+    return Built(
+        expected,
+        {"ours": _PROGRAMS[program_id]["source"], "qrisp": qrisp_programs.source_text(program_id, width)},
+        {"ours": ours, "qrisp": _qrisp(program_id, width)},
+    )
 
 
 def compare(program_id: str, width: int) -> Dict[str, Any]:
     """Everything the page shows for one program: both sources, and counts, text and drawing for each of the four circuits."""
-    from allocation_poc import qrisp_programs
     try:
         built = build(program_id, width)
     except Exception as error:
         return {"error": {"message": f"{type(error).__name__}: {error}"}}
-    ours, qrisp = built["ours_circuit"], built["qrisp_circuit"]
-    drawings = {
-        ("ours", "built"): circuits.diagram(ours),
-        ("ours", "optimised"): circuits.diagram(ours, built["ours"]["optimised"]),
-        ("qrisp", "built"): circuits.qiskit_diagram(qrisp.circuit, qrisp.labels, qrisp.groups),
-        ("qrisp", "optimised"): circuits.qiskit_diagram(built["qrisp"]["optimised"], qrisp.labels, qrisp.groups),
-    }
-    result: Dict[str, Any] = {
+    return {
         "width": width,
-        "expected": built["expected"],
-        "sources": {"ours": _program(program_id)["source"], "qrisp": qrisp_programs.source_text(program_id, width)},
-        "circuits": {},
-    }
-    for side in ("ours", "qrisp"):
-        result["circuits"][side] = {}
-        for variant in ("built", "optimised"):
-            circuit = built[side][variant]
-            text = ours.text if (side, variant) == ("ours", "built") else _text(circuit)
-            lines = text.splitlines()
-            if len(lines) > MAX_CIRCUIT_LINES:
-                text = "\n".join(lines[:MAX_CIRCUIT_LINES] + [f"// ... {len(lines) - MAX_CIRCUIT_LINES} more lines"])
-            result["circuits"][side][variant] = {
-                "metrics": circuits.measure(circuit),
-                "text": text,
-                "diagram": drawings[(side, variant)],
+        "expected": built.expected,
+        "sources": built.sources,
+        "circuits": {
+            name: {
+                variant: {
+                    "metrics": qiskit_tools.measure(side.variant(variant)),
+                    "text": shorten(side.text[variant]),
+                    "diagram": side.drawings[variant],
+                }
+                for variant in VARIANTS
             }
-    return result
+            for name, side in built.sides.items()
+        },
+    }
 
 
 def simulate(program_id: str, width: int, side: str, variant: str, shots: int) -> Dict[str, Any]:
     """Run one of the four circuits on Qiskit Aer and report the measurement against the expected value."""
-    if side not in ("ours", "qrisp") or variant not in ("built", "optimised"):
+    if side not in SIDES or variant not in VARIANTS:
         return {"error": "unknown circuit"}
-    if not circuits.aer_available():
+    if not qiskit_tools.aer_available():
         return {"error": "Running a circuit needs Qiskit Aer: pip install qiskit-aer"}
     try:
         built = build(program_id, width)
     except Exception as error:
         return {"error": f"{type(error).__name__}: {error}"}
-    shots = min(max(int(shots), 1), 4096)
-    entry = built[side]
-    outcome = circuits.execute(entry[variant], entry["result_bits"], shots)
-    scale = 2 ** entry["exponent"]  # a Qrisp QuantumFloat is a mantissa times a power of two
-    counts = {value * scale: count for value, count in outcome["counts"].items()}
-    return {
-        "side": side, "variant": variant, "shots": shots,
-        "counts": sorted(([value, count] for value, count in counts.items()), key=lambda item: -item[1]),
-        "leaked": [f"q[{q}]" for q in outcome["leaked"]],
-        "expected": built["expected"],
-        "matches": len(counts) == 1 and next(iter(counts)) == built["expected"],
+    shots = min(max(shots, 1), qiskit_tools.MAX_SHOTS)
+    entry = built.sides[side]
+    outcome = qiskit_tools.execute(entry.variant(variant), entry.result_bits, shots)
+    return {"side": side, "variant": variant,
+            **circuits.report(outcome, shots=shots, expected=built.expected, scale=2 ** entry.exponent)}
+
+
+def _compare_route(request: Dict[str, Any]) -> Dict[str, Any]:
+    return compare(http_server.text_field(request, "program"), clean_width(request.get("width")))
+
+
+def _simulate_route(request: Dict[str, Any]) -> Dict[str, Any]:
+    return simulate(http_server.text_field(request, "program"), clean_width(request.get("width")),
+                    http_server.text_field(request, "side"), http_server.text_field(request, "variant"),
+                    http_server.int_field(request, "shots", 100))
+
+
+class Handler(http_server.JsonHandler):
+    static_dir = STATIC
+    pages = {"/": "compare.html", "/index.html": "compare.html", "/circuit.js": "circuit.js"}
+    get_routes = {
+        "/api/programs": lambda: [{"id": p["id"], "name": p["name"], "description": p["description"]} for p in PROGRAMS],
     }
+    post_routes = {"/api/compare": _compare_route, "/api/simulate": _simulate_route}
 
 
-class Handler(BaseHTTPRequestHandler):
-    def log_message(self, *args):
-        pass
-
-    def reply(self, status: int, body: bytes, content_type: str) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
-
-    def json(self, payload, status: int = 200) -> None:
-        self.reply(status, json.dumps(payload).encode(), "application/json")
-
-    def do_GET(self):
-        if self.path in ("/", "/index.html"):
-            self.reply(200, (STATIC / "compare.html").read_bytes(), "text/html; charset=utf-8")
-        elif self.path == "/circuit.js":
-            self.reply(200, (STATIC / "circuit.js").read_bytes(), "application/javascript; charset=utf-8")
-        elif self.path == "/api/programs":
-            self.json([{"id": p["id"], "name": p["name"], "description": p["description"]} for p in PROGRAMS])
-        else:
-            self.json({"error": "not found"}, 404)
-
-    def do_POST(self):
-        if self.path not in ("/api/compare", "/api/simulate"):
-            return self.json({"error": "not found"}, 404)
-        length = int(self.headers.get("Content-Length") or 0)
-        if length > 200_000:
-            return self.json({"error": "program too large"}, 413)
-        try:
-            request = json.loads(self.rfile.read(length) or b"{}")
-            program_id = str(request.get("program", ""))
-            width = clean_width(request.get("width"))
-            shots = int(request.get("shots", 100))
-            side, variant = str(request.get("side", "")), str(request.get("variant", ""))
-        except (ValueError, AttributeError, TypeError):
-            return self.json({"error": "bad request"}, 400)
-        if self.path == "/api/simulate":
-            return self.json(simulate(program_id, width, side, variant, shots))
-        self.json(compare(program_id, width))
-
-
-def make_server(port: int) -> HTTPServer:
-    """One request at a time on the main thread (a thread per request crashes the Qiskit native allocator)."""
-    return HTTPServer(("127.0.0.1", port), Handler)
+def make_server(port: int):
+    return http_server.make_server(Handler, port)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--port", type=int, default=8001)
-    parser.add_argument("--no-browser", action="store_true", help="do not open a browser window")
-    args = parser.parse_args()
-    server = make_server(args.port)
-    url = f"http://127.0.0.1:{args.port}/"
-    print(f"Qrisp comparison running at {url} (Ctrl+C to stop)")
-    if not args.no_browser:
-        webbrowser.open(url)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print()
-    finally:
-        server.server_close()
+    http_server.serve(Handler, name="Qrisp comparison", description=__doc__.split("\n\n")[0], default_port=8001)
 
 
 if __name__ == "__main__":

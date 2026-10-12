@@ -48,10 +48,13 @@ Loops never reach this analysis: the unroll pass has already expanded them.
 
 Rename must have run first, so every name is a unique version.
 """
-from typing import Dict, FrozenSet, Iterator, NamedTuple, Optional, Sequence, Set, Tuple
+from typing import Dict, FrozenSet, NamedTuple, Optional, Sequence, Set, Tuple
 
 from parser.grammar import Assign, ExprStmt, FunctionDef, If, Node, Return, Unassign
-from passes.names import defined as _defined, read as _read, results as _results, variables as _variables
+from passes.names import defined as _defined
+from passes.names import read as _read
+from passes.names import results as _results
+from passes.names import variables as _variables
 
 _NONE: FrozenSet[str] = frozenset()
 
@@ -127,11 +130,11 @@ def _release(edges: Set[FrozenSet[str]], released: str) -> Set[FrozenSet[str]]:
 def _reads(body: Sequence[Node], effects: Sequence[_Effects]) -> Dict[str, FrozenSet[str]]:
     """The versions that must still exist when each version is released."""
     reads: Dict[str, FrozenSet[str]] = {}
-    for statement, e in zip(body, effects):
+    for statement, e in zip(body, effects, strict=True):
         if isinstance(statement, Assign):
             reads[statement.name] = e.uses
         elif isinstance(statement, If):
-            reads.update({target: e.uses for target in e.defs})
+            reads.update(dict.fromkeys(e.defs, e.uses))
         elif isinstance(statement, Unassign):
             reads[statement.name] = _variables(statement.witness) - {statement.name}
     return reads
@@ -182,7 +185,7 @@ def _reclaim_points(
         earliest = max(last_use.get(name, defined_at[name]), defined_at[name]) + 1
         after_dependents = [p for other, p in reclaim.items() if name in reads.get(other, ())]
         reclaim[name] = max([earliest, *after_dependents])
-    for statement, e in zip(body, effects):
+    for statement, e in zip(body, effects, strict=True):
         if isinstance(statement, If):
             produced = [name for name in e.defs if name in reclaim]
             if produced:
@@ -219,13 +222,13 @@ def _analyse(
             if effects[k].releases:
                 edges = _release(edges, effects[k].releases)
 
-    returned = frozenset().union(*(e.uses for s, e in zip(body, effects) if isinstance(s, Return)))
+    returned = frozenset().union(*(e.uses for s, e in zip(body, effects, strict=True) if isinstance(s, Return)))
     permanent = (escaping - keep_for) | returned  # versions that are never released
     reads = _reads(body, effects)
-    groups = {name: e.defs for s, e in zip(body, effects) if isinstance(s, If) for name in e.defs}
+    groups = {name: e.defs for s, e in zip(body, effects, strict=True) if isinstance(s, If) for name in e.defs}
     kept = _kept(keep_for, permanent, reads, groups, {name for e in effects for name in e.defs})
     outputs = escaping | kept | returned
-    defined_at = {p: 0 for p in params}
+    defined_at = dict.fromkeys(params, 0)
     defined_at.update({name: k + 1 for k, e in enumerate(effects) for name in e.defs})
     dies_at = {}
     for name, start in defined_at.items():

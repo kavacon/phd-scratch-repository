@@ -2,8 +2,8 @@ import unittest
 
 from parser.parser import parse as parse_with
 from passes.balance import balance
-from passes.rename import rename
 from passes.liveness import analyse_program
+from passes.rename import rename
 
 
 def parse(source):

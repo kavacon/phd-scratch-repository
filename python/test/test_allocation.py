@@ -1,17 +1,18 @@
 import textwrap
 import unittest
 
+from test_flatten import is_flat, is_plain
+
+from allocation_poc.printer import unparse
+from allocation_poc.simulate import SimulationError, simulate
+from parser.ast_tools import walk
+from parser.grammar import If, Unassign
 from parser.parser import parse
 from passes.allocation import lower_allocation
 from passes.balance import balance
 from passes.flatten import flatten
 from passes.rename import rename
 from passes.unroll import unroll
-from allocation_poc.printer import unparse
-from allocation_poc.simulate import SimulationError, simulate
-from parser.grammar import If, Unassign
-from parser.parser import walk
-from test_flatten import is_flat, is_plain
 
 
 def compiled(source):
@@ -289,7 +290,7 @@ class InsertionBehaviourTestCase(unittest.TestCase):
                     before = simulate(parse(source, passes=())).value  # the program as written, loops and all
                     after = simulate(compiled(source))
                     self.assertEqual(before, after.value)
-                    self.assertEqual({}, {s: l for s, l in after.leaks.items() if l}, "registers left behind")
+                    self.assertEqual({}, {s: held for s, held in after.leaks.items() if held}, "registers left behind")
 
     def test_every_release_is_one_operation_and_every_condition_is_a_register(self):
         # including the releases of what an if produced, which used to re-test a nested expression inline

@@ -122,7 +122,7 @@ class UnrollBehaviourTestCase(unittest.TestCase):
                     before = simulate(parse(text, passes=()))
                     after = simulate(parse(text))
                     self.assertEqual(before.value, after.value)
-                    self.assertEqual({}, {s: l for s, l in after.leaks.items() if l})
+                    self.assertEqual({}, {s: held for s, held in after.leaks.items() if held})
 
 
 if __name__ == '__main__':

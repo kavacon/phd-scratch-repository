@@ -1,17 +1,18 @@
 import unittest
 from unittest import mock
 
-from allocation_poc import circuits, demo
+from allocation_poc import demo, drawing
 from allocation_poc.demo import run_pipeline
 from allocation_poc.programs import PROGRAMS
-from allocation_poc.simulate import simulate_isa
 from parser.parser import parse
 from passes.allocate import allocate
 from passes.isa import lower_to_isa
 from passes.qasm import to_openqasm
+from utils import qiskit_tools
+from utils.text import MAX_TEXT_LINES
 
-needs_qiskit = unittest.skipUnless(circuits.qiskit_available(), "Qiskit is not installed")
-needs_aer = unittest.skipUnless(circuits.qiskit_available() and circuits.aer_available(), "Qiskit Aer is not installed")
+needs_qiskit = unittest.skipUnless(qiskit_tools.qiskit_available(), "Qiskit is not installed")
+needs_aer = unittest.skipUnless(qiskit_tools.qiskit_available() and qiskit_tools.aer_available(), "Qiskit Aer is not installed")
 
 SMALL = [
     "a = 3; b = a + 2; return b;",
@@ -32,25 +33,25 @@ class QiskitStagesTestCase(unittest.TestCase):
     def test_the_generated_text_loads_into_qiskit_with_the_same_wires_and_gate_count(self):
         for source in SMALL + [p["source"] for p in PROGRAMS]:
             circuit = self.circuit(source, 6)
-            loaded = circuits.read(circuit.text)
+            loaded = qiskit_tools.read(circuit.text)
             self.assertEqual(circuit.qubits, loaded.num_qubits)
-            self.assertEqual(len(circuit.gates), circuits.measure(loaded)["gates"], source[:40])
+            self.assertEqual(len(circuit.gates), qiskit_tools.measure(loaded)["gates"], source[:40])
 
     def test_the_optimised_circuit_uses_only_u_and_cx(self):
-        optimised = circuits.optimise(circuits.read(self.circuit(SMALL[1]).text))
-        self.assertLessEqual(set(circuits.measure(optimised)["ops"]), {"u", "cx", "measure"})
+        optimised = qiskit_tools.optimise(qiskit_tools.read(self.circuit(SMALL[1]).text))
+        self.assertLessEqual(set(qiskit_tools.measure(optimised)["ops"]), {"u", "cx", "measure"})
 
     def test_measurements_are_counted_apart_from_gates_and_survive_optimisation(self):
         circuit = self.circuit("a = 3; b = a + 2; return b;")
-        loaded = circuits.read(circuit.text)
-        before, after = circuits.measure(loaded), circuits.measure(circuits.optimise(loaded))
+        loaded = qiskit_tools.read(circuit.text)
+        before, after = qiskit_tools.measure(loaded), qiskit_tools.measure(qiskit_tools.optimise(loaded))
         self.assertEqual((len(circuit.measured), len(circuit.measured)), (before["measurements"], after["measurements"]))
         self.assertEqual(len(circuit.gates), before["gates"])  # the measurements are not gates
         self.assertEqual(len(circuit.measured), before["ops"]["measure"])
 
     def test_measure_counts_gates_depth_and_the_wires_that_are_touched(self):
-        loaded = circuits.read("OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit[5] q;\nx q[0];\ncx q[0], q[1];\nccx q[0], q[1], q[2];\n")
-        measured = circuits.measure(loaded)
+        loaded = qiskit_tools.read("OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit[5] q;\nx q[0];\ncx q[0], q[1];\nccx q[0], q[1], q[2];\n")
+        measured = qiskit_tools.measure(loaded)
         self.assertEqual((3, 2, 3, 5, 3), (measured["gates"], measured["two_qubit"], measured["depth"], measured["wires"], measured["touched"]))
         self.assertEqual({"x": 1, "cx": 1, "ccx": 1}, measured["ops"])
 
@@ -85,7 +86,7 @@ class CircuitStagesInTheDemoTestCase(unittest.TestCase):
 
     def test_only_the_start_of_a_long_circuit_is_shown(self):
         stage = self.stages(PROGRAMS[0]["source"])["optimise"]  # thousands of gates once rewritten into u and cx
-        self.assertLessEqual(len(stage["text"].splitlines()), demo.MAX_CIRCUIT_LINES + 1)
+        self.assertLessEqual(len(stage["text"].splitlines()), MAX_TEXT_LINES + 1)
         self.assertIn("more lines", stage["text"].splitlines()[-1])
 
     def test_a_division_program_stops_at_the_circuit_with_an_explanation(self):
@@ -94,7 +95,7 @@ class CircuitStagesInTheDemoTestCase(unittest.TestCase):
         self.assertIn("div is not supported", stage["error"])
 
     def test_the_rewrite_stages_say_so_when_qiskit_is_missing(self):
-        with mock.patch.object(circuits, "qiskit_available", return_value=False):
+        with mock.patch.object(qiskit_tools, "qiskit_available", return_value=False):
             stages = self.stages(PROGRAMS[0]["source"])
         self.assertIsNone(stages["qasm"]["circuit"])
         self.assertIn("Qiskit", stages["optimise"]["error"])
@@ -150,7 +151,7 @@ class DiagramTestCase(unittest.TestCase):
 
     def test_a_long_circuit_is_cut_at_a_fixed_number_of_layers(self):
         picture = self.stages(PROGRAMS[0]["source"], 6)["optimise"]["diagram"]
-        self.assertLessEqual(picture["layers"], circuits.MAX_LAYERS)
+        self.assertLessEqual(picture["layers"], drawing.MAX_LAYERS)
         self.assertLess(picture["shown"], picture["total"])
 
 
