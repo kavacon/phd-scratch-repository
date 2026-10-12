@@ -1,36 +1,28 @@
 \section{Background and related work}\label{sec:background}
-Prior research provides classifications, abstraction requirements and evaluation methods for quantum programming.
-These address different aspects of programmer-facing abstraction.
-
-\subsection{Prior surveys and taxonomies}\label{subsec:background:prior_surveys}
 An early survey classified quantum programming languages by imperative, functional and formal semantic approaches, identifying complex data structures and expressive quantum control as structural gaps~\cite{Gay2006QPLSurvey}.
 Its scope preceded contemporary frameworks and excluded hosted quantum libraries on grounds of insufficient language-level formalisation~\cite{Gay2006QPLSurvey}.
 
-Later comparisons distinguish stated abstraction from properties of programs.
 A survey of quantum SDKs and frameworks found no consistent progression toward greater separation from the quantum substrate~\cite{furntratt2024higherabstractionlevels}.
 An evaluation using lines of code, cyclomatic complexity and Halstead complexity found that higher-level claims did not consistently correspond to lower complexity, nor did standalone languages systematically outperform hosted libraries~\cite{corralesgarro2025productivityexpressiveness}.
 
 A quantum IR review assessed hardware agnosticism, optimisation, tooling accessibility and ease of use~\cite{irreview2024}.
 QIR, Q-MLIR and related systems could perform well technically while remaining difficult to access through tooling~\cite{irreview2024}.
-Its comparison remains within the IR tier.
 
-These approaches compare paradigms, code complexity and technical capabilities.
-They do not provide the cross-tier, task-based account of mandatory quantum vocabulary and programming obligations developed here.
+These comparisons examine paradigms, code complexity and technical capabilities rather than the cross-tier, task-based account of mandatory quantum vocabulary and programming obligations developed here.
 
 \subsection{Abstraction requirements and documented gaps}\label{subsec:background:abstraction}
-The abstraction hierarchy requires separation of algorithmic intent from quantum realisation and hardware-specific implementation~\cite{DiMatteo2024AbstractionHierarchy}.
-Work on quantum abstract machines proposes fifteen criteria, with no examined candidate satisfying the three programming-layer criteria of symbolic denotational syntax, representation-independent data types and a stable instruction set architecture~\cite{nunez_corrales2025betterabstractmachines}.
-The analysis identifies a definitional coupling between instruction symbols and circuit primitives, with an application-programming target independent of qubit modality and gate-set choice~\cite{nunez_corrales2025betterabstractmachines}.
+Work on quantum abstract machines identifies programming-layer requirements for separating computational intent from quantum implementation.
+These include symbolic denotational syntax, representation-independent data types and a stable instruction set architecture, which no examined candidate jointly satisfies~\cite{nunez_corrales2025betterabstractmachines}.
+The analysis identifies coupling between instruction symbols and circuit primitives and proposes an application-programming target independent of qubit modality and gate-set choice~\cite{nunez_corrales2025betterabstractmachines}.
 
-Quantum semantics constrain the abstractions used to achieve that separation.
+Quantum semantics constrain how implementations achieve that separation.
 No-cloning restricts copying, observation can change quantum data and temporary computations require a reversible clean-up account~\cite{yuan2025foundationalabstractions}.
 Classical control constructs cannot transfer unrestrictedly to superposition while preserving unitary behaviour~\cite{yuan2025foundationalabstractions}.
 These constraints must be respected by implementations but do not by themselves determine which obligations remain visible to programmers.
 
-The software engineering account of higher-level abstraction identifies bespoke circuit construction as an obstacle and argues for removing quantum-mechanical prerequisites from programming~\cite{cobb2022higherlevelabstractions}.
-Among 251 surveyed quantum programmers, 86\% had at least five years of classical programming experience, yet quantum-specific vocabulary remained a dominant challenge~\cite{ferreira2024qplusage}.
-
-Together, these sources motivate examining programmer obligations directly rather than treating improved tooling, language packaging or reduced code complexity as sufficient evidence of abstraction.
+Among 251 surveyed quantum programmers, 86\% had at least five years of classical programming experience, yet quantum-specific vocabulary remained a prominent challenge~\cite{ferreira2024qplusage}.
+Substantial classical programming experience therefore does not remove the need to learn quantum-specific concepts.
+The review examines those requirements directly rather than treating improved tooling, language packaging or reduced code complexity as sufficient evidence of abstraction.
 
 \subsection{Programming language usability frameworks}\label{subsec:background:usability}
 PLIERS grounds programming language evaluation in language goals and intended users' requirements~\cite{Coblenz2021PLIERS}.

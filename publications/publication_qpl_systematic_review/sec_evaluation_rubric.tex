@@ -24,8 +24,8 @@ The lenses guide interpretation rather than being assessed directly; tier assign
 \fi
 
 \subsection{Representative task suite}\label{subsec:evaluation_instrument:task_suite}
-Representative tasks ground evaluation in concrete programmer intent~\cite{Myers2016PLUsabilitySIG}.
-Following PLIERS, four tasks were defined before evaluation to reflect real workflows and use each language's primary surface model rather than optional escape hatches~\cite{Coblenz2021PLIERS}.
+Four tasks were pre-specified to examine programmer requirements, following goal-oriented language evaluation~\cite{Coblenz2021PLIERS}.
+Constructions use each system's primary surface model rather than optional low-level interfaces.
 
 \begin{description}
     \item[$T_1$ Deutsch--Jozsa]
@@ -44,16 +44,13 @@ Following PLIERS, four tasks were defined before evaluation to reflect real work
     Avoid measurement in the core construction where possible.
 \end{description}
 
-For every task, required measurement, sampling, shots or observable-boundary concepts are recorded in the condition outcomes, including where the system requires observation to expose the Bell construction's result.
-Tasks provide evidence for condition outcomes rather than scoring items.
+Required measurement, sampling, shots and observable-boundary concepts are recorded in the condition outcomes for every task, including Bell result extraction.
 
 \subsection{Conditions and outcome labels}\label{subsec:evaluation_instrument:conditions}
-Each system and task is assessed against the nine conditions in Table~\ref{tab:evaluation_instrument:expected_profile}.
+Each system and task is assessed against the nine conditions and expected tier profiles in Table~\ref{tab:evaluation_instrument:expected_profile}.
 \textbf{Fail (F)} indicates the condition is not met.
 \textbf{Constrained (C)} indicates the condition is met only partially or under restrictions, with some quantum-specific programming obligations remaining explicit.
 \textbf{Pass (P)} indicates the condition is met in the representative programming model.
-
-Table~\ref{tab:evaluation_instrument:expected_profile} defines the nine conditions and gives their expected outcomes by tier.
 
 \begin{table*}[t]
     \centering
@@ -84,5 +81,5 @@ Bell preparation does not require uncomputation in its core construction.
 C6 is read from the worst case across T1--T4: Bell preparation can avoid measurement internally, while the algorithmic tasks generally require result extraction.
 
 C2, C3 and C6 are the principal discriminators between High-level and Quantum-implicit.
-Quantum-implicit classification requires $C2$, $C3$, $C6$ and $C9$ to pass in representative $T_1$--$T_4$ constructions.
-These conditions are necessary but not sufficient.
+Quantum-implicit classification requires C2, C3, C6 and C9 to pass across the representative task suite.
+These passes are necessary but not sufficient: classification also requires a justified match to the tier definition.
