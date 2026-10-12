@@ -1,11 +1,9 @@
 \section{Review methodology}\label{sec:methodology}
 The review follows evidence-based software engineering guidelines~\cite{KitchenhamCharters2007SLR}, with a pre-registered protocol available at~\cite{kavadias2026qplSurveyProtocol}.
-The evaluation instrument is defined in Section~\ref{sec:evaluation_instrument}.
 
 \subsection{Search protocol}\label{subsec:methodology:search_protocol}
 Searches were conducted on 2026-05-19 across ACM Digital Library, IEEE Xplore and arXiv, with a literature cutoff of 2026-04-08.
-Later evidence was excluded from assessment.
-Official project and specification sites were consulted per system throughout assessment.
+Official project and specification sites were consulted per system throughout assessment; later evidence was excluded.
 
 Three verbatim search strings were applied consistently across the databases:
 \begin{description}
@@ -17,14 +15,13 @@ The searches retrieved 852 records from arXiv, 1{,}295 from ACM Digital Library 
 The combined 2{,}851 records yielded 2{,}233 unique records after deduplication.
 Per-database counts, search strings and URLs are published in Appendix~A of~\cite{kavadias2026qplSurveySupplementary}.
 
-Supplementary AI-assisted discovery used a scheduled agent to surface candidate papers from active project context fortnightly.
-Its dynamically generated queries are not reproducible verbatim and do not constitute a primary PRISMA search~\cite{page2021prisma}.
-All candidates were screened against the pre-specified criteria.
+Supplementary AI-assisted discovery used a scheduled agent to surface candidates from project context fortnightly.
+Its dynamically generated queries are not reproducible verbatim and do not constitute a primary database search.
+All candidates underwent the same eligibility screening.
 
 \subsection{Screening and selection}\label{subsec:methodology:screening}
-A bounded, pre-specified seed set informed search-strategy design and validation.
-Database searches provided the primary discovery mechanism.
-Extraction concerns each included system's authoritative papers, specifications and official documentation rather than the full retrieved corpus.
+A bounded, pre-specified seed set informed search design and validation.
+Database searches provided primary discovery; extraction concerns included systems' authoritative papers, specifications and documentation rather than the full retrieved corpus.
 
 Systems must satisfy at least three of four inclusion criteria:
 \begin{description}
@@ -34,23 +31,18 @@ Systems must satisfy at least three of four inclusion criteria:
     \item[$C_4$] Public documentation is enough to complete the representative tasks defined in Section~\ref{subsec:evaluation_instrument:task_suite} without access to private knowledge.
 \end{description}
 Exclusions comprise marketing-only primary materials, projects inactive for more than 36 months and documentation insufficient for representative workflows.
-The latest stable major release or specification available by 2026-04-08 is assessed.
-Earlier versions serve only as labelled historical contrasts.
+Assessment uses the latest stable major release or specification available at the cutoff; earlier versions serve only as labelled historical contrasts.
 
 Screening was conducted by one reviewer, with full-text exclusion rationales in Appendix~B of~\cite{kavadias2026qplSurveySupplementary}.
 Two additional reviewers participated in independent assessment and calibration reconciliation.
 The bounded review did not permit dual screening of the full inclusion corpus, which remains a review-process limitation~\cite{page2021prisma}.
 
-The eleven included systems are OpenQASM~3.0, QIR, Q-MLIR, Qiskit, PennyLane, Q\#, Silq, Qmod, Quff, Qwerty and Qutes.
-
-\subsection{Study quality assessment}\label{subsec:methodology:quality}
+\subsection{Evidence quality, extraction and synthesis}\label{subsec:methodology:quality}
 Source quality was assessed before extraction using a hierarchy adapted from evidence-based software engineering guidelines~\cite{KitchenhamCharters2007SLR}.
 Tier~1 comprises peer-reviewed journal or conference publications, tier~2 preprints from established groups with a peer-reviewed publication programme and tier~3 official specifications, standards-body publications and maintained documentation.
 No included system depends primarily on tier~4 grey literature.
-
 The non-tier~1 primary sources are QIR's official specification, classified as tier~3~\cite{qir_alliance_qir_spec_repo}, and Qmod's preprint, classified as tier~2~\cite{vax2025qmodexpressivehighlevelquantum}.
 
-\subsection{Data extraction and synthesis}\label{subsec:methodology:extraction}
 Each system and task $T_1$--$T_4$ is assessed against $C_1$--$C_9$ using the outcome labels in Section~\ref{sec:evaluation_instrument}.
 Outcomes are supported by minimal code constructions, primary-source citations and one-sentence justifications.
 
@@ -59,24 +51,22 @@ Constructed examples are used only where no canonical example exists for the tas
 They are labelled and require primary-source justification for every non-trivial feature.
 Abridgement may omit cited routines or helpers outside the evidence claim, but must not conceal the assessed mechanism.
 
-Records capture example type, sources, code, outcomes and justifications, and required escape hatches.
+Records capture example type, sources, code, outcomes, justifications and required low-level interfaces.
 Absent or ambiguous evidence received the more conservative outcome label.
 Appendices~C and~D publish the extraction dataset and assessed code samples respectively~\cite{kavadias2026qplSurveySupplementary}.
 
 Structured narrative synthesis groups systems by taxonomy tier without meta-analysis~\cite{KitchenhamCharters2007SLR}.
-The instrument's aggregation rules produce tier assignments justified by discriminating conditions, condition profiles and cited representative evidence.
+Tier assignments are justified by discriminating conditions, condition profiles and cited representative evidence.
 
 \subsection{Sensitivity analysis and threats to validity}\label{subsec:methodology:sensitivity}
 Pre-specified leave-one-out analysis examined sole or pivotal source dependencies~\cite{kavadias2026qplSurveyProtocol}.
-Two dependencies were identified.
 
-All Quff outcomes depend on one peer-reviewed source, with no additional published specification or paper available at the cutoff~\cite{wright2024quff}.
-Removing it leaves no evidence base.
-Its outcomes are retained with this dependency acknowledged.
+All Quff outcomes depend on one peer-reviewed paper, with no additional published specification or paper available at the cutoff~\cite{wright2024quff}.
+Removing it leaves no evidence base; its outcomes are retained with this dependency acknowledged.
 
 Two tier-relevant Qutes outcomes depend critically on a reversible-lifetime preprint~\cite{reversiblelifetime2026}.
 The HPDC~2025 paper alone would not sustain the same tier justification~\cite{faro2025qutes}.
-The mechanism's preprint status remains a limitation despite the broader programme's peer-reviewed publications.
+The mechanism's preprint status remains a limitation.
 
 The principal validity threats and mitigations are:
 \begin{itemize}
@@ -84,8 +74,8 @@ The principal validity threats and mitigations are:
     \item \textit{Task-suite dependence}: protocol-defined tasks and documented, prospective post-calibration amendments~\cite{kavadias2026qplSurveyProtocol}.
     \item \textit{Ecosystem maturity}: source tiers and per-claim confidence ratings.
     \item \textit{Version churn}: consistent assessment of stable releases available by 2026-04-08.
-    \item \textit{Publication bias}: specifications and maintainer documentation prevent under-representation of IR-tier and industry-produced frameworks~\cite{KitchenhamCharters2007SLR,page2021prisma}.
+    \item \textit{Publication bias}: specifications and maintainer documentation reduce the risk of under-representing IR-tier and industry-produced frameworks~\cite{KitchenhamCharters2007SLR,page2021prisma}.
     \item \textit{Evidence availability and representativeness}: uneven canonical coverage requires constructed examples, which can over-approximate idiomatic workflows.
-    These are labelled, supported by primary sources and record escape hatches or cross-layer leakage.
+    These are labelled, supported by primary sources and document required low-level operations.
     \item \textit{Interpretation drift}: common condition ladders, shared-subset calibration, outcome justifications and conservative treatment of ambiguous evidence.
 \end{itemize}

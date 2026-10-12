@@ -1,5 +1,4 @@
 \section{Discussion}\label{sec:discussion}
-The recorded profiles distinguish improvements in program organisation from the removal of quantum-specific programming obligations.
 
 \subsection{RQ1: Current abstraction levels and the quantum-implicit gap}\label{subsec:discussion:rq1}
 No reviewed system meets the quantum-implicit requirements across the representative task suite, as recorded in Table~\ref{tab:system_assessments:system_summary}.
@@ -13,23 +12,16 @@ High-level systems simplify additional obligations but only partially meet the p
 
 Tier assignments do not capture all differences in structured reversal, observation handling and composition.
 Q\#, Quff, Qutes and Qwerty provide program-like organisation or alternative expression mechanisms, yet their recorded profiles remain Framework because other obligations persist.
-Organising quantum operations does not by itself make quantum concepts non-mandatory.
 
 \subsection{RQ2: A new quantum programming language is justified}\label{subsec:discussion:rq2}
-OpenQASM exposes instruction sequences, while QIR and Q-MLIR supply compiler representations and lowering infrastructure.
-Their assessed constructions retain explicit quantum artefacts and resource identities.
-Qiskit and PennyLane provide reusable library structures and execution tooling, but programmers still author circuits or device-bound quantum operations.
-That infrastructure improves construction and execution without replacing the programmer's primary representation.
+OpenQASM, QIR and Q-MLIR retain explicit instruction or compiler representations and resource identities.
+Qiskit and PennyLane add library reuse and execution tooling without replacing circuit-oriented authoring.
+Q\#'s typed operations and structured reversal and Silq's program-level values and compiler-managed safety simplify construction without eliminating quantum-specific constructs and observation requirements~\cite{MicrosoftQSharpOverview,bichsel2020silq}.
 
-Q\# provides typed operations and structured reversible constructs, while Silq combines program-level values and composition with compiler-managed safety mechanisms~\cite{MicrosoftQSharpOverview,bichsel2020silq}.
-Both assessed suites nevertheless retain quantum-specific constructs and observation requirements.
-
-Qmod, Quff and Qutes provide synthesis, runtime inversion and task-specific implicit operations, respectively~\cite{vax2025qmodexpressivehighlevelquantum,wright2024quff,faro2025qutes}.
-Their assessed programs improve composition and compress result extraction.
-Qutes' membership operation passes every condition for its search task, without requiring explicit management of the assessed quantum obligations.
-That task-local success does not extend across the remaining constructions.
-Qwerty's basis-oriented approach changes the representation more substantially than circuit-library organisation~\cite{adams2024qwerty}.
-Its task-local improvements coexist with explicit staging, observation and phase reasoning elsewhere in the suite.
+Qmod provides synthesis, Quff runtime inversion and Qutes task-specific implicit operations, improving composition and result extraction without removing every obligation across the suite~\cite{vax2025qmodexpressivehighlevelquantum,wright2024quff,faro2025qutes}.
+Qutes' membership operation passes all nine conditions, but that success does not extend across its remaining constructions.
+Qwerty's basis-oriented programming changes the authoring representation, yet retains explicit staging, observation and phase reasoning elsewhere in the suite~\cite{adams2024qwerty}.
+Its artefact and resource-identity passes in Deutsch--Jozsa and Grover likewise do not extend across the complete task suite.
 
 Required quantum knowledge persists across these authoring models, particularly in phase estimation.
 This pattern is consistent with practitioner evidence identifying quantum vocabulary and insufficient higher-level abstraction as adoption barriers~\cite{ferreira2024qplusage}.
@@ -45,7 +37,6 @@ A new language that makes quantum realisation an implementation responsibility i
 The comparison does not establish that every possible adaptation of an existing system would fail.
 
 \subsection{Methodological reflections}\label{subsec:discussion:methodological_reflections}
-The results concern obligations exercised by representative constructions, not exhaustive system capabilities.
 OpenQASM's C7 passes despite the expected Assembly profile because the examples do not require timing, topology or pulse-level calibration.
 Task under-coverage, examples that avoid hardware-control features or changes in default assembly workflows could explain this outcome.
 The recorded pattern does not distinguish those explanations.
