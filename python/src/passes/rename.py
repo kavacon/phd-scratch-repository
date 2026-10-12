@@ -19,7 +19,19 @@ from dataclasses import fields, replace
 from typing import Dict, List, Sequence
 
 from parser.grammar import (
-    Assign, BinOp, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not, Param, Return, Unassign,
+    Assign,
+    BinOp,
+    Call,
+    Equals,
+    ExprStmt,
+    ForLoop,
+    FunctionDef,
+    If,
+    Node,
+    Not,
+    Param,
+    Return,
+    Unassign,
     Variable,
 )
 

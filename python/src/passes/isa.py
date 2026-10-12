@@ -17,11 +17,36 @@ variable (see passes.flatten).
 from typing import List, Optional, Tuple
 
 from parser.grammar import (
-    Assign, BinOp, Boolean, Call as CallNode, Equals, ExprStmt, FunctionDef, If, Node, Not, Number, Return,
-    Unassign, Variable,
+    Assign,
+    BinOp,
+    Boolean,
+    Equals,
+    ExprStmt,
+    FunctionDef,
+    If,
+    Node,
+    Not,
+    Number,
+    Return,
+    Unassign,
+    Variable,
+)
+from parser.grammar import (
+    Call as CallNode,
 )
 from parser.instructions import (
-    Alloc, Const, Ctrl, EndCtrl, Free, ICtrl, Instruction, IsaProgram, Op, Operand, Reg, inverse,
+    Alloc,
+    Const,
+    Ctrl,
+    EndCtrl,
+    Free,
+    ICtrl,
+    Instruction,
+    IsaProgram,
+    Op,
+    Operand,
+    Reg,
+    inverse,
 )
 
 _BINARY = {"+": "add", "-": "sub", "*": "mul", "/": "div", "<": "lt", ">": "gt", "!=": "ne", "&&": "and", "||": "or"}

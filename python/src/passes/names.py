@@ -1,24 +1,15 @@
 """Which names a statement reads and defines, including everything nested inside it."""
-from dataclasses import fields
-from typing import FrozenSet, Iterator, List, Sequence
+from typing import FrozenSet, List, Sequence
 
-from parser.grammar import (
-    Assign, ExprStmt, If, Node, Return, Unassign, Variable,
-)
+from parser.ast_tools import walk
+from parser.grammar import Assign, ExprStmt, If, Node, Return, Unassign, Variable
 
 _NONE: FrozenSet[str] = frozenset()
 
 
 def variables(node: Node) -> FrozenSet[str]:
-    def walk(n) -> Iterator[str]:
-        if isinstance(n, Variable):
-            yield n.name
-        for f in fields(n):
-            value = getattr(n, f.name)
-            for child in value if isinstance(value, tuple) else (value,):
-                if isinstance(child, Node):
-                    yield from walk(child)
-    return frozenset(walk(node))
+    """Every variable name that appears anywhere inside `node`."""
+    return frozenset(n.name for n in walk(node) if isinstance(n, Variable))
 
 
 def read(statement: Node) -> FrozenSet[str]:

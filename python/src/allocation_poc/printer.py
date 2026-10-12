@@ -2,9 +2,22 @@
 from typing import List, Sequence
 
 from parser.grammar import (
-    Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not,
-    Number, Return, Unassign, Variable,
+    Assign,
+    BinOp,
+    Boolean,
+    Call,
+    ExprStmt,
+    ForLoop,
+    FunctionDef,
+    If,
+    Node,
+    Not,
+    Number,
+    Return,
+    Unassign,
+    Variable,
 )
+from parser.instructions import Alloc, Ctrl, EndCtrl, Free, ICtrl, IOp, Op, Reg
 
 
 def unparse(program: Sequence[Node]) -> str:
@@ -59,7 +72,6 @@ def _stmt(node: Node, depth: int) -> List[str]:
 
 
 def _operand_text(operand) -> str:
-    from parser.instructions import Reg
     if isinstance(operand, Reg):
         return operand.name
     value = operand.value
@@ -67,7 +79,6 @@ def _operand_text(operand) -> str:
 
 
 def _instruction_lines(instruction, depth: int) -> List[str]:
-    from parser.instructions import Alloc, Ctrl, EndCtrl, Free, ICtrl, IOp, Op
     pad = "    " * depth
     if isinstance(instruction, Alloc):
         return [f"{pad}ALLOC {instruction.register}"]
@@ -94,7 +105,6 @@ def unparse_instruction(instruction) -> str:
 def unparse_isa(program) -> str:
     """The instructions in order, then the returned value. Instructions inside a control region are indented, which
     is only for reading: the list itself is flat."""
-    from parser.instructions import Ctrl, EndCtrl, ICtrl
     lines: List[str] = []
     depth = 0
     for instruction in program.body:

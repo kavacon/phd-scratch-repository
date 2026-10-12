@@ -4,8 +4,9 @@ import unittest
 from allocation_poc.printer import unparse
 from allocation_poc.programs import PROGRAMS
 from allocation_poc.simulate import simulate
+from parser.ast_tools import walk
 from parser.grammar import Assign, BinOp, Boolean, Call, Equals, ExprStmt, If, Not, Number, Return, Unassign, Variable
-from parser.parser import parse, walk
+from parser.parser import parse
 from passes.flatten import FlattenError, flatten
 from passes.unroll import unroll
 

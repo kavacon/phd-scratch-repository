@@ -2,10 +2,25 @@ import unittest
 
 from lark.exceptions import UnexpectedInput
 
+from parser.ast_tools import rewrite, walk
 from parser.grammar import (
-    Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Not, Number, Param, Return, Unassign, Variable,
+    Assign,
+    BinOp,
+    Boolean,
+    Call,
+    Equals,
+    ExprStmt,
+    ForLoop,
+    FunctionDef,
+    If,
+    Not,
+    Number,
+    Param,
+    Return,
+    Unassign,
+    Variable,
 )
-from parser.parser import parse, rewrite, walk
+from parser.parser import parse
 
 
 def raw(source):
@@ -134,7 +149,7 @@ class ReturnRulesTestCase(unittest.TestCase):
 class PassesTestCase(unittest.TestCase):
     def test_passes(self):
         source = "x = 1; return x;"
-        self.assertEqual([], parse(source, passes=[lambda p: []]))
+        self.assertEqual([], parse(source, passes=[lambda _program: []]))
         self.assertEqual(raw(source), parse(source, passes=()))
         self.assertEqual(Assign("x#1", Number(1)), parse(source)[0])  # default passes include rename
 

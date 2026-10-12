@@ -20,10 +20,23 @@ For a call `f(a, b)`:
 A call whose value is discarded still runs its body, and its locals are released like any other.
 """
 from dataclasses import fields, replace
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from typing import Dict, List, Sequence, Set, Tuple
 
 from parser.grammar import (
-    Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not, Number, Return, Unassign,
+    Assign,
+    BinOp,
+    Boolean,
+    Call,
+    Equals,
+    ExprStmt,
+    ForLoop,
+    FunctionDef,
+    If,
+    Node,
+    Not,
+    Number,
+    Return,
+    Unassign,
     Variable,
 )
 
@@ -144,7 +157,7 @@ class _Inliner:
         prefix = f"{node.name}{self.counts[node.name]}."
         written = _written(statements)
         mapping: Dict[str, Node] = {}
-        for param, argument in zip(params, arguments):
+        for param, argument in zip(params, arguments, strict=True):
             if isinstance(argument, _ATOMS) and param not in written:
                 mapping[param] = argument
             else:  # computed once into a local, or copied because the callee changes it

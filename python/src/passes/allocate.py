@@ -30,7 +30,18 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 from parser.instructions import (
-    Alloc, Const, Ctrl, EndCtrl, Free, ICtrl, IOp, Instruction, IsaProgram, Op, Operand, Reg,
+    Alloc,
+    Const,
+    Ctrl,
+    EndCtrl,
+    Free,
+    ICtrl,
+    Instruction,
+    IOp,
+    IsaProgram,
+    Op,
+    Operand,
+    Reg,
 )
 
 
@@ -90,6 +101,64 @@ def slot_name(slot: int) -> str:
     return f"R{slot}"
 
 
+class _Allocator:
+    """Walks a program once, giving each logical register the lowest free slot and rewriting every use of it."""
+
+    def __init__(self) -> None:
+        self.free: List[int] = []
+        self.opened = 0
+        self.held: Dict[int, Held] = {}
+        self.operands: Dict[str, Operand] = {}
+
+    def operand(self, operand: Operand) -> Operand:
+        if isinstance(operand, Const):
+            return operand
+        if operand.name not in self.operands:
+            raise AllocationError(f"{operand.name} is used before it is allocated")
+        return self.operands[operand.name]
+
+    def register(self, name: str) -> str:
+        mapped = self.operands.get(name)
+        if not isinstance(mapped, Reg):
+            raise AllocationError(f"{name} is written before it is allocated")
+        return mapped.name
+
+    def alloc(self, instruction: Alloc) -> Tuple[Instruction, int]:
+        if self.free:
+            slot = min(self.free)
+            self.free.remove(slot)
+        else:
+            slot, self.opened = self.opened, self.opened + 1
+        self.held[slot] = Held(slot, instruction.register)
+        self.operands[instruction.register] = Reg(slot_name(slot))
+        return Alloc(slot_name(slot)), slot
+
+    def release(self, instruction: Free) -> Tuple[Instruction, int]:
+        name = self.register(instruction.register)
+        slot = int(name[1:])
+        del self.held[slot]
+        self.free.append(slot)
+        return Free(name), slot
+
+    def rewrite(self, instruction: Instruction) -> Tuple[Instruction, Optional[int]]:
+        """The instruction on physical slots, and the slot it opened or closed, if any."""
+        if isinstance(instruction, Alloc):
+            return self.alloc(instruction)
+        if isinstance(instruction, Free):
+            return self.release(instruction)
+        if isinstance(instruction, (Op, IOp)):
+            sources = tuple(self.operand(source) for source in instruction.sources)
+            return type(instruction)(instruction.opcode, self.register(instruction.dst), sources), None
+        if isinstance(instruction, (Ctrl, ICtrl)):
+            return type(instruction)(self.operand(instruction.control)), None
+        if isinstance(instruction, EndCtrl):
+            return instruction, None
+        raise AllocationError(f"cannot allocate {type(instruction).__name__}")
+
+    def snapshot(self) -> Tuple[Held, ...]:
+        return tuple(sorted(self.held.values(), key=lambda held: held.slot))
+
+
 def allocate(program: IsaProgram, register_width: int, qubits: int) -> Allocation:
     """Rewrite `program` onto numbered slots. Raises `WidthExceeded` if it needs more than the machine has."""
     if register_width < 1:
@@ -97,56 +166,16 @@ def allocate(program: IsaProgram, register_width: int, qubits: int) -> Allocatio
     if qubits < 0:
         raise ValueError("qubits cannot be negative")
 
-    free: List[int] = []
-    opened = 0
-    held: Dict[int, Held] = {}
-    operands: Dict[str, Operand] = {}
-    trace: List[Step] = []
-
-    def operand(o: Operand) -> Operand:
-        if isinstance(o, Const):
-            return o
-        if o.name not in operands:
-            raise AllocationError(f"{o.name} is used before it is allocated")
-        return operands[o.name]
-
-    def register(name: str) -> str:
-        mapped = operands.get(name)
-        if not isinstance(mapped, Reg):
-            raise AllocationError(f"{name} is written before it is allocated")
-        return mapped.name
-
+    allocator = _Allocator()
     body: List[Instruction] = []
+    trace: List[Step] = []
     for instruction in program.body:
-        changed: Optional[int] = None
-        if isinstance(instruction, Alloc):
-            if free:
-                changed = min(free)
-                free.remove(changed)
-            else:
-                changed, opened = opened, opened + 1
-            held[changed] = Held(changed, instruction.register)
-            operands[instruction.register] = Reg(slot_name(changed))
-            physical: Instruction = Alloc(slot_name(changed))
-        elif isinstance(instruction, Free):
-            name = register(instruction.register)
-            changed = int(name[1:])
-            del held[changed]
-            free.append(changed)
-            physical = Free(name)
-        elif isinstance(instruction, (Op, IOp)):
-            physical = type(instruction)(instruction.opcode, register(instruction.dst), tuple(operand(s) for s in instruction.sources))
-        elif isinstance(instruction, (Ctrl, ICtrl)):
-            physical = type(instruction)(operand(instruction.control))
-        elif isinstance(instruction, EndCtrl):
-            physical = instruction
-        else:
-            raise AllocationError(f"cannot allocate {type(instruction).__name__}")
+        physical, changed = allocator.rewrite(instruction)
         body.append(physical)
-        trace.append(Step(instruction, physical, tuple(sorted(held.values(), key=lambda h: h.slot)), changed))
+        trace.append(Step(instruction, physical, allocator.snapshot(), changed))
 
     slots = max(qubits // register_width - 1, 0)  # one register is kept back for scratch
-    result = Allocation(IsaProgram(tuple(body), operand(program.result)), register_width, qubits, slots, opened, tuple(trace))
+    result = Allocation(IsaProgram(tuple(body), allocator.operand(program.result)), register_width, qubits, slots, allocator.opened, tuple(trace))
     if not result.fits:
         raise WidthExceeded(result.needed, result.slots, result)
     return result

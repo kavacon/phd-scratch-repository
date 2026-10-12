@@ -4,8 +4,9 @@ import unittest
 from allocation_poc.printer import unparse
 from allocation_poc.programs import PROGRAMS
 from allocation_poc.simulate import simulate
+from parser.ast_tools import walk
 from parser.grammar import Call, FunctionDef
-from parser.parser import parse, walk
+from parser.parser import parse
 from passes.inline import InlineError, inline
 
 AREA = "function area(w: int, h: int): int { p = w * h; q = p + 1; return q; }"
@@ -149,7 +150,7 @@ class InlineBehaviourTestCase(unittest.TestCase):
         for program in PROGRAMS:
             with self.subTest(program=program["id"]):
                 result = simulate(parse(program["source"]))
-                self.assertEqual({}, {s: l for s, l in result.leaks.items() if l})
+                self.assertEqual({}, {s: held for s, held in result.leaks.items() if held})
 
 
 if __name__ == '__main__':

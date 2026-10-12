@@ -35,7 +35,16 @@ from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple, Union
 
 from parser.instructions import (
-    Alloc, Const, Ctrl, EndCtrl, Free, ICtrl, IOp, Instruction, Op, Operand, Reg,
+    Alloc,
+    Const,
+    Ctrl,
+    EndCtrl,
+    Free,
+    ICtrl,
+    IOp,
+    Op,
+    Operand,
+    Reg,
 )
 from passes.allocate import Allocation
 
@@ -149,7 +158,7 @@ class _Builder:
                 self.gate(q)
 
     def copy(self, dst: Sequence[int], src: Sequence[Bit]) -> None:
-        for q, bit in zip(dst, src):
+        for q, bit in zip(dst, src, strict=True):
             self.gate(q, [(bit, True)])
 
     def add_constant(self, acc: Sequence[int], value: int) -> None:
@@ -184,13 +193,12 @@ class _Builder:
         getattr(self, f"op_{opcode}", self.unsupported(opcode))(dst, *srcs)
 
     def fold(self, opcode: str, v: Sequence[int]) -> int:
-        w, mask = self.w, (1 << self.w) - 1
-        bit = lambda x: x & 1
+        mask = (1 << self.w) - 1
         table = {
             "copy": lambda a: a, "add": lambda a, b: (a + b) & mask, "sub": lambda a, b: (a - b) & mask,
             "mul": lambda a, b: (a * b) & mask, "lt": lambda a, b: int(a < b), "gt": lambda a, b: int(a > b),
             "eq": lambda a, b: int(a == b), "ne": lambda a, b: int(a != b),
-            "and": lambda a, b: bit(a) & bit(b), "or": lambda a, b: bit(a) | bit(b), "not": lambda a: 1 - bit(a),
+            "and": lambda a, b: (a & b) & 1, "or": lambda a, b: (a | b) & 1, "not": lambda a: 1 - (a & 1),
         }
         if opcode not in table:
             raise CircuitError(f"{opcode} is not supported yet")
@@ -265,7 +273,7 @@ class _Builder:
         elif _same(a, b):
             self.gate(dst[0])
         else:
-            pairs = [Gate(y.index, ((x.index, True),)) for x, y in zip(a, b)]
+            pairs = [Gate(y.index, ((x.index, True),)) for x, y in zip(a, b, strict=True)]
             self.gates += pairs
             self.gate(dst[0], [(y, False) for y in b])
             self.gates += list(reversed(pairs))
@@ -329,7 +337,7 @@ def to_openqasm(allocation: Allocation) -> Circuit:
     for instruction in allocation.program.body:
         if isinstance(instruction, (Alloc, Free)):
             continue  # a register's life is not a gate
-        elif isinstance(instruction, EndCtrl):
+        if isinstance(instruction, EndCtrl):
             regions.pop()
         elif isinstance(instruction, (Op, IOp)):
             dst = _bits(Reg(instruction.dst), width, needed)

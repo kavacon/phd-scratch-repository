@@ -1,11 +1,11 @@
 import textwrap
 import unittest
 
+from allocation_poc.printer import unparse
 from parser.grammar import Assign, If
-from parser.parser import _parser, parse, walk
+from parser.parser import _parser, parse
 from passes.balance import balance
 from passes.rename import RenameError, rename
-from allocation_poc.printer import unparse
 
 INPUT = """
 x = 1;

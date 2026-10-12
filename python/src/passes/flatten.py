@@ -23,8 +23,21 @@ intermediate is a temporary that liveness and release insertion see and release 
 from typing import List, Tuple
 
 from parser.grammar import (
-    Assign, BinOp, Boolean, Call, Equals, ExprStmt, ForLoop, FunctionDef, If, Node, Not, Number, Return,
-    Unassign, Variable,
+    Assign,
+    BinOp,
+    Boolean,
+    Call,
+    Equals,
+    ExprStmt,
+    ForLoop,
+    FunctionDef,
+    If,
+    Node,
+    Not,
+    Number,
+    Return,
+    Unassign,
+    Variable,
 )
 
 _ATOMS = (Number, Boolean, Variable)
@@ -62,7 +75,7 @@ class _Flattener:
             return Not(self.atom(expr.operand, out))
         if isinstance(expr, Equals):
             operands = [self.atom(o, out) for o in expr.operands]
-            pairs = [Equals((a, b)) for a, b in zip(operands, operands[1:])]
+            pairs = [Equals((a, b)) for a, b in zip(operands, operands[1:], strict=False)]
             if len(pairs) == 1:
                 return pairs[0]
             both = [self.atom(p, out) for p in pairs]  # each comparison in a register of its own

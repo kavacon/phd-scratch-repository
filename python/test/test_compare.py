@@ -1,10 +1,10 @@
 import importlib.util
 import unittest
 
-from allocation_poc import circuits
 from allocation_poc.programs import PROGRAMS
+from utils import qiskit_tools
 
-HAVE_QRISP = importlib.util.find_spec("qrisp") is not None and circuits.qiskit_available()
+HAVE_QRISP = importlib.util.find_spec("qrisp") is not None and qiskit_tools.qiskit_available()
 needs_qrisp = unittest.skipUnless(HAVE_QRISP, "Qrisp and Qiskit are not installed")
 
 
@@ -62,6 +62,7 @@ class CompareTestCase(unittest.TestCase):
 
     def test_the_server_handles_requests_on_one_thread(self):
         from socketserver import ThreadingMixIn
+
         from allocation_poc import compare
         server = compare.make_server(0)
         try:

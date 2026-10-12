@@ -4,10 +4,10 @@ import unittest
 from allocation_poc.circuits import gates_from_text, leftover_qubits, run_gates, value_of
 from allocation_poc.programs import PROGRAMS
 from allocation_poc.simulate import simulate_isa
+from parser.instructions import Const
 from parser.parser import parse
 from passes.allocate import allocate
 from passes.isa import lower_to_isa
-from parser.instructions import Const
 from passes.qasm import C, CircuitError, Gate, Q, _Builder, gate_text, to_openqasm
 
 W = 3
@@ -18,10 +18,14 @@ QUBITS = 4 * W
 A = [Q(i) for i in range(W)]
 B = [Q(W + i) for i in range(W)]
 D = [2 * W + i for i in range(W)]
-CONSTANT = lambda value: [C((value >> i) & 1) for i in range(W)]
+
+
+def constant(value):
+    return [C((value >> i) & 1) for i in range(W)]
+
 
 EXPECTED = {
-    "copy": lambda a, b: a, "add": lambda a, b: (a + b) & MASK, "sub": lambda a, b: (a - b) & MASK,
+    "copy": lambda a, _b: a, "add": lambda a, b: (a + b) & MASK, "sub": lambda a, b: (a - b) & MASK,
     "mul": lambda a, b: (a * b) & MASK, "lt": lambda a, b: int(a < b), "gt": lambda a, b: int(a > b),
     "eq": lambda a, b: int(a == b), "ne": lambda a, b: int(a != b),
 }
@@ -69,14 +73,14 @@ class OpcodeCircuitTestCase(unittest.TestCase):
             if opcode == "copy":
                 continue
             for a, c in itertools.product(range(1 << W), repeat=2):
-                self.check(opcode, (A, CONSTANT(c)), a, 0, f(a, c))
-                self.check(opcode, (CONSTANT(c), A), a, 0, f(c, a))
+                self.check(opcode, (A, constant(c)), a, 0, f(a, c))
+                self.check(opcode, (constant(c), A), a, 0, f(c, a))
 
     def test_an_operation_on_two_constants_is_computed_at_compile_time(self):
         for opcode, f in EXPECTED.items():
             if opcode == "copy":
                 continue
-            gates = build(opcode, CONSTANT(5), CONSTANT(3))
+            gates = build(opcode, constant(5), constant(3))
             self.assertTrue(all(not g.controls for g in gates), opcode)  # only X gates
             self.assertEqual(f(5, 3), decode(run_gates(gates, QUBITS), 2 * W))
 
@@ -101,7 +105,7 @@ class OpcodeCircuitTestCase(unittest.TestCase):
         with self.assertRaises(CircuitError):
             build("div", A, B)
         with self.assertRaises(CircuitError):
-            build("div", CONSTANT(4), CONSTANT(2))
+            build("div", constant(4), constant(2))
 
     def test_the_circuit_only_touches_the_scratch_qubit_it_needs(self):
         used = {g.target for g in build("add", A, B)} | {q for g in build("add", A, B) for q, _ in g.controls}
@@ -161,8 +165,12 @@ class ProgramCircuitTestCase(unittest.TestCase):
             circuit = to_openqasm(allocate(lower_to_isa(parse(source)), 6, 1000))
             qubits, gates = gates_from_text(circuit.text)
             self.assertEqual(circuit.qubits, qubits)
-            normal = lambda gs: [(g.target, sorted(g.controls)) for g in gs]  # the order of controls does not matter
-            self.assertEqual(normal(circuit.gates), normal(gates))
+            self.assertEqual(self.normal(circuit.gates), self.normal(gates))
+
+    @staticmethod
+    def normal(gates):
+        """The gates with their controls sorted: the order of controls does not matter."""
+        return [(gate.target, sorted(gate.controls)) for gate in gates]
 
     def test_the_layout_is_one_register_with_the_scratch_after_the_slots(self):
         allocation = allocate(lower_to_isa(parse(PROGRAMS[0]["source"])), 4, 100)
@@ -190,9 +198,9 @@ class MeasurementTestCase(unittest.TestCase):
         self.assertEqual([b.index for b in circuit.result], list(circuit.measured))
 
     def test_the_measurements_come_after_every_gate(self):
-        lines = [l for l in self.circuit("a = 3; b = a + 2; return b;").text.splitlines() if l and not l.startswith("//")]
-        first = next(i for i, l in enumerate(lines) if "measure" in l)
-        self.assertTrue(all("measure" in l for l in lines[first:]))
+        lines = [text for text in self.circuit("a = 3; b = a + 2; return b;").text.splitlines() if text and not text.startswith("//")]
+        first = next(i for i, text in enumerate(lines) if "measure" in text)
+        self.assertTrue(all("measure" in text for text in lines[first:]))
 
     def test_a_program_that_returns_a_literal_returns_a_register_holding_it_like_any_other(self):
         circuit = self.circuit("return 7;")

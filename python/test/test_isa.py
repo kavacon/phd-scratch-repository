@@ -5,7 +5,18 @@ from allocation_poc.printer import unparse_isa
 from allocation_poc.programs import PROGRAMS
 from allocation_poc.simulate import SimulationError, simulate, simulate_isa
 from parser.instructions import (
-    Alloc, Const, Ctrl, EndCtrl, Free, ICtrl, IOp, IsaProgram, Op, Reg, inverse, inverse_block,
+    Alloc,
+    Const,
+    Ctrl,
+    EndCtrl,
+    Free,
+    ICtrl,
+    IOp,
+    IsaProgram,
+    Op,
+    Reg,
+    inverse,
+    inverse_block,
 )
 from parser.parser import parse
 from passes.balance import balance
@@ -202,7 +213,7 @@ class LoweringBehaviourTestCase(unittest.TestCase):
                 before = simulate(parse(source, passes=())).value
                 after = simulate_isa(lowered(source))
                 self.assertEqual(before, after.value)
-                self.assertEqual({}, {s: l for s, l in after.leaks.items() if l}, "registers left held")
+                self.assertEqual({}, {s: held for s, held in after.leaks.items() if held}, "registers left held")
 
     def test_nothing_is_allocated_or_freed_inside_a_controlled_block(self):
         for source in self.sources():
@@ -223,8 +234,8 @@ class LoweringBehaviourTestCase(unittest.TestCase):
 
 
 class PreconditionTestCase(unittest.TestCase):
-    def run_body(self, *body, result=Const(0)):
-        return simulate_isa(IsaProgram(tuple(body), result))
+    def run_body(self, *body, result=None):
+        return simulate_isa(IsaProgram(tuple(body), Const(0) if result is None else result))
 
     def test_an_op_needs_a_zero_register_and_its_inverse_needs_the_value_it_computes(self):
         add = Op("add", "p", (Const(2), Const(3)))
@@ -301,7 +312,7 @@ class InverseTestCase(unittest.TestCase):
             with self.subTest(source=source):
                 program = lower_to_isa(parse(source, passes=(unroll, flatten, balance, rename)))
                 result = simulate_isa(IsaProgram(program.body + inverse_block(program.body), Const(0)))
-                self.assertEqual({}, {s: l for s, l in result.leaks.items() if l})
+                self.assertEqual({}, {s: held for s, held in result.leaks.items() if held})
 
 
 if __name__ == '__main__':
