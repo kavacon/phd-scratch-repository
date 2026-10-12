@@ -3,6 +3,7 @@ The evaluation instrument operationalises the taxonomy in Section~\ref{sec:taxon
 Tier assignment follows a justified match between evidence-backed condition profiles and expected tier profiles, subject to explicit quantum-implicit gating constraints.
 
 \ifthesis
+
 \subsection{Evaluation lenses}\label{subsec:evaluation_instrument:lenses}
 Five lenses guide interpretation of the programming evidence.
 \begin{description}
@@ -27,68 +28,61 @@ Representative tasks ground evaluation in concrete programmer intent~\cite{Myers
 Following PLIERS, four tasks were defined before evaluation to reflect real workflows and use each language's primary surface model rather than optional escape hatches~\cite{Coblenz2021PLIERS}.
 
 \begin{description}
-    \item[$T_1$ Deutsch--Jozsa] Implement the decision procedure for a small input size.
-    The minimum deliverable parameterises the construction for a small $n$, supplies an explicit oracle or the system's intended oracle hook with a balanced oracle by default and runs the procedure to expose a clear decision artefact.
+    \item[$T_1$ Deutsch--Jozsa]
+    Parameterise the decision procedure for small $n$, supply an explicit oracle or intended oracle hook with a balanced oracle by default and execute it to expose a decision artefact.
 
-    \item[$T_2$ Grover search] Implement one Grover iteration, or a small fixed number, for a simple marked-state or predicate oracle.
-    The minimum deliverable defines the oracle, implements a full iteration comprising an oracle phase flip followed by diffusion and provides the canonical execution and result-extraction pathway.
+    \item[$T_2$ Grover search]
+    Define a simple marked-state or predicate oracle and implement one or a small fixed number of complete iterations, each comprising oracle phase flip and diffusion.
+    Provide the canonical execution and result-extraction pathway.
 
-    \item[$T_3$ Quantum phase estimation] Implement phase estimation for a small unitary and precision.
-    The minimum deliverable documents a unitary $U$ with a known phase or eigenvalue, implements controlled-$U^{2^k}$ for $k=0,\ldots,t-1$ and supplies an inverse QFT explicitly or through a cited library routine.
-    The construction exposes estimated phase bits or a documented analogue.
+    \item[$T_3$ Quantum phase estimation]
+    For a small unitary $U$ with known phase or eigenvalue and small precision $t$, implement controlled-$U^{2^k}$ for $k=0,\ldots,t-1$ and an explicit inverse QFT or cited library routine.
+    Expose estimated phase bits or a documented analogue.
 
-    \item[$T_4$ Bell state preparation] Prepare a Bell state from $\ket{00}$ as a reusable construction.
-    The minimum deliverable defines or calls a routine producing an entangled pair and demonstrates follow-on use, such as passing the pair to another routine or applying an additional controlled operation.
-    Measurement is avoided in the core construction where possible.
+    \item[$T_4$ Bell state preparation]
+    Define or call a reusable routine preparing an entangled pair from $\ket{00}$ and demonstrate follow-on use by another routine or an additional controlled operation.
+    Avoid measurement in the core construction where possible.
 \end{description}
 
 For every task, required measurement, sampling, shots or observable-boundary concepts are recorded in the condition outcomes, including where the system requires observation to expose the Bell construction's result.
 Tasks provide evidence for condition outcomes rather than scoring items.
 
 \subsection{Conditions and outcome labels}\label{subsec:evaluation_instrument:conditions}
-Each system and task is assessed against nine conditions using three outcome labels.
-\textbf{Fail (F)} The condition is not met in representative constructions.
-\textbf{Constrained (C)} The condition is met only with restrictions, leakage of lower-layer obligations or reliance on escape hatches.
-\textbf{Pass (P)} The condition is met in the representative programming model for the task suite.
+Each system and task is assessed against the nine conditions in Table~\ref{tab:evaluation_instrument:expected_profile}.
+\textbf{Fail (F)} indicates the condition is not met.
+\textbf{Constrained (C)} indicates the condition is met only partially or under restrictions, with some quantum-specific programming obligations remaining explicit.
+\textbf{Pass (P)} indicates the condition is met in the representative programming model.
 
 Table~\ref{tab:evaluation_instrument:expected_profile} defines the nine conditions and gives their expected outcomes by tier.
 
 \begin{table*}[t]
     \centering
     \caption{Conditions and expected outcomes in representative $T_1$--$T_4$ constructions.
-    A = Assembly; IR = Intermediate representation; FW = Framework; HL = High-level; QI = Quantum-implicit.
-    Bold entries identify mandatory quantum-implicit gating outcomes.}
+    Bold entries identify mandatory QI gating outcomes.}
     \label{tab:evaluation_instrument:expected_profile}
     \footnotesize
     \setlength{\tabcolsep}{3pt}
     \begin{tabular}{lp{0.70\textwidth}ccccc}
         \toprule
-        \textbf{Condition} & \textbf{Definition} & \textbf{A} & \textbf{IR} & \textbf{FW} & \textbf{HL} & \textbf{QI} \\
+        \textbf{ID} & \textbf{Definition}                                                                                                                                             & \textbf{A} & \textbf{IR} & \textbf{FW} & \textbf{HL} & \textbf{QI}  \\
         \midrule
-        $C1$ & \textbf{Superposition introduced as a value.} Superposition-like quantum data is introduced without explicit qubit identity and gate-level initiation as the conceptual entry point. & $F$ & $F$ & $F$ & $C$ & $P$ \\
-        $C2$ & \textbf{Primary artefact is not a circuit/tape/IR.} Representative authoring is a program over values rather than construction or manipulation of a circuit, tape, IR or graph object. & $F$ & $F$ & $F$ & $C$ & $\mathbf{P}$ \\
-        $C3$ & \textbf{Qubit identity and lifetime not user-visible.} Representative constructions do not require explicit qubit handles, allocation, indexing, lifetime management, reset or release. & $F$ & $F$ & $F$ & $C$ & $\mathbf{P}$ \\
-        $C4$ & \textbf{Uncomputation not manual reverse-programming.} Clean-up is automatic or structured rather than requiring manual inversion as a normal correctness step. & $F$ & $F$ & $F$ & $C$ & $P$ \\
-        $C5$ & \textbf{Quantum and classical marking not mandatory.} Representative code does not require explicit marking or staging boundaries between quantum and classical computation. & $F$ & $F$ & $C/F$ & $C$ & $P$ \\
-        $C6$ & \textbf{Measurement or observation boundary absent from the surface model.} Getting results does not require explicit measurement, sampling, shots or observable-boundary concepts in representative constructions. & $F$ & $F$ & $F$ & $C$ & $\mathbf{P}$ \\
-        $C7$ & \textbf{Hardware adjacency optional and separated.} Basis gates, topology, timing and backend constraints are absent from representative programming, with tuning remaining opt-in. & $F$ & $C$ & $P$ & $P$ & $P$ \\
-        $C8$ & \textbf{Amplitude/phase and entanglement/interference concepts not required.} Correctness in representative programming does not require reasoning directly about amplitudes, phases, entanglement or interference. & $F$ & $F$ & $C/F$ & $C$ & $P$ \\
-        $C9$ & \textbf{First-class subroutine composition.} Larger programs are built by composing subroutines rather than circuit surgery or staging glue. & $F$ & $F$ & $C$ & $P$ & $\mathbf{P}$ \\
+        $C1$        & \textbf{Superposition as a value.} Introduced without explicit qubit identity or gate-level initiation as the conceptual entry point. & $F$ & $F$ & $F$ & $C$ & $P$ \\
+        $C2$        & \textbf{Primary artefact.} Programs over values, not construction or manipulation of circuits, tapes, IRs or graph objects. & $F$ & $F$ & $F$ & $C$ & $\mathbf{P}$ \\
+        $C3$        & \textbf{Resource identity and lifetime.} No required qubit handles, allocation, indexing, lifetime management, reset or release. & $F$ & $F$ & $F$ & $C$ & $\mathbf{P}$ \\
+        $C4$        & \textbf{Uncomputation not manual reverse-programming.} Clean-up is automatic or structured rather than requiring manual inversion as a normal correctness step. & $F$ & $F$ & $F$ & $C$ & $P$ \\
+        $C5$        & \textbf{Quantum/classical boundaries.} No mandatory explicit marking or staging between quantum and classical computation. & $F$ & $F$ & $C/F$ & $C$ & $P$ \\
+        $C6$        & \textbf{Observation boundary.} Results require no explicit measurement, sampling, shots or observable-boundary concepts. & $F$ & $F$ & $F$ & $C$ & $\mathbf{P}$ \\
+        $C7$        & \textbf{Hardware separation.} No required basis gates, topology, timing or backend constraints; tuning remains opt-in. & $F$ & $C$ & $P$ & $P$ & $P$ \\
+        $C8$        & \textbf{Required quantum knowledge.} Correctness requires no direct reasoning about amplitudes, phases, entanglement or interference. & $F$ & $F$ & $C/F$ & $C$ & $P$ \\
+        $C9$        & \textbf{Subroutine composition.} Larger programs compose subroutines rather than requiring circuit surgery or staging glue. & $F$ & $F$ & $C$ & $P$ & $\mathbf{P}$ \\
         \bottomrule
     \end{tabular}
 \end{table*}
 
-Task context affects $C4$ and $C6$ outcomes.
-Outcomes on $C4$ (uncomputation) are most strongly exercised by $T_1$--$T_3$, where oracle, diffusion and controlled-power constructions involve auxiliary state that must be released.
-Those outcomes are largely inert for $T_4$, which does not require uncomputation in its core construction.
-$C4$ outcomes are read primarily from $T_1$--$T_3$.
-Outcomes on $C6$ (measurement or observation boundary) admit a measurement-free core construction for $T_4$ but require a result-extraction step in $T_1$--$T_3$ in most systems.
-$C6$ outcomes are read from the worst case across $T_1$--$T_4$.
+C4 outcomes are read primarily from T1--T3, whose oracle, diffusion and controlled-power constructions exercise auxiliary-state clean-up.
+Bell preparation does not require uncomputation in its core construction.
+C6 is read from the worst case across T1--T4: Bell preparation can avoid measurement internally, while the algorithmic tasks generally require result extraction.
 
-Three cells distinguish the high-level and quantum-implicit tiers and act as the principal discriminators between them: $C2$ (primary artefact), $C3$ (qubit identity and lifetime) and $C6$ (measurement or observation boundary).
-The remaining conditions on which the two tiers might otherwise be compared, $C4$ (uncomputation) and $C9$ (subroutine composition), are both $P$ at high-level and quantum-implicit and therefore do not discriminate between them.
-
-\subsection{Quantum-implicit gating constraints}\label{subsec:evaluation_instrument:gating}
+C2, C3 and C6 are the principal discriminators between High-level and Quantum-implicit.
 Quantum-implicit classification requires $C2$, $C3$, $C6$ and $C9$ to pass in representative $T_1$--$T_4$ constructions.
 These conditions are necessary but not sufficient.
-Passing all four still requires a justified profile match against the tier definitions in Section~\ref{sec:taxonomy}.

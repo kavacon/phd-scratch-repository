@@ -1,178 +1,110 @@
 \section{System assessments}\label{sec:system_assessments}
-The instrument defined in Section~\ref{sec:evaluation_instrument} is applied to eleven primary systems using tasks T1--T4 and conditions C1--C9.
-The extraction dataset and assessed code are published in Appendices~C and~D of~\cite{kavadias2026qplSurveySupplementary}.
-The summaries below retain discriminating evidence and task-specific qualifications; Table~\ref{tab:system_assessments:system_summary} reports the aggregated profiles.
-Tower remains excluded from primary assessment.
-Interpretation of RQ1 and RQ2 is reserved for Section~\ref{sec:discussion}.
+Table~\ref{tab:system_assessments:system_summary} reports tier assignments and aggregated outcomes for eleven systems.
+Appendices~C and~D publish extraction data and assessed code~\cite{kavadias2026qplSurveySupplementary}.
+Tower is excluded from primary assessment.
+Constructed examples comprise OpenQASM T1--T2; QIR T1--T3; Q-MLIR and Quff T1, T3 and T4; Q\# and Qmod T3; and Silq and Qutes T3--T4.
 
-\subsection{Per-system evidence summaries}\label{subsec:system_assessments:per_system}
-
-\subsubsection{OpenQASM 3.0}\label{subsubsec:system_assessments:per_system:openqasm}
-The representative constructions use named gates on explicit, indexed \texttt{qubit} registers, with \texttt{measure} operations extracting classical results in T1--T3~\cite{cross2022openqasm3,kavadias2026qplSurveySupplementary}.
-T1 and T2 are constructed examples.
-The recorded profile assigns OpenQASM~3.0 to Assembly, with C2, C3, C6 and C9 all F.
-The C4 judgement records explicit reversal in T1--T3: the second Hadamard layer, the diffusion sequence \texttt{h; x; cz; x; h} and \texttt{inv @ phase(c)}.
-C9 is constrained in T1 and T3 through user-defined gates and modifiers, but fails in the inlined T2 and T4 constructions.
-C8 is constrained in T1--T3 and fails in the Bell example.
-C7 passes throughout because the examples use standard gates without exercising timing or pulse-level calibration, differing from the expected Assembly profile.
-
-\subsubsection{QIR}\label{subsubsec:system_assessments:per_system:qir}
-The assessed examples are LLVM-IR function bodies containing quantum intrinsic calls over opaque qubit and result handles; T1--T3 are constructed fragments~\cite{qir_alliance_qir_spec_repo,kavadias2026qplSurveySupplementary}.
-QIR is assigned to IR, with C2, C3 and C9 failing throughout.
-C4 records F for the explicit reversal steps in T1--T3, including the second Hadamard layer, diffusion and inverse-QFT decomposition.
-Although LLVM provides \texttt{define} and \texttt{call}, the assessed fragments contain flat intrinsic sequences, supporting the recorded C9 failure.
-C8 is constrained in T1--T2 and fails in T3--T4.
-C6 is unassessable because the evidence does not exercise result extraction.
-This is an evidence-coverage limitation, not a pass or a claim that QIR lacks measurement capability.
-C7 passes in the representative suite.
-
-\subsubsection{Q-MLIR}\label{subsubsec:system_assessments:per_system:qmlir}
-The assessed surface is a qcor-style \texttt{\_\_qpu\_\_} kernel using \texttt{qreg}, \texttt{qalloc(N)} and gate calls on indexed qubits~\cite{McCaskey2021MLIRDialectQASM,kavadias2026qplSurveySupplementary}.
-T1, T3 and T4 are constructed examples.
-Q-MLIR is assigned to IR, with C1, C2, C3 and C5 failing throughout.
-C4 fails in T1 and T3 but is constrained in T2, where \texttt{compute \{...\} action \{...\}} provides structured reversal.
-Kernel definitions and calls support constrained C9 outcomes rather than value-level composition.
-C8 is constrained in T1 and fails in T2--T4.
-The abstract gate namespace permits C7 to pass without removing the explicit qubit and gate model.
-
-\subsubsection{Qiskit}\label{subsubsec:system_assessments:per_system:qiskit}
-Each construction authors and mutates a \texttt{QuantumCircuit} through named gate calls and explicit qubit identities~\cite{aleksandrowicz2019qiskit,kavadias2026qplSurveySupplementary}.
-Even the minimal Bell example requires a circuit object and indexed Hadamard and controlled-X operations.
-The recorded profile assigns Qiskit to Framework.
-Composition through \texttt{qc.compose}, Grover operators and \texttt{QFT(3, inverse=True)} operates on circuits rather than replacing circuit authoring.
-C9 therefore records C in the aggregate.
-Explicit quantum/classical registers and measurement placement retain failed C5 and C6 outcomes.
-C8 is constrained in T1--T3 but fails in T4, while C4 remains F and C7 P in the aggregated profile.
-
-\subsubsection{PennyLane}\label{subsubsec:system_assessments:per_system:pennylane}
-Named operations on identified wires inside a device-bound \texttt{@qml.qnode} retain an explicit circuit authoring model~\cite{bergholm2018pennylane,kavadias2026qplSurveySupplementary}.
-PennyLane is assigned to Framework.
-T1 and T2 follow preparation, oracle, interference and readout recipes.
-T3 delegates phase-estimation structure to \texttt{qml.QuantumPhaseEstimation}, giving a task-local constrained C4 outcome without changing the circuit artefact.
-C4 remains F in the aggregate.
-Explicit staging and classical post-processing retain C5=F.
-Bell preparation contributes C8=F, while circuit-level reuse supports C9=C.
-Observation is unassessable in T3 and T4 but fails in T1 and T2, producing the recorded aggregate C6=F.
-
-\subsubsection{Q\#}\label{subsubsec:system_assessments:per_system:qsharp}
-The representative programs allocate qubits and apply typed operations using \texttt{use}, \texttt{within \{...\} apply \{...\}}, \texttt{Adjoint} and \texttt{Controlled}~\cite{MicrosoftQSharpOverview,kavadias2026qplSurveySupplementary}.
-T3 is constructed.
-The recorded profile assigns Q\# to Framework despite its standalone language surface.
-Structured reversal avoids manually duplicating inverse gate sequences, yielding C4=C across the main algorithmic tasks.
-Operation-level reuse supports C9=C and hardware concerns remain optional, giving C7=P.
-Explicit qubit commitments, quantum/classical boundaries and result extraction retain failures on C1--C3, C5 and C6.
-Phase estimation and Bell preparation require phase or entanglement reasoning, producing aggregate C8=F.
-
-\subsubsection{Silq}\label{subsubsec:system_assessments:per_system:silq}
-The assessed Silq programs manipulate quantum-typed values through functions rather than assembling circuit objects~\cite{bichsel2020silq,kavadias2026qplSurveySupplementary}.
-T3 and T4 are constructed examples.
-Reusable oracle and diffusion routines, together with a \texttt{bell\_pair} routine whose result is consumed by another routine, support C9=P.
-Result extraction remains explicit through \texttt{measure}, but without classical-register wiring, giving C6=C.
-The recorded profile assigns Silq to High-level, with C2--C6 constrained and C7 passing.
-Addressed Hadamard applications retain C1=F.
-The constructed phase-estimation example requires explicit phase reasoning and inverse-QFT decomposition, driving C8=F despite the program-level organisation.
-
-\subsubsection{Qmod (Classiq)}\label{subsubsec:system_assessments:per_system:qmod}
-Typed \texttt{qfunc}/\texttt{qperm} routines, explicit allocation and callable parameters provide reusable quantum program structure~\cite{vax2025qmodexpressivehighlevelquantum,kavadias2026qplSurveySupplementary}.
-T1 uses \texttt{within\_apply}; T2 uses \texttt{power} and \texttt{grover\_operator}.
-The recorded profile assigns Qmod to High-level, with C9=P and C2, C3, C5 and C6 constrained.
-T3 is constructed and retains explicit controlled powers, inverse-QFT code and \texttt{measure(count)}.
-C4 is recorded as failed because this phase-estimation construction requires manual inverse-QFT decomposition as ordinary code.
-Addressed Hadamard applications drive aggregate C1=F, and explicit phase reasoning in T3 drives C8=F.
-Hardware adjacency remains optional, giving C7=P.
-
-\subsubsection{Quff}\label{subsubsec:system_assessments:per_system:quff}
-Ordinary functions and higher-order oracle use coexist with quantum blocks, indexed registers and explicit \texttt{measure} calls~\cite{wright2024quff,kavadias2026qplSurveySupplementary}.
-T1, T3 and T4 are constructed examples.
-The recorded profile assigns Quff to Framework.
-Program-first organisation supports C2=C and C9=P, while explicit register identity retains C3=F.
-Inversion remains visible through \texttt{invertF(f, q)} in Grover and \texttt{invertF(qft, count)} in phase estimation, supporting C4=C.
-Compact result extraction supports C6=C rather than eliminating observation.
-The constructed phase-estimation unitary and controlled-power pattern retain explicit phase reasoning, producing C8=F.
-C1 also fails because superposition begins through quantum gate idioms.
-
-\subsubsection{Qutes}\label{subsubsec:system_assessments:per_system:qutes}
-The task suite spans classical-looking substring membership and explicitly quantum programs~\cite{faro2025qutes,reversiblelifetime2026,kavadias2026qplSurveySupplementary}.
-T3 and T4 are constructed.
-T2 expresses search as \texttt{"01" in b}, without visible qubits, circuit objects, measurement calls or amplitude reasoning; all nine conditions pass for that task.
-Other tasks retain quantum types, initialisation, indexed resources and gate operations.
-Result extraction through classical assignment or \texttt{measure} supports aggregate C6=C.
-The recorded profile assigns Qutes to Framework, with C2, C4--C6 constrained and C9 passing.
-Task-local relief in T2 does not remove aggregate C1 and C3 failures, while the constructed phase-estimation example drives C8=F.
-
-\subsubsection{Qwerty}\label{subsubsec:system_assessments:per_system:qwerty}
-Basis translations and oracle lifting express program structure without circuit-object assembly~\cite{adams2024qwerty,kavadias2026qplSurveySupplementary}.
-T1 and T2 use \texttt{oracle.sign} and translations such as \texttt{pm**N >> std**N}.
-These tasks pass C2, C3 and C4, while explicit \texttt{@qpu} staging and observation remain visible.
-T4 introduces a Bell pair through \texttt{'00' + '11'} and consumes it through another routine.
-T3 retains controlled powers, \texttt{fourier[prec].measure} and phase or eigenvalue reasoning.
-The aggregate profile assigns Qwerty to Framework: C1--C4 are constrained, C5, C6 and C8 fail, and C7 and C9 pass.
-Qwerty is the only reviewed system with aggregate C1=C rather than F.
-
-\subsection{Result summary}\label{subsec:system_assessments:summary}
-Table~\ref{tab:system_assessments:system_summary} preserves the recorded tier assignments and aggregated condition outcomes.
-The set comprises one Assembly system, two IR systems, six Framework systems and two High-level systems.
-No reviewed system is assigned to Quantum-implicit.
-
-\begin{table}[htbp*]
+\begin{table}[htbp]
     \centering
-    \caption{System assessment results. Tier is assigned by justified profile match under the task/condition instrument. Outcomes are recorded as F (fail), C (constrained), P (pass) or `-' (unassessable). A = Assembly; IR = Intermediate representation; FW = Framework; HL = High-level;}
+    \caption{System assessment result rubric.}
     \label{tab:system_assessments:system_summary}
-    \small
-    \begin{tabular}{@{}p{1.35cm}cccccccccc@{}}
+    \footnotesize
+    \setlength{\tabcolsep}{2pt}
+    \begin{tabular}{@{}llccccccccc@{}}
         \toprule
-        \textbf{System \& Tier} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
+        \textbf{Tier} & \textbf{System} & \textbf{C1} & \textbf{C2} & \textbf{C3} & \textbf{C4} & \textbf{C5} & \textbf{C6} & \textbf{C7} & \textbf{C8} & \textbf{C9} \\
         \midrule
-        OpenQASM 3.0 (A)        & F           & F           & F           & F           & F           & F           & P           & F           & F           \\
-        QIR (IR)                & F           & F           & F           & F           & F           & -           & P           & F           & F           \\
-        Q-MLIR (IR)             & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
-        Qiskit (FW)             & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
-        PennyLane (FW)          & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
-        Q\#  (FW)               & F           & F           & F           & C           & F           & F           & P           & F           & C           \\
-        Silq (HL)               & F           & C           & C           & C           & C           & C           & P           & F           & P           \\
-        Qmod (HL)               & F           & C           & C           & F           & C           & C           & P           & F           & P           \\
-        Quff (FW)               & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
-        Qutes (FW)              & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
-        Qwerty (FW)             & C           & C           & C           & C           & F           & F           & P           & F           & P           \\
+        A             & OpenQASM 3.0    & F           & F           & F           & F           & F           & F           & P           & F           & F           \\
+        \midrule
+        \multirow{IR}
+        & QIR             & F           & F           & F           & F           & F           & -           & P           & F           & F           \\
+        & Q-MLIR          & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
+        \midrule
+        \multirow{FW}
+        & Qiskit          & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
+        & PennyLane       & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
+        & Q\#             & F           & F           & F           & C           & F           & F           & P           & F           & C           \\
+        & Quff            & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
+        & Qutes           & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
+        & Qwerty          & C           & C           & C           & C           & F           & F           & P           & F           & P           \\
+        \midrule
+        \multirow{HL}
+        & Silq            & F           & C           & C           & C           & C           & C           & P           & F           & P           \\
+        & Qmod            & F           & C           & C           & F           & C           & C           & P           & F           & P           \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-\subsection{Comparative analysis}\label{subsec:system_assessments:comparative}
-Tier groupings refer to the assignments in Table~\ref{tab:system_assessments:system_summary}.
+\subsection{Artefacts, resource identity and composition}\label{subsec:system_assessments:artefacts_composition}
+Reuse remains instruction-level in OpenQASM: user-defined gates and modifiers constrain C9 in Deutsch--Jozsa and phase estimation, while the inlined Grover and Bell constructions fail~\cite{cross2022openqasm3,kavadias2026qplSurveySupplementary}.
+The programmer still names gates and indexed \texttt{qubit} registers.
+QIR's assessed LLVM-IR bodies likewise use flat quantum-intrinsic sequences over opaque qubit and result handles, giving C9=F despite LLVM's \texttt{define} and \texttt{call} facilities~\cite{qir_alliance_qir_spec_repo,kavadias2026qplSurveySupplementary}.
+Q-MLIR's qcor-style \texttt{\_\_qpu\_\_} kernel calls constrain rather than pass C9 because composition remains over \texttt{qreg}, \texttt{qalloc(N)} and indexed gate constructions~\cite{McCaskey2021MLIRDialectQASM,kavadias2026qplSurveySupplementary}.
 
-\subsubsection{Condition patterns and constraint drivers}\label{subsubsec:system_assessments:condition_patterns}
-C7 passes across all eleven aggregated profiles.
-The representative constructions therefore do not require hardware-specific authoring obligations.
-This does not imply that the systems lack hardware-control interfaces: the OpenQASM examples, for instance, do not exercise its timing and calibration extensions.
+Qiskit's \texttt{qc.compose}, Grover operators and \texttt{QFT(3, inverse=True)} reuse circuit structures without replacing \texttt{QuantumCircuit} authoring, giving C9=C~\cite{aleksandrowicz2019qiskit,kavadias2026qplSurveySupplementary}.
+Bell preparation also requires indexed Hadamard and controlled-X\@.
+PennyLane's circuit-level reuse likewise constrains C9 because named operations still act on identified wires within device-bound \texttt{@qml.qnode} constructions~\cite{bergholm2018pennylane,kavadias2026qplSurveySupplementary}.
 
-C2 and C3 remain persistent constraints.
-Circuit and IR constructions expose circuit objects, gate sequences or intrinsic calls alongside registers, wires or handles.
-Program-oriented systems improve C2 to constrained outcomes and often pass C9, but these improvements do not eliminate qubit identity across the suite.
-Composition and resource abstraction consequently improve independently rather than together.
+Value-level reuse is evidenced in Silq by oracle and diffusion routines and a \texttt{bell\_pair} result consumed by another routine, supporting C9=P~\cite{bichsel2020silq,kavadias2026qplSurveySupplementary}.
+Qmod's typed \texttt{qfunc}/\texttt{qperm} routines and callable parameters similarly support reusable program structure but retain explicit allocation~\cite{vax2025qmodexpressivehighlevelquantum,kavadias2026qplSurveySupplementary}.
+Quff's ordinary functions and higher-order oracles support C9=P while indexed registers retain C3=F~\cite{wright2024quff,kavadias2026qplSurveySupplementary}.
+Q\# instead records C9=C for typed operation-level reuse with qubits allocated through \texttt{use}~\cite{MicrosoftQSharpOverview,kavadias2026qplSurveySupplementary}.
 
-C6 also distinguishes compact observation from absent observation.
-Silq, Qmod, Quff and Qutes compress extraction into program-level operations and record constrained aggregate outcomes.
-Qwerty retains explicit observation despite task-local improvements in artefact and identity.
-QIR's unassessable C6 records incomplete observation evidence, not a positive result.
+Qutes' search expression \texttt{"01" in b} passes all nine conditions without visible qubits, circuits, measurement calls or amplitude reasoning; its other constructions retain quantum types, initialisation, indexed resources and gates~\cite{faro2025qutes,reversiblelifetime2026,kavadias2026qplSurveySupplementary}.
+Qwerty's \texttt{oracle\.sign} and \texttt{pmN >> stdN} translations pass C2, C3 and C4 in Deutsch--Jozsa and Grover without circuit-object assembly~\cite{adams2024qwerty,kavadias2026qplSurveySupplementary}.
+Its Bell construction \texttt{'00' + '11'} is consumed by another routine, but explicit \texttt{@qpu} staging and observation remain.
 
-Task-specific profiles qualify these aggregates.
-Qutes passes every condition in the membership-test task but retains quantum-explicit obligations elsewhere.
-Qwerty passes C2 and C3 in Deutsch--Jozsa and Grover, yet its phase-estimation construction retains constrained outcomes.
-Its aggregate C1=C distinguishes basis-oriented initiation from the gate-idiom initiation recorded for the remaining systems.
+\subsection{Reversal and clean-up}\label{subsec:system_assessments:reversal}
+The recorded OpenQASM C4 failures concern explicit reversal through the second Hadamard layer, Grover diffusion sequence \texttt{h; x; cz; x; h} and \texttt{inv @ phase(c)}~\cite{cross2022openqasm3,kavadias2026qplSurveySupplementary}.
+QIR similarly records C4=F for second-Hadamard, diffusion and inverse-QFT reversal steps~\cite{qir_alliance_qir_spec_repo,kavadias2026qplSurveySupplementary}.
+Q-MLIR's Grover example instead structures reversal through \texttt{compute{\dots} action{\dots}}, giving C4=C, while its Deutsch--Jozsa and phase-estimation outcomes remain F~\cite{McCaskey2021MLIRDialectQASM,kavadias2026qplSurveySupplementary}.
 
-Required-knowledge outcomes also depend on the task.
-Phase estimation concentrates failures involving phase or eigenvalue reasoning, while explicit Bell construction contributes entanglement-related failures in several circuit-oriented examples.
-Under the recorded aggregation, favourable task-local outcomes do not remove C8 failure elsewhere in the suite.
-The profiles therefore show selective relief of programming obligations, not uniform improvement across every condition.
+Q\#s \texttt{within {\dots} apply {\dots}}, \texttt{Adjoint} and \texttt{Controlled} support structured reversal without manually duplicated inverse sequences, giving C4=C across the main algorithmic tasks~\cite{MicrosoftQSharpOverview,kavadias2026qplSurveySupplementary}.
+Quff's \texttt{invertF(f, q)} in Grover and \texttt{invertF(qft, count)} in phase estimation likewise constrain C4 through visible inversion operations~\cite{wright2024quff,kavadias2026qplSurveySupplementary}.
+
+Library delegation does not produce a uniform task profile: PennyLane's \texttt{qml.QuantumPhaseEstimation} gives task-local C4=C but aggregate C4=F~\cite{bergholm2018pennylane,kavadias2026qplSurveySupplementary}.
+Qmod uses \texttt{within\_apply} in Deutsch--Jozsa and \texttt{power} and \texttt{grover\_operator} in Grover, yet its constructed phase-estimation example requires manual inverse-QFT decomposition as ordinary code, giving the recorded C4=F~\cite{vax2025qmodexpressivehighlevelquantum,kavadias2026qplSurveySupplementary}.
+
+\subsection{Observation and quantum/classical boundaries}\label{subsec:system_assessments:observation}
+Observation remains an explicit programmer action in OpenQASM's \texttt{measure} calls for the three algorithmic tasks and Qiskit's measurement placement over quantum/classical registers~\cite{cross2022openqasm3,aleksandrowicz2019qiskit,kavadias2026qplSurveySupplementary}.
+Qiskit records C5=F and C6=F\@.
+PennyLane's staging and classical post-processing retain C5=F\@.
+Observation fails in Deutsch--Jozsa and Grover but is unassessable in phase estimation and Bell preparation, producing aggregate C6=F~\cite{bergholm2018pennylane,kavadias2026qplSurveySupplementary}.
+Q\# likewise retains explicit quantum/classical boundaries and result extraction~\cite{MicrosoftQSharpOverview,kavadias2026qplSurveySupplementary}.
+
+Silq constrains C6 because \texttt{measure} remains explicit even without classical-register wiring~\cite{bichsel2020silq,kavadias2026qplSurveySupplementary}.
+Qmod's constructed phase-estimation example uses \texttt{measure(count)}, Quff uses \texttt{measure} and Qutes uses classical assignment or \texttt{measure}; each records aggregate C6=C~\cite{vax2025qmodexpressivehighlevelquantum,wright2024quff,faro2025qutes,kavadias2026qplSurveySupplementary}.
+Qwerty's task-local artefact and identity passes coexist with \texttt{@qpu} staging and explicit observation, including \texttt{fourier[prec].measure} in phase estimation~\cite{adams2024qwerty,kavadias2026qplSurveySupplementary}.
+QIR's missing C6 outcome reflects fragments that do not exercise result extraction, so it supports neither a pass nor an absence of measurement capability~\cite{qir_alliance_qir_spec_repo,kavadias2026qplSurveySupplementary}.
+
+\subsection{Required quantum knowledge and hardware adjacency}\label{subsec:system_assessments:knowledge}
+C8 outcomes vary with the construction: OpenQASM is constrained in T1--T3 but fails in Bell preparation; QIR is constrained in T1--T2 and fails in T3--T4; Q-MLIR is constrained in T1 and fails in T2--T4~\cite{cross2022openqasm3,qir_alliance_qir_spec_repo,McCaskey2021MLIRDialectQASM,kavadias2026qplSurveySupplementary}.
+Qiskit is constrained in T1--T3 and fails in Bell preparation, which also contributes PennyLane's C8 failure~\cite{aleksandrowicz2019qiskit,bergholm2018pennylane,kavadias2026qplSurveySupplementary}.
+Q\#s phase-estimation and Bell constructions require phase or entanglement reasoning~\cite{MicrosoftQSharpOverview,kavadias2026qplSurveySupplementary}.
+
+Constructed phase-estimation examples drive C8=F in Silq, Qmod, Quff and Qutes~\cite{bichsel2020silq,vax2025qmodexpressivehighlevelquantum,wright2024quff,faro2025qutes,kavadias2026qplSurveySupplementary}.
+Silq requires explicit phase reasoning and inverse-QFT decomposition.
+Qmod retains controlled powers and inverse-QFT code.
+Quff's unitary and controlled-power pattern requires phase reasoning.
+Qwerty likewise retains controlled powers and phase or eigenvalue reasoning in phase estimation~\cite{adams2024qwerty,kavadias2026qplSurveySupplementary}.
+Under the recorded aggregation, these failures are not removed by favourable outcomes in other tasks.
+Their occurrence in constructed examples also bounds the interpretation to the assessed constructions rather than exhaustive capabilities.
+
+C1 distinguishes the programmer's entry into superposition: addressed Hadamard applications retain F in Silq and Qmod, and Quff also begins through gate idioms~\cite{bichsel2020silq,vax2025qmodexpressivehighlevelquantum,wright2024quff,kavadias2026qplSurveySupplementary}.
+Qwerty's basis-oriented initiation instead yields the only aggregate C1=C\@.
+C7 passes across all eleven profiles because the representative constructions do not require hardware-specific authoring.
+OpenQASM's examples omit timing and calibration features, while Q-MLIR uses an abstract gate namespace without removing explicit qubits and gates.
+
+\subsection{Result summary and quantum-implicit gap}\label{subsec:system_assessments:summary}
+No aggregated profile passes all four gates, C2, C3, C6 and C9, so none meets the quantum-implicit requirements within the assessed systems, tasks and evidence.
+Section~\ref{sec:discussion} considers the implications.
 
 \ifthesis
 
 \subsubsection{Systems $\times$ conditions heatmap}\label{subsubsec:system_assessments:condition_heatmap}
 Figure~\ref{fig:system_assessments:condition_heatmap} visualises the aggregated profiles in Table~\ref{tab:system_assessments:system_summary}.
 It highlights uniform C7 passes, persistent artefact and identity constraints, Qwerty's distinctive C1 outcome and QIR's unassessable observation condition.
-Task-specific differences are described in the evidence summaries rather than represented by the aggregated heatmap.
-
+Task-specific differences are described in the thematic analysis rather than represented by the aggregated heatmap.
 
 \begin{figure}[htbp*]
     \centering
@@ -181,15 +113,3 @@ Task-specific differences are described in the evidence summaries rather than re
     \label{fig:system_assessments:condition_heatmap}
 \end{figure}
 \fi
-
-\subsubsection{Quantum-implicit gap finding}\label{subsubsec:system_assessments:qi_gap}
-No reviewed system satisfies the complete quantum-implicit gate set under the recorded task evidence.
-Classification requires C2, C3, C6 and C9 to pass, together with a justified match to the tier definition.
-Each aggregated profile lacks at least one required pass.
-
-Circuit- and IR-centred constructions retain explicit artefacts and qubit identities.
-Program-oriented constructions improve organisation, composition and sometimes observation handling, but retain quantum-specific obligations elsewhere.
-Qutes's membership operation and Qwerty's task-local artefact and identity passes demonstrate that individual workflows can relieve several obligations without satisfying the full profile across the suite.
-
-The quantum-implicit tier is therefore unoccupied within these eleven systems and representative constructions.
-The finding is bounded by the included systems, task suite and evidence base; its implications for RQ1 and RQ2 are considered in Section~\ref{sec:discussion}.

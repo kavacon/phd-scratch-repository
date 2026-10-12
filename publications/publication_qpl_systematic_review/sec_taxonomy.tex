@@ -9,38 +9,32 @@ The comparison considers the visibility of quantum-mechanical concerns and the d
 Descriptive system roles do not determine assessed tiers, which depend on representative programming evidence.
 
 \begin{description}
-    \item[Assembly]
-    Assembly-tier systems provide explicit gates, measurements and classical control for interchange and execution~\cite{cross2022openqasm3}.
-    Programmers author circuits over visible qubit registers, with hardware-control details available at the surface.
-    Portability follows instruction semantics rather than language-level data abstraction.
+    \item[Assembly (A)]
+    Explicit gates, measurements and classical control operate on visible qubit registers for interchange and execution~\cite{cross2022openqasm3}.
+    Hardware control is exposed; portability follows instruction semantics rather than data abstraction.
 
     \item[Intermediate representation (IR)]
-    IR-tier systems provide compiler and tooling authors with representations for interchange, lowering, optimisation and analysis~\cite{qir_alliance_qir_spec_repo,McCaskey2021MLIRDialectQASM}.
-    Explicit resource models expose qubit lifetime and quantum/classical distinctions.
-    Progressive lowering can preserve different levels of structure before and after gate decomposition, so audience and compilation role distinguish the tier rather than a fixed stack position~\cite{McCaskey2021MLIRDialectQASM}.
+    Compiler and tooling representations support interchange, lowering, optimisation and analysis, exposing qubit lifetime and quantum/classical distinctions~\cite{qir_alliance_qir_spec_repo,McCaskey2021MLIRDialectQASM}.
+    Compilation role, not a fixed stack position, defines the tier.
 
-    \item[Framework]
-    Framework-tier systems provide library or SDK interfaces for constructing circuit objects or quantum nodes through API calls~\cite{aleksandrowicz2019qiskit,bergholm2018pennylane}.
-    A host language may supply control flow, data structures and tooling, while transpilation and backend interfaces support execution portability.
-    Circuit-centred authoring defines the tier, regardless of whether its syntax is embedded or standalone.
+    \item[Framework (FW)]
+    Reusable quantum operations are organised through library APIs or language constructs, while representative programming retains circuit manipulation, explicit register management or staging obligations.
 
-    \item[High-level]
-    High-level systems provide quantum-explicit programs structured through functions, modules and types rather than circuit files~\cite{bichsel2020silq,MicrosoftQSharpOverview,vax2025qmodexpressivehighlevelquantum}.
-    Safety disciplines such as linearity, affinity or ownership govern resource use, with an explicit uncomputation or disposal account.
-    Compiler assistance manages implementation obligations, while hardware-specific tuning remains optional.
+    \item[High-level (HL)]
+    Quantum-explicit functions, modules and types replace circuit-file authoring.
+    Safety disciplines govern resources and clean-up, with compiler assistance and optional hardware tuning.
 
-    \item[Quantum-implicit]
-    Quantum-implicit systems express programmer intent through ordinary mathematical and computational abstractions~\cite{nunez_corrales2025betterabstractmachines}.
-    Representative programming does not require explicit qubits, gates or quantum-mechanical analogues.
-    The compiler infers and synthesises quantum realisation, lowering it to an explicit IR or circuit.
-    The implementation manages result extraction without requiring programmers to understand or explicitly cross a measurement or observation boundary.
-    Optional expert access supports fine-grained control, optimisation and hardware-specific tuning.
+    \item[Quantum-implicit (QI)]
+    This tier operationalises literature-derived requirements for programming abstractions independent of quantum realisation~\cite{nunez_corrales2025betterabstractmachines}.
+    Ordinary mathematical and computational abstractions require no quantum-mechanical vocabulary.
+    The implementation infers quantum realisation, lowers it to IR or circuits and manages results without a programmer-visible observation boundary.
+    Expert control, optimisation and hardware tuning remain opt-in.
 \end{description}
 
 \ifthesis
-\begin{mdframed}[frametitle={Litmus test]
-A language is quantum-implicit if a programmer with no prior instruction in quantum mechanics can learn it from its own documentation.
-That programmer must be able to implement representative programs without needing to understand qubits, gates, amplitudes or entanglement.
+\begin{mdframed}[frametitle={Litmus test}]
+    A language is quantum-implicit if a programmer with no prior instruction in quantum mechanics can learn it from its own documentation.
+    That programmer must be able to implement representative programs without needing to understand qubits, gates, amplitudes or entanglement.
 \end{mdframed}
 \fi
 
@@ -48,6 +42,7 @@ Quantum-implicit classification requires the joint absence of mandatory quantum 
 Section~\ref{sec:evaluation_instrument} operationalises these requirements through representative tasks, condition profiles and explicit gating constraints.
 
 \ifthesis
+
 \subsection{Systems under review}\label{subsec:taxonomy:systems}
 Table~\ref{tab:taxonomy:systems} identifies eleven primary systems selected under the criteria in Section~\ref{sec:methodology}, with per-system verification in Appendix~B of~\cite{kavadias2026qplSurveySupplementary}.
 Tower is included as an unassessed comparison.
@@ -58,7 +53,7 @@ Artefact types are descriptive; assessed tiers are reported in Section~\ref{sec:
     \caption{Systems under review. Artefact types are descriptive; assessed tier assignments are reported in Section~\ref{sec:system_assessments}.}
     \label{tab:taxonomy:systems}
     \begin{threeparttable}
-        \small
+        \footnotesize
         \begin{tabular}{ll}
             \toprule
             \textbf{System}                                           & \textbf{Artefact type}       \\

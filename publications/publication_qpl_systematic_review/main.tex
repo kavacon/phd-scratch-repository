@@ -37,14 +37,14 @@
     \maketitle
 
     \begin{abstract}
-        Productive quantum programming still requires programmers to reason explicitly about qubits, circuits/gates, measurement outcomes, and uncomputation, even in the most high-level systems available today.
-        Prior taxonomy work has mapped the quantum programming landscape, but has not established whether any existing system supports a mode of programming in which developers can construct non-trivial programs without quantum-mechanical prerequisites.
-        We address this by systematically reviewing eleven quantum programming systems and positioning each one on an abstraction spectrum spanning assembly, intermediate representation, framework, high-level, and quantum-implicit systems.
-        The review uses an evidence-first evaluation instrument: for a fixed suite of representative tasks (T1–T4), we record per-system condition outcomes (C1–C9) with primary-source citations, and assign tiers by justified profile match with explicit gating constraints for quantum-implicit claims.
-        These conditions capture recurring sources of bleed-through and quantum bias—where execution- and hardware-layer obligations surface in representative workflows and make quantum-native vocabulary mandatory.
-        No assessed system occupies the quantum-implicit tier; the four lower tiers are populated and each largely performs its designed function.
-        A vocabulary ceiling on the mental-model dimension appears across the assessed high-level systems.
-        The gap identified across the reviewed systems is structural; developing a new quantum programming language targeting this tier is justified.
+        Quantum programming systems simplify implementation but continue to require quantum-specific knowledge.
+        Prior classifications surveyed paradigms such as functional and imperative programming without establishing whether representative programs can be written without quantum-mechanical prerequisites.
+        This review defines a five-tier abstraction taxonomy spanning Assembly, IR, Framework, High-level and Quantum-implicit, and assesses eleven systems through four representative tasks and nine conditions.
+        Primary-source code evidence supports condition outcomes and tier assignments by justified profile match, with explicit quantum-implicit gating constraints.
+        No assessed system meets the quantum-implicit requirements across the task suite.
+        Although the representative constructions avoid hardware-specific authoring, quantum artefacts, resource identities, observation boundaries and required quantum concepts remain recurring programming obligations.
+        Task-local simplifications do not satisfy the complete quantum-implicit profile.
+        The findings identify a structural gap across the reviewed approaches, justifying a new quantum programming language that makes quantum realisation a compilation responsibility while preserving optional expert control.
     \end{abstract}
 
     \input{content}
