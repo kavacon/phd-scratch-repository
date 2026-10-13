@@ -4,17 +4,17 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "lark>=1.1",
+    "qiskit>=2",  # the circuit representation, and the optimiser
 ]
 
 [project.optional-dependencies]
-# Reading generated OpenQASM back, counting gates and wires, the black-box optimisation stage, and running circuits.
+# Reading OpenQASM text back (to check what is printed), and running circuits on a simulator.
 circuits = [
-    "qiskit>=2",
     "qiskit-qasm3-import",
     "openqasm3[parser]",
     "qiskit-aer",
 ]
-# The Qrisp comparison app (allocation_poc.compare), which also needs the circuits extra.
+# The Qrisp comparison app (experiments.allocation_poc.compare), which also needs the circuits extra.
 compare = [
     "qrisp",
 ]
@@ -27,5 +27,6 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"parser" = ["resources/*"]
-"allocation_poc" = ["static/*"]
+"compiler.parser" = ["resources/*"]
+"demo" = ["static/*"]
+"experiments.allocation_poc" = ["static/*"]
