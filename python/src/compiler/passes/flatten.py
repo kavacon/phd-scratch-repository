@@ -97,7 +97,7 @@ class _Flattener:
 
     def statement(self, node: Node, out: List[Node]) -> None:
         if isinstance(node, Assign):
-            out.append(Assign(node.name, self.operation(node.value, out)))
+            out.append(Assign(node.name, self.operation(node.value, out), node.inplace))
         elif isinstance(node, ExprStmt):
             out.append(ExprStmt(self.operation(node.expr, out)))
         elif isinstance(node, Return):

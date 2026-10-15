@@ -75,7 +75,7 @@ class _Renamer:
         if isinstance(node, Assign):
             value = self.expr(node.value, env)
             env[node.name] = name = self.fresh(node.name)
-            return Assign(name, value)
+            return Assign(name, value, node.inplace)
         if isinstance(node, ExprStmt):
             return ExprStmt(self.expr(node.expr, env))
         if isinstance(node, Return):

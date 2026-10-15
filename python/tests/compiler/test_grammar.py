@@ -67,9 +67,20 @@ class ParseTestCase(unittest.TestCase):
         [statement] = stmts("x = 1 < 2; // trailing comment\n")
         self.assertEqual(BinOp("<", Number(1), Number(2)), statement.value)
         self.assertEqual(BinOp(">", Number(1), Number(2)), stmts("x = 1 > 2;")[0].value)
-        for bad in ('x = "a";', "x = -1;", "x = 1 < 2 < 3;", "function f() { function g() { return 1; } return 2; }"):
+        for bad in ('x = "a";', "x = 1 < 2 < 3;", "x += ;", "x + = 1;", "function f() { function g() { return 1; } return 2; }"):
             with self.assertRaises(UnexpectedInput, msg=bad):
                 stmts(bad)
+
+    def test_negative_literals_and_negation(self):
+        self.assertEqual(Number(-1), stmts("x = -1;")[0].value)
+        self.assertEqual(BinOp("-", Number(5), Number(-3)), stmts("x = 5 - -3;")[0].value)
+        self.assertEqual(BinOp("-", Number(0), Variable("y")), stmts("x = -y;")[0].value)  # negation is a subtraction from zero
+        self.assertEqual(BinOp("*", Number(-2), Variable("y")), stmts("x = -2 * y;")[0].value)
+
+    def test_updates_are_assignments_marked_in_place(self):
+        self.assertEqual(Assign("x", BinOp("+", Variable("x"), Number(3)), inplace=True), stmts("x += 3;")[0])
+        self.assertEqual(Assign("x", BinOp("-", Variable("x"), Variable("y")), inplace=True), stmts("x -= y;")[0])
+        self.assertFalse(stmts("x = x + 3;")[0].inplace)
 
     def test_conditionals(self):
         [plain, with_else] = stmts("if x < 1 { y = 1; } if x < 1 { y = 1; } else { y = 3; }")

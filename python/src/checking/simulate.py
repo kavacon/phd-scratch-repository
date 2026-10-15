@@ -29,7 +29,8 @@ from compiler.parser.grammar import (
     Unassign,
     Variable,
 )
-from compiler.parser.instructions import Alloc, Const, Ctrl, EndCtrl, Free, ICtrl, IOp, IsaProgram, Op, Reg
+from compiler.parser.instructions import Alloc, Const, Ctrl, EndCtrl, Free, ICtrl, IOp, IsaProgram, Op, Reg, Update
+from compiler.system import System
 
 
 class SimulationError(AssertionError):
@@ -55,6 +56,27 @@ _OPS = {  # the source operators, by the opcode they lower to
 
 MAX_STEPS = 200_000
 
+_ARITHMETIC = ("+", "-", "*", "add", "sub", "mul")
+
+
+def normaliser(system: Optional[System]):
+    """
+    How integers are held on the machine `system` describes: wrapped to the register width, as two's complement
+    (-2^(w-1) to 2^(w-1)-1). With no system integers are unbounded, which is the reference for programs that never
+    overflow.
+    """
+    if system is None:
+        return lambda value: value
+    width = system.register_width
+    mask, half = (1 << width) - 1, 1 << (width - 1)
+
+    def normalise(value):
+        if isinstance(value, bool) or not isinstance(value, int):
+            return value
+        value &= mask
+        return value - (mask + 1) if value >= half else value
+    return normalise
+
 
 class _Return(NamedTuple):
     value: Any
@@ -68,7 +90,8 @@ class Result(NamedTuple):
 
 
 class Machine:
-    def __init__(self, program: List[Node]):
+    def __init__(self, program: List[Node], system: Optional[System] = None):
+        self.norm = normaliser(system)
         self.functions = {s.name: s for s in program if isinstance(s, FunctionDef)}
         self.leaks: Dict[str, set] = {}
         self.peak: Dict[str, int] = {}
@@ -102,7 +125,11 @@ class Machine:
     def statement(self, node: Node, registers: Dict[str, Any], scope: str):
         self.tick("step limit reached (does a loop or a recursive call never end?)")
         if isinstance(node, Assign):
-            self.hold(node.name, self.eval(node.value, registers, scope), registers, scope)
+            value = self.eval(node.value, registers, scope)
+            old = node.value.left if node.inplace and isinstance(node.value, BinOp) else None
+            if isinstance(old, Variable) and old.name != node.name:
+                registers.pop(old.name, None)  # an update takes over the register of the version it replaces
+            self.hold(node.name, value, registers, scope)
         elif isinstance(node, Unassign):
             self.release(node, registers, scope)
         elif isinstance(node, ExprStmt):
@@ -138,12 +165,15 @@ class Machine:
         return registers[name]
 
     def eval(self, node: Node, registers: Dict[str, Any], scope: str) -> Any:
-        if isinstance(node, (Number, Boolean)):
+        if isinstance(node, Number):
+            return self.norm(node.value)
+        if isinstance(node, Boolean):
             return node.value
         if isinstance(node, Variable):
             return self.read(node.name, registers)
         if isinstance(node, BinOp):
-            return _OPS[node.op](self.eval(node.left, registers, scope), self.eval(node.right, registers, scope))
+            value = _OPS[node.op](self.eval(node.left, registers, scope), self.eval(node.right, registers, scope))
+            return self.norm(value) if node.op in _ARITHMETIC else value
         if isinstance(node, Not):
             return not self.eval(node.operand, registers, scope)
         if isinstance(node, Equals):
@@ -164,9 +194,12 @@ class Machine:
         raise SimulationError(f"cannot evaluate {type(node).__name__}")
 
 
-def simulate(program: List[Node]) -> Result:
-    """Run a program; returns its value, the leaked registers of each scope and the peak registers of each scope."""
-    machine = Machine(program)
+def simulate(program: List[Node], system: Optional[System] = None) -> Result:
+    """
+    Run a program; returns its value, the leaked registers of each scope and the peak registers of each scope. With a
+    system, integers wrap to its register width the way the circuits do.
+    """
+    machine = Machine(program, system)
     value = machine.run(program)
     return Result(value, machine.leaks, machine.peak)
 
@@ -177,14 +210,15 @@ _OPCODES = {**_BINARY, "copy": lambda a: a, "not": operator.not_}
 class _IsaMachine:
     """Runs a program of instructions. `FREE` must find the register at zero, which checks every release."""
 
-    def __init__(self) -> None:
+    def __init__(self, system: Optional[System] = None) -> None:
+        self.norm = normaliser(system)
         self.registers: Dict[str, Any] = {}
         self.peak = 0
         self.steps = 0
 
     def read(self, operand):
         if isinstance(operand, Const):
-            return operand.value
+            return self.norm(operand.value)
         if operand.name not in self.registers:
             raise SimulationError(f"{operand.name} read but not held")
         return self.registers[operand.name]
@@ -215,6 +249,8 @@ class _IsaMachine:
             self.free(instruction.register)
         elif isinstance(instruction, (Op, IOp)):
             self.operate(instruction)
+        elif isinstance(instruction, Update):
+            self.update(instruction)
 
     def alloc(self, name: str) -> None:
         if name in self.registers:
@@ -229,8 +265,17 @@ class _IsaMachine:
             raise SimulationError(f"{name} freed while holding {self.registers[name]}")
         del self.registers[name]
 
+    def update(self, instruction: Update) -> None:
+        name = instruction.dst
+        if name not in self.registers:
+            raise SimulationError(f"{name} updated but not allocated")
+        value = _OPCODES[instruction.opcode](self.registers[name], self.read(instruction.source))
+        self.registers[name] = self.norm(value)
+
     def operate(self, instruction) -> None:
         value = _OPCODES[instruction.opcode](*(self.read(source) for source in instruction.sources))
+        if instruction.opcode in _ARITHMETIC:
+            value = self.norm(value)
         name = instruction.dst
         if name not in self.registers:
             raise SimulationError(f"{name} written but not allocated")
@@ -245,22 +290,23 @@ class _IsaMachine:
             self.registers[name] = 0
 
 
-def simulate_isa(program: IsaProgram) -> Result:
+def simulate_isa(program: IsaProgram, system: Optional[System] = None) -> Result:
     """Run a program; returns its value, the registers left held and the most held at once."""
-    machine = _IsaMachine()
+    machine = _IsaMachine(system)
     machine.run(program.body)
     value = machine.read(program.result)
     held = set(machine.registers) - ({program.result.name} if isinstance(program.result, Reg) else set())
     return Result(value, {"<program>": held}, {"<program>": machine.peak})
 
 
-def execute(output: Any) -> Optional[Result]:
+def execute(output: Any, system: Optional[System] = None) -> Optional[Result]:
     """
     Run what a pipeline stage produced on its reference machine: a program (a list of nodes) on the program machine,
-    instructions on the instruction machine. A circuit has no machine here, so it gives None.
+    instructions on the instruction machine. A circuit has no machine here, so it gives None. Give the system the
+    program was compiled for to wrap integers to its register width.
     """
     if isinstance(output, list):
-        return simulate(output)
+        return simulate(output, system)
     if isinstance(output, IsaProgram):
-        return simulate_isa(output)
+        return simulate_isa(output, system)
     return None

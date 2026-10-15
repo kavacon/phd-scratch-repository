@@ -10,7 +10,7 @@ from compiler.system import System
 from demo.text_diff import diff_lines
 from compiler.passes.qasm import openqasm_text
 from experiments.allocation_poc.experiment import FRONT_END, compile_circuit, compiler, text_of
-from experiments.allocation_poc.passes.rename import RenameError
+from compiler.passes.rename import RenameError
 from experiments.allocation_poc.programs import PROGRAMS
 
 IDS = compiler().names

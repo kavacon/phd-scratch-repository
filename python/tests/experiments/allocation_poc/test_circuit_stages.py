@@ -9,7 +9,7 @@ from compiler.compiler import PassError
 from compiler.passes.optimise import optimise
 from compiler.passes.qasm import measured_qubits, openqasm_text, x_gates
 from compiler.system import System
-from experiments.allocation_poc.experiment import compile_circuit, compiler, text_of
+from experiments.allocation_poc.experiment import compile_circuit, compiler
 from experiments.allocation_poc.programs import PROGRAMS
 
 needs_qiskit = unittest.skipUnless(qiskit_tools.qiskit_available(), "Qiskit is not installed")

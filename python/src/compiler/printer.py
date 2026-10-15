@@ -17,7 +17,7 @@ from compiler.parser.grammar import (
     Unassign,
     Variable,
 )
-from compiler.parser.instructions import Alloc, Ctrl, EndCtrl, Free, ICtrl, IOp, Op, Reg, Scratch
+from compiler.parser.instructions import Alloc, Ctrl, EndCtrl, Free, ICtrl, IOp, Op, Reg, Scratch, Update
 
 
 def unparse(program: Sequence[Node]) -> str:
@@ -49,7 +49,10 @@ def _block(body: Sequence[Node], depth: int) -> List[str]:
 def _stmt(node: Node, depth: int) -> List[str]:
     pad = "    " * depth
     if isinstance(node, Assign):
-        return [f"{pad}{node.name} = {_expr(node.value)};"]
+        value = node.value
+        if node.inplace and isinstance(value, BinOp) and isinstance(value.left, Variable) and value.left.name == node.name:
+            return [f"{pad}{node.name} {value.op}= {_expr(value.right)};"]
+        return [f"{pad}{node.name} = {_expr(value)};" + ("  // in place" if node.inplace else "")]
     if isinstance(node, ExprStmt):
         return [f"{pad}{_expr(node.expr)};"]
     if isinstance(node, Return):
@@ -84,6 +87,8 @@ def _instruction_lines(instruction, depth: int) -> List[str]:
         return [f"{pad}ALLOC {instruction.register}"]
     if isinstance(instruction, Free):
         return [f"{pad}FREE  {instruction.register}"]
+    if isinstance(instruction, Update):
+        return [f"{pad}{instruction.opcode.upper() + '=':<5} {instruction.dst}, {_operand_text(instruction.source)}"]
     if isinstance(instruction, Scratch):
         return [f"{pad}SCRATCH {instruction.register}"]
     if isinstance(instruction, (Op, IOp)):

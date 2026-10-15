@@ -129,7 +129,15 @@ hovering one highlights the others with the same key.
 
 ## Conventions
 
-- Integers are unsigned and arithmetic is modulo 2 to the register width everywhere (reference machines and circuits).
+- Integers are two's complement and wrap modulo 2 to the register width everywhere (reference machines and circuits).
+  Add, subtract and multiply are the same gates as unsigned; only `<`, `>` and how a value is read differ. Pass the
+  system to `simulate`, `simulate_isa` and `execute` so the reference wraps the way the circuit does, and use
+  `checking.circuits.to_signed` to read a measured register.
+- The language has negative literals and negation (`-x` is `0 - x`), and in-place `x += e;` and `x -= e;`. An update is
+  an assignment marked `inplace`: rename still gives it a new version, and `lower_to_isa` makes that version another
+  name for the old register and emits an `Update` instruction (`ADD=`, `SUB=`). Only add and subtract, because
+  only they can be undone in place; `x += x` is refused. Release insertion (the allocation experiment) cannot undo
+  an update and refuses a program that has one.
 - Division and squaring a register have no circuit and are refused by the code generator.
 - Match the surrounding code's comment density and naming. Docstrings say why, not what.
 - When something about a pass's behaviour or an experiment's result is a decision, record the rationale in the

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class System:
-    register_width: int = 6  # qubits in one register; integers are unsigned and arithmetic is modulo 2 to this
+    register_width: int = 6  # qubits in one register; integers are two's complement, arithmetic modulo 2 to this
     qubits: int = 100  # qubits available in all
 
     def __post_init__(self) -> None:
