@@ -6,7 +6,7 @@ Constructed examples comprise OpenQASM T1--T2; QIR T1--T3; Q-MLIR and Quff T1, T
 
 \begin{table}[htbp]
     \centering
-    \caption{System assessment result rubric.}
+    \caption{Aggregated system assessments; `-' denotes unassessable.}
     \label{tab:system_assessments:system_summary}
     \footnotesize
     \setlength{\tabcolsep}{2pt}
@@ -51,7 +51,7 @@ Quff's ordinary functions and higher-order oracles support C9=P while indexed re
 Q\# instead records C9=C for typed operation-level reuse with qubits allocated through \texttt{use}~\cite{MicrosoftQSharpOverview,kavadias2026qplSurveySupplementary}.
 
 Qutes' search expression \texttt{"01" in b} passes all nine conditions without visible qubits, circuits, measurement calls or amplitude reasoning; its other constructions retain quantum types, initialisation, indexed resources and gates~\cite{faro2025qutes,reversiblelifetime2026,kavadias2026qplSurveySupplementary}.
-Qwerty's \texttt{oracle\.sign} and \texttt{pmN >> stdN} translations pass C2, C3 and C4 in Deutsch--Jozsa and Grover without circuit-object assembly~\cite{adams2024qwerty,kavadias2026qplSurveySupplementary}.
+Qwerty's \texttt{oracle.sign} and \texttt{pm**N >> std**N} translations pass C2, C3 and C4 in Deutsch--Jozsa and Grover without circuit-object assembly~\cite{adams2024qwerty,kavadias2026qplSurveySupplementary}.
 Its Bell construction \texttt{'00' + '11'} is consumed by another routine, but explicit \texttt{@qpu} staging and observation remain.
 
 \subsection{Reversal and clean-up}\label{subsec:system_assessments:reversal}
@@ -87,7 +87,7 @@ Silq requires explicit phase reasoning and inverse-QFT decomposition.
 Qmod retains controlled powers and inverse-QFT code.
 Quff's unitary and controlled-power pattern requires phase reasoning.
 Qwerty likewise retains controlled powers and phase or eigenvalue reasoning in phase estimation~\cite{adams2024qwerty,kavadias2026qplSurveySupplementary}.
-Under the recorded aggregation, these failures are not removed by favourable outcomes in other tasks.
+C8 aggregates worst-case across the task suite, so favourable outcomes in other tasks do not offset a failure.
 Their occurrence in constructed examples also bounds the interpretation to the assessed constructions rather than exhaustive capabilities.
 
 C1 distinguishes the programmer's entry into superposition: addressed Hadamard applications retain F in Silq and Qmod, and Quff also begins through gate idioms~\cite{bichsel2020silq,vax2025qmodexpressivehighlevelquantum,wright2024quff,kavadias2026qplSurveySupplementary}.
