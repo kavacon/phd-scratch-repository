@@ -157,6 +157,16 @@ For the thesis (`thesis/main.tex`, one level deep):
 
 Then use `\printbibliography` (not `\bibliography{}`) in the document body.
 
+### Anonymous bibliography variants
+
+`preamble/bibliography.tex` always loads `bib/references.bib`. It then uses the
+`\ifanon` switch to load either `bib/anon_self_references.bib` for anonymous
+builds or `bib/self_references.bib` for identified builds. Configure
+`\anontrue` or `\anonfalse` in each document's `main.tex` before loading
+`preamble/bibliography.tex`. The two self-reference files should preserve the
+same citation keys so that `\cite{...}` commands remain unchanged between
+builds.
+
 ## Reports and reviews (thesis milestones)
 
 Reports and reviews are supplemental documents for thesis milestones (e.g., pre-confirmation, confirmation). Unlike publications, they are NOT imported into the thesis. They:

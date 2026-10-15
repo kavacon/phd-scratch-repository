@@ -19,4 +19,10 @@
   \newif\ifthesis
   \thesistrue
 }{}
+
+% Retain the complete content unless anonymization exclusions are enabled.
+\@ifundefined{anon}{%
+  \newif\ifanon
+  \anonfalse
+}{}
 \makeatother
