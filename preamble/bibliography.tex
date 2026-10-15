@@ -1,3 +1,8 @@
 \usepackage{biblatex}
 
 \addbibresource{bib/references.bib}
+\ifanon
+    \addbibresource{bib/anon_self_references.bib}
+\else
+    \addbibresource{bib/self_references.bib}
+\fi
