@@ -1,8 +1,8 @@
 import unittest
 
-from experiments.allocation_poc.passes.balance import balance
+from compiler.passes.balance import balance
 from experiments.allocation_poc.passes.liveness import analyse_program
-from experiments.allocation_poc.passes.rename import rename
+from compiler.passes.rename import rename
 from experiments.allocation_poc.experiment import compile_source
 
 

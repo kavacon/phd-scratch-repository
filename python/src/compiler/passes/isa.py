@@ -14,7 +14,7 @@ on a constant is resolved here and only the branch that runs is emitted.
 The program must be flat: each assignment a plain value or one operation on plain values, and it returns a
 variable (see passes.flatten).
 """
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from compiler.compiler import ISA, NODE, compile_pass
 from compiler.system import System
@@ -48,6 +48,7 @@ from compiler.parser.instructions import (
     Op,
     Operand,
     Reg,
+    Update,
     inverse,
 )
 
@@ -58,27 +59,28 @@ class IsaError(Exception):
     pass
 
 
-def _operand(node: Node) -> Operand:
+def _operand(node: Node, reg=lambda name: name) -> Operand:
+    """The operand for a plain value; `reg` says which register a version lives in."""
     if isinstance(node, Variable):
-        return Reg(node.name)
+        return Reg(reg(node.name))
     if isinstance(node, (Number, Boolean)):
         return Const(node.value)
     raise IsaError(f"expected a plain value, got {type(node).__name__}; run flatten first")
 
 
-def _compute(dst: str, value: Node) -> Instruction:
+def _compute(dst: str, value: Node, reg=lambda name: name) -> Instruction:
     """The instruction that XORs `value` into `dst`."""
     if isinstance(value, BinOp):
-        return Op(_BINARY[value.op], dst, (_operand(value.left), _operand(value.right)))
+        return Op(_BINARY[value.op], dst, (_operand(value.left, reg), _operand(value.right, reg)))
     if isinstance(value, Not):
-        return Op("not", dst, (_operand(value.operand),))
+        return Op("not", dst, (_operand(value.operand, reg),))
     if isinstance(value, Equals):
         if len(value.operands) != 2:
             raise IsaError("an equality chain must be flattened first")
-        return Op("eq", dst, tuple(_operand(o) for o in value.operands))
+        return Op("eq", dst, tuple(_operand(o, reg) for o in value.operands))
     if isinstance(value, CallNode):
         raise IsaError("calls must be inlined first")
-    return Op("copy", dst, (_operand(value),))
+    return Op("copy", dst, (_operand(value, reg),))
 
 
 class _Hoisted:
@@ -94,23 +96,71 @@ def _unique(names: List[str]) -> List[str]:
 
 
 class _Lowerer:
+    """
+    Lowers a flat, renamed program. An in-place update (`x#2 = x#1 + e`, marked) has no register of its own: its new
+    version is another name for the register of the version it replaces, recorded in `alias`.
+    """
+
+    def __init__(self) -> None:
+        self.alias: Dict[str, str] = {}
+
+    def reg(self, name: str) -> str:
+        return self.alias.get(name, name)
+
+    def operand(self, node: Node) -> Operand:
+        return _operand(node, self.reg)
+
     def block(self, body: Tuple[Node, ...], out: List[Instruction], hoisted: Optional[_Hoisted]) -> None:
         for statement in body:
             self.statement(statement, out, hoisted)
 
+    def update_target(self, node: Assign) -> Tuple[str, Node]:
+        """The register an in-place update changes and the operand it adds or subtracts."""
+        value = node.value
+        if not (isinstance(value, BinOp) and value.op in ("+", "-") and isinstance(value.left, Variable)):
+            raise IsaError("an in-place update must add or subtract a plain value")
+        return self.reg(value.left.name), value.right
+
+    def in_place(self, node: Assign, out: List[Instruction]) -> None:
+        target, rhs = self.update_target(node)
+        source = self.operand(rhs)
+        if source == Reg(target):
+            raise IsaError(f"'{node.name}' is updated with itself, which cannot be undone, so it has no circuit")
+        out.append(Update("add" if node.value.op == "+" else "sub", target, source))
+        self.alias[node.name] = target
+
+    def claim_updates(self, block: Tuple[Node, ...]) -> None:
+        """Before the branches of an `if` are lowered, give every version an update makes its register, in order."""
+        for statement in block:
+            if isinstance(statement, Assign) and statement.inplace:
+                self.alias[statement.name] = self.update_target(statement)[0]
+            elif isinstance(statement, If):
+                self.claim_updates(statement.body)
+                self.claim_updates(statement.orelse)
+
     def statement(self, node: Node, out: List[Instruction], hoisted: Optional[_Hoisted]) -> None:
         if isinstance(node, Assign):
+            if node.inplace:
+                self.in_place(node, out)
+                return
+            if node.name in self.alias:
+                # the other branch of an `if` updated this variable in place, so this branch either leaves it alone
+                # (an identity copy from balance, which is nothing to do) or cannot be expressed
+                if isinstance(node.value, Variable) and self.reg(node.value.name) == self.alias[node.name]:
+                    return
+                raise IsaError(f"'{node.name}' is updated in place in one branch of an if and reassigned in the other; "
+                               f"use += or -= in both")
             if hoisted is None:
                 out.append(Alloc(node.name))
             else:
                 hoisted.allocs.append(node.name)
-            out.append(_compute(node.name, node.value))
+            out.append(_compute(node.name, node.value, self.reg))
         elif isinstance(node, Unassign):
-            out.append(inverse(_compute(node.name, node.witness)))
+            out.append(inverse(_compute(self.reg(node.name), node.witness, self.reg)))
             if hoisted is None:
-                out.append(Free(node.name))
+                out.append(Free(self.reg(node.name)))
             else:
-                hoisted.frees.append(node.name)
+                hoisted.frees.append(self.reg(node.name))
         elif isinstance(node, ExprStmt):
             pass  # a value that is not used leaves nothing behind
         elif isinstance(node, If):
@@ -119,10 +169,12 @@ class _Lowerer:
             raise IsaError(f"cannot lower {type(node).__name__}")
 
     def if_statement(self, node: If, out: List[Instruction], hoisted: Optional[_Hoisted]) -> None:
-        control = _operand(node.condition)
+        control = self.operand(node.condition)
         if isinstance(control, Const):  # decided now, so only the branch that runs is emitted
             self.block(node.body if control.value else node.orelse, out, hoisted)
             return
+        self.claim_updates(node.body)
+        self.claim_updates(node.orelse)
         inner = hoisted if hoisted is not None else _Hoisted()
         blocks: List[Instruction] = []
         for opener, branch in ((Ctrl, node.body), (ICtrl, node.orelse)):
@@ -145,7 +197,7 @@ class _Lowerer:
             raise IsaError("the program must return a variable; run flatten first")
         out: List[Instruction] = []
         self.block(tuple(statements), out, None)
-        return IsaProgram(tuple(out), _operand(last.value))
+        return IsaProgram(tuple(out), self.operand(last.value))
 
 
 @compile_pass(

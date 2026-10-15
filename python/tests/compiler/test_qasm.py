@@ -27,9 +27,14 @@ def constant(value):
     return [C((value >> i) & 1) for i in range(W)]
 
 
+def signed(value):
+    """A W-bit register's two's complement value: comparison is on this, not on the raw bits."""
+    return value - (1 << W) if value >= 1 << (W - 1) else value
+
+
 EXPECTED = {
     "copy": lambda a, _b: a, "add": lambda a, b: (a + b) & MASK, "sub": lambda a, b: (a - b) & MASK,
-    "mul": lambda a, b: (a * b) & MASK, "lt": lambda a, b: int(a < b), "gt": lambda a, b: int(a > b),
+    "mul": lambda a, b: (a * b) & MASK, "lt": lambda a, b: int(signed(a) < signed(b)), "gt": lambda a, b: int(signed(a) > signed(b)),
     "eq": lambda a, b: int(a == b), "ne": lambda a, b: int(a != b),
 }
 

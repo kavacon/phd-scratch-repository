@@ -1,12 +1,17 @@
 start: (function_def | statement)* return_stmt
 
 ?statement: assignment
+          | update_stmt
           | for_loop
           | if_stmt
           | unassign_stmt
           | expr_statement
 
 assignment: NAME "=" expr ";"
+
+// Updates the variable where it sits: only add and subtract, the two operations that can be undone in place.
+update_stmt: NAME "+=" expr ";"   -> add_update
+           | NAME "-=" expr ";"   -> sub_update
 
 function_def: "function" NAME "(" params? ")" return_type? function_body
 function_body: "{" statement* return_stmt "}"
@@ -56,6 +61,7 @@ block: "{" statement* "}"
 
 ?unary: atom
       | "!" unary -> not_
+      | "-" unary -> neg
 
 ?atom: NUMBER           -> number
      | "true"           -> true

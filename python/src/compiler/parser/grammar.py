@@ -48,8 +48,14 @@ class Call(Node):
 
 @dataclass(frozen=True)
 class Assign(Node):
+    """
+    `name = value;`. An in-place update (`x += e;` or `x -= e;`) is the same assignment marked `inplace`: its value is
+    `x + e` or `x - e` with the target's previous version on the left, and the new version reuses that version's
+    register instead of getting one of its own.
+    """
     name: str
     value: Node
+    inplace: bool = False
 
 
 @dataclass(frozen=True)

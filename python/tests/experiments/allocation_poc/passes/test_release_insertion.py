@@ -10,9 +10,9 @@ from compiler.parser.grammar import If, Unassign
 from compiler.parser.parser import parse
 from experiments.allocation_poc.experiment import compile_source
 from experiments.allocation_poc.passes.allocation import lower_allocation
-from experiments.allocation_poc.passes.balance import balance
+from compiler.passes.balance import balance
 from compiler.passes.flatten import flatten
-from experiments.allocation_poc.passes.rename import rename
+from compiler.passes.rename import rename
 from compiler.passes.unroll import unroll
 
 

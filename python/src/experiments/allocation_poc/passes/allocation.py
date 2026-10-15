@@ -23,9 +23,14 @@ from typing import Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple
 
 from compiler.compiler import NODE, compile_pass
 from compiler.system import System
+from compiler.parser.ast_tools import walk
 from compiler.parser.grammar import Assign, FunctionDef, If, Node, Unassign
 from experiments.allocation_poc.passes.liveness import Liveness, analyse_program
 from compiler.passes.names import results
+
+
+class ReleaseError(Exception):
+    pass
 
 
 def _released_inside(statement: Node) -> FrozenSet[str]:
@@ -111,6 +116,9 @@ def prepare(program: Sequence[Node]) -> Tuple[List[Node], Dict[str, Liveness]]:
 )
 def lower_allocation(program: Sequence[Node], system: Optional[System] = None) -> List[Node]:
     """The program with a `~=` for every releasable temporary."""
+    if any(isinstance(n, Assign) and n.inplace for statement in program for n in walk(statement)):
+        # a release re-reads the value a version was defined from, which an update has already overwritten
+        raise ReleaseError("release insertion cannot undo an in-place update (+= or -=)")
     program, analyses = prepare(program)
     return list(_Inserter(analyses).block(program, analyses["<program>"]))
 

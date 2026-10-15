@@ -46,7 +46,7 @@ def _map(node: Node, rename: Dict[str, str], constants: Dict[str, Node]) -> Node
     if isinstance(node, Variable):
         return constants.get(node.name) or Variable(rename.get(node.name, node.name))
     if isinstance(node, Assign):
-        return Assign(rename.get(node.name, node.name), _map(node.value, rename, constants))
+        return replace(node, name=rename.get(node.name, node.name), value=_map(node.value, rename, constants))
     if isinstance(node, Unassign):
         return Unassign(rename.get(node.name, node.name), _map(node.witness, rename, constants))
     changes = {}

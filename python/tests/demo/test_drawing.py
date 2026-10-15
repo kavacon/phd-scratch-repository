@@ -1,6 +1,5 @@
 import unittest
 
-from compiler.passes.qasm import openqasm_text
 
 from checking import qiskit_tools
 from compiler.passes.optimise import optimise

@@ -5,7 +5,7 @@ from compiler.printer import unparse
 from checking.simulate import simulate
 from compiler.parser.parser import parse
 from experiments.allocation_poc.experiment import compile_source
-from experiments.allocation_poc.passes.rename import RenameError
+from compiler.passes.rename import RenameError
 from compiler.passes.unroll import UnrollError, unroll
 
 

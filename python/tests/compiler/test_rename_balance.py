@@ -5,8 +5,8 @@ from compiler.printer import unparse
 from compiler.parser.grammar import Assign, If
 from compiler.parser.parser import _parser, parse
 from experiments.allocation_poc.experiment import compile_source
-from experiments.allocation_poc.passes.balance import balance
-from experiments.allocation_poc.passes.rename import RenameError, rename
+from compiler.passes.balance import balance
+from compiler.passes.rename import RenameError, rename
 
 INPUT = """
 x = 1;

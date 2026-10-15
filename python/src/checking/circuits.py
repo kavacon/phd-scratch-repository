@@ -34,6 +34,11 @@ def wrap(value: Any, width: int) -> int:
     return int(value) & ((1 << width) - 1)
 
 
+def to_signed(value: int, width: int) -> int:
+    """The two's complement reading of a register's `width` bits: -2^(width-1) to 2^(width-1)-1."""
+    return value - (1 << width) if value >= 1 << (width - 1) else value
+
+
 # --- reading OpenQASM back ---------------------------------------------------------------------------------------
 
 def _controls(statement) -> Tuple[int, int]:

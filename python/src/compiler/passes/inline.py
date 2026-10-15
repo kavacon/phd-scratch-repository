@@ -118,7 +118,7 @@ class _Inliner:
 
     def statement(self, node: Node, out: List[Node]) -> None:
         if isinstance(node, Assign):
-            out.append(Assign(node.name, self.expr(node.value, out)))
+            out.append(Assign(node.name, self.expr(node.value, out), node.inplace))
         elif isinstance(node, Unassign):
             out.append(Unassign(node.name, self.expr(node.witness, out)))
         elif isinstance(node, ExprStmt):

@@ -45,6 +45,7 @@ from compiler.parser.instructions import (
     Operand,
     Reg,
     Scratch,
+    Update,
 )
 from compiler.system import System
 
@@ -111,6 +112,8 @@ class _Allocator:
         if isinstance(instruction, (Op, IOp)):
             sources = tuple(self.operand(source) for source in instruction.sources)
             return type(instruction)(instruction.opcode, self.register(instruction.dst), sources)
+        if isinstance(instruction, Update):
+            return Update(instruction.opcode, self.register(instruction.dst), self.operand(instruction.source))
         if isinstance(instruction, (Ctrl, ICtrl)):
             return type(instruction)(self.operand(instruction.control))
         if isinstance(instruction, EndCtrl):

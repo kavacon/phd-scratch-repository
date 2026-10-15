@@ -73,6 +73,17 @@ class Op(Instruction):
 
 
 @dataclass(frozen=True)
+class Update(Instruction):
+    """
+    `dst += source` or `dst -= source` in place (`opcode` is "add" or "sub"). Unlike `Op` it needs no zero register:
+    `dst` holds a value and keeps the result. Its inverse is the other opcode, so a program can undo it exactly.
+    """
+    opcode: str
+    dst: str
+    source: Operand
+
+
+@dataclass(frozen=True)
 class IOp(Instruction):
     """The inverse of `Op` with the same fields: `dst` equals `opcode(sources)` and is left zero."""
     opcode: str
@@ -113,6 +124,8 @@ def inverse(instruction: Instruction) -> Instruction:
         return IOp(instruction.opcode, instruction.dst, instruction.sources)
     if isinstance(instruction, IOp):
         return Op(instruction.opcode, instruction.dst, instruction.sources)
+    if isinstance(instruction, Update):
+        return Update({"add": "sub", "sub": "add"}[instruction.opcode], instruction.dst, instruction.source)
     raise TypeError(f"no inverse for {type(instruction).__name__} on its own")
 
 

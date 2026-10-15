@@ -25,8 +25,8 @@ from compiler.passes.unroll import unroll
 from compiler.printer import unparse, unparse_isa
 from compiler.system import System
 from experiments.allocation_poc.passes.allocation import lower_allocation
-from experiments.allocation_poc.passes.balance import balance
-from experiments.allocation_poc.passes.rename import rename
+from compiler.passes.balance import balance
+from compiler.passes.rename import rename
 from experiments.allocation_poc.programs import PROGRAMS
 
 # The AST passes in the order they run (see the pipeline notes for why this order).

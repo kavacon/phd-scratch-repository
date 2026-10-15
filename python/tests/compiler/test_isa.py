@@ -20,10 +20,10 @@ from compiler.parser.instructions import (
 )
 from compiler.parser.parser import parse
 from experiments.allocation_poc.experiment import compile_source
-from experiments.allocation_poc.passes.balance import balance
+from compiler.passes.balance import balance
 from compiler.passes.flatten import flatten
 from compiler.passes.isa import IsaError, lower_to_isa
-from experiments.allocation_poc.passes.rename import rename
+from compiler.passes.rename import rename
 from compiler.passes.unroll import unroll
 
 

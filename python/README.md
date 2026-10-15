@@ -5,7 +5,7 @@ Compiler proof of concept and the experiments built on it.
 ```
 src/
   compiler/      shared: the Compiler and System, grammar, parser (and its syntax-error messages), instruction set, printer
-    passes/      passes any experiment can use: inline, unroll, flatten, ISA lowering, physical allocation,
+    passes/      passes any experiment can use: inline, unroll, flatten, balance, rename, ISA lowering, physical allocation,
                  circuit generation (a Qiskit circuit), Qiskit optimisation (the core above does not import them)
   checking/      shared: reference machines (AST and instruction level), gate-level checks, Qiskit/Aer helpers
   demo/          shared: the demo app framework. model.py is the data a demo fills in, app.py serves it,
@@ -13,7 +13,7 @@ src/
   experiments/
     allocation_poc/
       experiment.py     the pass order, a Compiler, compile_source / compile_circuit, and a CLI. No web code.
-      passes/           balance, rename, liveness, release insertion
+      passes/           liveness, release insertion
       demos/            explorer.py (+ explorer_blocks.py) and compare.py: web apps built on `demo`
       programs.py, views.py, qrisp_programs.py, qrisp_comparison.py
     encodings/          Same program, different encodings (experiment.py is a stub)

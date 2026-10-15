@@ -71,6 +71,17 @@ class _ToGrammar(Transformer):
     def assignment(self, name, value):
         return Assign(str(name), value)
 
+    def add_update(self, name, value):
+        return Assign(str(name), BinOp("+", Variable(str(name)), value), inplace=True)
+
+    def sub_update(self, name, value):
+        return Assign(str(name), BinOp("-", Variable(str(name)), value), inplace=True)
+
+    def neg(self, operand):
+        if isinstance(operand, Number):  # a negative literal
+            return Number(-operand.value)
+        return BinOp("-", Number(0), operand)
+
     def return_stmt(self, value):
         return Return(value)
 

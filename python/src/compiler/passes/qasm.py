@@ -3,7 +3,7 @@ Circuit generation: turn an allocated instruction program into a circuit (a Qisk
 
 Layout. Slot `i` is the qubits `i*w` to `i*w + w - 1`, least significant bit first, where `w` is the system's register
 width. The scratch register the program declares with `SCRATCH` follows the slots, so the circuit has `(slots used + 1) * w` qubits.
-An integer is unsigned and arithmetic is modulo 2^w. A boolean (a comparison, `and`, `or`, `not`) is bit 0 of its
+An integer is two's complement and arithmetic is modulo 2^w. A boolean (a comparison, `and`, `or`, `not`) is bit 0 of its
 register with the other bits zero; `CTRL` and the logical operations read only bit 0.
 
 Every gate here is an X with some controls (X, CNOT, Toffoli, multi-controlled X), each control positive or
@@ -52,6 +52,7 @@ from compiler.parser.instructions import (
     Reg,
     IsaProgram,
     Scratch,
+    Update,
 )
 from compiler.compiler import CIRCUIT, ISA, compile_pass
 from compiler.system import System
@@ -237,6 +238,19 @@ class _Builder:
         for i in range(len(a)):
             self.majority(carries[i], b[i], a[i])
 
+    def update(self, opcode: str, dst: Sequence[int], src: Sequence[Bit]) -> None:
+        """dst += src or dst -= src in place: the adder (or its inverse) without the copy an out-of-place add needs."""
+        constant = _constant(src)
+        if constant is not None:
+            self.add_constant(dst, constant if opcode == "add" else (-constant) & ((1 << self.w) - 1))
+        elif list(src) == [Q(q) for q in dst]:
+            raise CircuitError("a register cannot be updated with itself: the result cannot be undone")
+        elif opcode == "add":
+            self.adder(dst, [bit.index for bit in src], self.scratch)
+        else:
+            with self.undone():
+                self.adder(dst, [bit.index for bit in src], self.scratch)
+
     # -- opcodes ------------------------------------------------------------------------------------------------
 
     def op(self, opcode: str, dst: Sequence[int], srcs: Sequence[Sequence[Bit]]) -> None:
@@ -247,10 +261,12 @@ class _Builder:
         getattr(self, f"op_{opcode}", self.unsupported(opcode))(dst, *srcs)
 
     def fold(self, opcode: str, v: Sequence[int]) -> int:
-        mask = (1 << self.w) - 1
+        mask, half = (1 << self.w) - 1, 1 << (self.w - 1)
+        signed = lambda x: x - (mask + 1) if x >= half else x  # noqa: E731  (comparison is on two's complement values)
         table = {
             "copy": lambda a: a, "add": lambda a, b: (a + b) & mask, "sub": lambda a, b: (a - b) & mask,
-            "mul": lambda a, b: (a * b) & mask, "lt": lambda a, b: int(a < b), "gt": lambda a, b: int(a > b),
+            "mul": lambda a, b: (a * b) & mask, "lt": lambda a, b: int(signed(a) < signed(b)),
+            "gt": lambda a, b: int(signed(a) > signed(b)),
             "eq": lambda a, b: int(a == b), "ne": lambda a, b: int(a != b),
             "and": lambda a, b: (a & b) & 1, "or": lambda a, b: (a | b) & 1, "not": lambda a: 1 - (a & 1),
         }
@@ -341,6 +357,17 @@ class _Builder:
         self.gate(dst[0])
 
     def op_lt(self, dst, a, b):
+        # integers are two's complement, and that order is the unsigned order with the top bit flipped on both sides
+        top = self.w - 1
+        flipped = [bits[top].index for bits in (a, b) if isinstance(bits[top], Q) and not _same(a, b)]
+        flip = lambda bits: [C(1 - bit.value) if i == top and isinstance(bit, C) else bit for i, bit in enumerate(bits)]  # noqa: E731
+        for q in flipped:
+            self.x(q)
+        self.lt_unsigned(dst, flip(a), flip(b))
+        for q in flipped:
+            self.x(q)
+
+    def lt_unsigned(self, dst, a, b):
         w = self.w
         if _constant(b) is not None:  # a < c: the first bit that differs is a 0 in a where c has a 1
             c = _constant(b)
@@ -467,6 +494,9 @@ def to_openqasm(program: IsaProgram, system: Optional[System] = None) -> Quantum
             _Builder(target, width, scratch, regions).op(instruction.opcode, dst, sources)
             if isinstance(instruction, IOp):  # the inverse instruction is the same gates in reverse order
                 circuit.compose(target.inverse(), inplace=True)
+        elif isinstance(instruction, Update):
+            dst = [bit.index for bit in _bits(Reg(instruction.dst), width, needed)]
+            _Builder(circuit, width, scratch, regions).update(instruction.opcode, dst, _bits(instruction.source, width, needed))
         elif isinstance(instruction, (Ctrl, ICtrl)):
             control = _bits(instruction.control, width, needed)[0]
             if not isinstance(control, Q):
