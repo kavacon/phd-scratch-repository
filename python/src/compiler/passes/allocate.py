@@ -137,7 +137,7 @@ def allocate(program: IsaProgram, system: Optional[System] = None) -> IsaProgram
     system = system or System()
     allocator = _Allocator()
     body: List[Instruction] = [allocator.rewrite(instruction) for instruction in program.body]
-    result = IsaProgram((Scratch(slot_name(allocator.opened)), *body), allocator.operand(program.result))
+    result = IsaProgram((Scratch(slot_name(allocator.opened)), *body), None if program.result is None else allocator.operand(program.result))
     if allocator.opened > system.slots:
         raise WidthExceeded(allocator.opened, system.slots, result)
     return result

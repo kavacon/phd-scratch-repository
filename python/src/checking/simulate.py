@@ -294,7 +294,7 @@ def simulate_isa(program: IsaProgram, system: Optional[System] = None) -> Result
     """Run a program; returns its value, the registers left held and the most held at once."""
     machine = _IsaMachine(system)
     machine.run(program.body)
-    value = machine.read(program.result)
+    value = None if program.result is None else machine.read(program.result)
     held = set(machine.registers) - ({program.result.name} if isinstance(program.result, Reg) else set())
     return Result(value, {"<program>": held}, {"<program>": machine.peak})
 

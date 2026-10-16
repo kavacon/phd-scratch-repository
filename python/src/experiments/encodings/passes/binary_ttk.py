@@ -89,6 +89,8 @@ def to_circuit_binary_ttk(program: IsaProgram, system: Optional[System] = None) 
             regions.append((control.index, isinstance(instruction, Ctrl)))
         else:
             raise CircuitError(f"cannot turn {type(instruction).__name__} into gates")
+    if program.result is None:  # just the instructions: nothing to read out
+        return circuit
     if not isinstance(program.result, Reg):
         raise CircuitError("a program must return a register; run flatten first")
     result = _bits(program.result, width, needed)

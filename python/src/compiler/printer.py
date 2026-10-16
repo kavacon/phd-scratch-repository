@@ -120,4 +120,4 @@ def unparse_isa(program) -> str:
         lines += _instruction_lines(instruction, depth)
         if isinstance(instruction, (Ctrl, ICtrl)):
             depth += 1
-    return "\n".join(lines + [f"RETURN {_operand_text(program.result)}"])
+    return "\n".join(lines + ([f"RETURN {_operand_text(program.result)}"] if program.result is not None else []))
