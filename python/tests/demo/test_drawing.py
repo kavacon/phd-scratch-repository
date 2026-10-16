@@ -62,5 +62,20 @@ class DiagramTestCase(unittest.TestCase):
         self.assertLess(picture["shown"], picture["total"])
 
 
+@needs_qiskit
+class ControlledGateDiagramTestCase(unittest.TestCase):
+    def test_a_controlled_phase_is_a_box_on_the_target_with_its_controls_attached(self):
+        from qiskit import QuantumCircuit
+        from qiskit.circuit.library import PhaseGate
+        circuit = QuantumCircuit(4)
+        circuit.cp(0.5, 0, 3)
+        circuit.append(PhaseGate(1.25).control(2, ctrl_state=0b01), [1, 2, 0])
+        first, second = drawing.qiskit_diagram(circuit)["gates"]
+        self.assertEqual(("box", 3, [[0, True]], "P"), (first["kind"], first["target"], first["controls"], first["label"]))
+        self.assertEqual(("box", 0, [[1, True], [2, False]]), (second["kind"], second["target"], second["controls"]))
+        self.assertIn("2 controls", second["detail"])
+        self.assertEqual(2, drawing.qiskit_diagram(circuit)["layers"])  # they share wire 0, so they cannot be in one layer
+
+
 if __name__ == '__main__':
     unittest.main()
