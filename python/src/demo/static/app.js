@@ -334,8 +334,8 @@ function renderSteps() {
   panel.hidden = false;
   const nameOf = (id) => (steps.find((s) => s.id === id) || {}).name || id;
   panel.replaceChildren(
-    h("div", { class: "panel-head" }, h("h2", {}, "Steps"),
-      h("div", { class: "tools" }, h("button", { onclick: () => setAll(true) }, "All on"), h("button", { onclick: () => setAll(false) }, "All off"))),
+    h("div", { class: "panel-head" }, h("h2", {}, state.boot.steps_label),
+      state.boot.max_steps ? null : h("div", { class: "tools" }, h("button", { onclick: () => setAll(true) }, "All on"), h("button", { onclick: () => setAll(false) }, "All off"))),
     h("div", { class: "step-grid" }, steps.map((step, i) => {
       const on = state.enabled.has(step.id);
       const missing = on ? step.requires.filter((r) => !state.enabled.has(r)).map(nameOf) : [];
@@ -349,6 +349,8 @@ function renderSteps() {
 
 function toggle(id) {
   if (state.enabled.has(id)) state.enabled.delete(id); else { state.enabled.add(id); state.focus = id; }
+  const limit = state.boot.max_steps;
+  while (limit && state.enabled.size > limit) state.enabled.delete(state.enabled.values().next().value);  // the oldest goes
   renderSteps();
   run();
 }
@@ -394,6 +396,7 @@ function applyTheme(theme) {
   for (const spec of boot.inputs) state.values[spec.id] = spec.default;
   state.enabled = new Set(boot.steps.filter((s) => s.enabled).map((s) => s.id));
   buildInputs();
+  if (boot.steps_first) $("#stepper").before($("#steps-panel"));
   renderSteps();
   if (boot.cases.length) chooseCase(boot.cases[0]); else run();
 })();
