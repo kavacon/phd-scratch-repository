@@ -31,6 +31,9 @@ class Demo:
     workflow: bool = True  # stages are stepped through; False shows them all, one under another
     actions: Mapping[str, ActionFn] = field(default_factory=dict)  # (inputs, steps, payload) -> blocks
     cases_label: str = "Cases"
+    steps_label: str = "Steps"
+    steps_first: bool = False  # the steps panel goes above the results instead of below them
+    max_steps: int = 0  # at most this many steps on at once (0 for any number); turning on another turns off the oldest
     theme: Optional[Theme] = None  # the demo's colours; the shared look when None
     port: int = 8000
 
@@ -55,7 +58,8 @@ class Demo:
     def clean_steps(self, raw: Any) -> List[str]:
         known = [step.id for step in self.steps]
         chosen = set(raw) if isinstance(raw, list) else set(known)
-        return [step for step in known if step in chosen]  # in the demo's order
+        steps = [step for step in known if step in chosen]  # in the demo's order
+        return steps[:self.max_steps] if self.max_steps else steps
 
     def bootstrap(self) -> Dict[str, Any]:
         """What the page needs before anything runs."""
@@ -64,6 +68,9 @@ class Demo:
             "description": self.description,
             "workflow": self.workflow,
             "cases_label": self.cases_label,
+            "steps_label": self.steps_label,
+            "steps_first": self.steps_first,
+            "max_steps": self.max_steps,
             "theme": self.theme.css() if self.theme is not None else None,
             "inputs": [{"kind": "number" if isinstance(i, Number) else "text", **to_data(i)} for i in self.inputs],
             "cases": [to_data(c) for c in self.cases],

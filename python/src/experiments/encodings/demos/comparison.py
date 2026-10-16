@@ -11,25 +11,15 @@ from lark.exceptions import UnexpectedInput
 
 from compiler.parser.errors import describe_parse_error
 from compiler.parser.parser import parse
-from compiler.passes.qasm import openqasm_text
+from qiskit import QuantumCircuit
+
 from compiler.system import System
 from demo import app
-from demo.drawing import diagram
-from demo.model import (
-    Bar, Case, Cell, Code, Diagram, Note, Number, Option, Result, Row, SourceError, Stage, Stats, Step, Switcher, Text,
-)
-from demo.text import shorten
+from demo.model import Bar, Case, Cell, Code, Note, Number, Result, Row, SourceError, Stage, Stats, Step, Text
 from experiments.encodings import experiment
+from experiments.encodings.demos.blocks import bar, circuits, mix
 from experiments.encodings.encodings import DEFAULT, ENCODINGS
 from experiments.encodings.programs import PROGRAMS
-
-
-def _mix(r: experiment.Outcome) -> str:
-    return " · ".join(f"{n} {name}" for name, n in sorted(r.ops.items(), key=lambda item: -item[1]))
-
-
-def _bar(value: int, top: int) -> Cell:
-    return Cell(str(value), bars=(Bar(value / top, "series-1"),))
 
 
 def _results(rows: List[experiment.Outcome], reference: int, enabled: List[str], failures: Dict[str, Note]) -> List[Any]:
@@ -44,36 +34,17 @@ def _results(rows: List[experiment.Outcome], reference: int, enabled: List[str],
         blocks.append(Stats(
             ("stage", "value", "agrees", "shots", "qubits touched", "gates", "depth"),
             tuple(
-                Row(r.stage, note=_mix(r), cells=(
+                Row(r.stage, note=mix(r.ops), cells=(
                     Cell(str(r.value), tone="good" if r.agrees else "bad"),
                     Cell("yes" if r.agrees else "no", tone="good" if r.agrees else "bad"),
                     Cell(str(r.shots)),
-                    _bar(r.qubits_touched, top["qubits_touched"]),
-                    _bar(r.gates, top["gates"]),
-                    _bar(r.depth, top["depth"]),
+                    bar(r.qubits_touched, top["qubits_touched"]),
+                    bar(r.gates, top["gates"]),
+                    bar(r.depth, top["depth"]),
                 ))
                 for r in rows if r.encoding == name
             ),
         ))
-    return blocks
-
-
-def _circuits(compilations: Dict[str, Any]) -> List[Any]:
-    """A heading and a row of stage buttons for each encoding, one button per circuit its pipeline produced."""
-    blocks: List[Any] = []
-    for name, compilation in compilations.items():
-        options = []
-        for stage in compilation.stages:
-            if not hasattr(stage.output, "qregs"):
-                continue
-            picture = diagram(stage.output)
-            cut = (f"first {picture['layers']} layers, {picture['shown']:,} of {picture['total']:,} gates" if picture["shown"] < picture["total"]
-                   else f"{picture['total']:,} gates, {picture['layers']} layers")
-            options.append(Option(stage.name, stage.name, (Switcher("circuit-view", (
-                Option("diagram", "Circuit diagram", (Diagram(picture, stage.name, cut),)),
-                Option("text", "OpenQASM text", (Code.of(shorten(openqasm_text(stage.output)), stage.name),)),
-            )),)))
-        blocks += [Note(ENCODINGS[name].title, "heading"), Switcher(f"circuit-{name}", tuple(options))]
     return blocks
 
 
@@ -147,7 +118,7 @@ def _single(inputs: Dict[str, Any], enabled: List[str], system: System) -> Resul
         rows = experiment.outcomes(source, compilations, system)
         stages += [
             Stage("results", "Results", "What each encoding returned, and what it cost.", tuple(_results(rows, reference, enabled, failures))),
-            Stage("circuits", "Circuits", "", tuple(_circuits(compilations))),
+            Stage("circuits", "Circuits", "", tuple(circuits({name: [(st.name, st.output) for st in c.stages if isinstance(st.output, QuantumCircuit)] for name, c in compilations.items()}))),
         ]
     else:
         stages.append(Stage("results", "Results", "", tuple(failures.values())))

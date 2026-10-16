@@ -38,6 +38,16 @@ class DemoTestCase(unittest.TestCase):
         self.assertEqual(["one", "two"], DEMO.clean_steps(None))
         self.assertEqual([], DEMO.clean_steps([]))
 
+    def test_a_demo_can_cap_how_many_steps_are_on_and_put_them_first(self):
+        capped = app.Demo("t", "d", toy_run, steps=(Step("one", "One"), Step("two", "Two"), Step("three", "Three")),
+                          steps_label="Pick", steps_first=True, max_steps=2)
+        self.assertEqual(["one", "two"], capped.clean_steps(["three", "two", "one"]))
+        self.assertEqual(["one", "two"], capped.clean_steps(None))
+        boot = capped.bootstrap()
+        self.assertEqual(("Pick", True, 2), (boot["steps_label"], boot["steps_first"], boot["max_steps"]))
+        plain = DEMO.bootstrap()
+        self.assertEqual(("Steps", False, 0), (plain["steps_label"], plain["steps_first"], plain["max_steps"]))
+
     def test_the_bootstrap_declares_inputs_cases_steps_and_action_urls(self):
         boot = DEMO.bootstrap()
         self.assertEqual(["text", "number"], [i["kind"] for i in boot["inputs"]])

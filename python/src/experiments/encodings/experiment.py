@@ -85,17 +85,22 @@ def reference(source: str, system: Optional[System] = None) -> int:
     return int(simulate(parse(source), system or SYSTEM).value)
 
 
-def measure(encoding: str, stage: str, circuit: QuantumCircuit, expected: int, system: System) -> Outcome:
-    """Run one circuit with its own readout recipe, and count what it is made of."""
-    readout = readout_of(circuit)
-    ran = qiskit_tools.execute(circuit, len(measured_qubits(circuit)), readout.shots)
+def count(circuit: QuantumCircuit) -> Tuple[int, int, int, Dict[str, int]]:
+    """What a circuit is made of: the qubits touched, gates, depth, and the gates by name (measurements left out)."""
     counted = qiskit_tools.measure(circuit)
     ops: Dict[str, int] = {}
     for name, n in counted["ops"].items():  # "mcx_o5" is an mcx with some controls open: still an mcx
         if name != "measure":
             ops[name.split("_o")[0]] = ops.get(name.split("_o")[0], 0) + n
+    return counted["touched"], counted["gates"], counted["depth"], ops
+
+
+def measure(encoding: str, stage: str, circuit: QuantumCircuit, expected: int, system: System) -> Outcome:
+    """Run one circuit with its own readout recipe, and count what it is made of."""
+    readout = readout_of(circuit)
+    ran = qiskit_tools.execute(circuit, len(measured_qubits(circuit)), readout.shots)
     return Outcome(encoding, stage, decode(readout, ran["counts"], system.register_width), expected, readout.shots,
-                   counted["touched"], counted["gates"], counted["depth"], ops)
+                   *count(circuit))
 
 
 def outcomes(source: str, compilations: Dict[str, Compilation], system: Optional[System] = None) -> List[Outcome]:
