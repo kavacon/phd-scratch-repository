@@ -14,7 +14,8 @@ no widths yet) and an instruction becomes a circuit fragment directly.
   adds a control. There are no jumps and no blocks: an `if` is a `Ctrl` region and an `ICtrl` region, and both
   are always in the circuit. A controlled region never allocates or frees; those are placed before and after it.
 
-A program is one flat list of these instructions and the value it returns. There is no call instruction: calls were
+A program is one flat list of these instructions and, usually, the value it returns. A program with no `result` is just
+a body: a lowering builds its instructions and nothing to read the result out. There is no call instruction: calls were
 descoped for this version, and the inline pass has already copied every callee into its call sites, so a program
 reaches this level with no functions. A `CALL` to a separate instruction set could return if a target needs
 subroutines to stay first-class.
@@ -23,7 +24,7 @@ Every instruction has an explicit inverse (`inverse`): `ALLOC`/`FREE`, `OP`/`IOP
 In-place forms (`x += y`, whose inverse `x -= y` is a different circuit) are not defined yet.
 """
 from dataclasses import dataclass
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 
 @dataclass(frozen=True)
@@ -111,7 +112,7 @@ class EndCtrl(Instruction):
 @dataclass(frozen=True)
 class IsaProgram:
     body: Tuple[Instruction, ...]
-    result: Operand
+    result: Optional[Operand] = None
 
 
 def inverse(instruction: Instruction) -> Instruction:
