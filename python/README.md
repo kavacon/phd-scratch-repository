@@ -16,7 +16,9 @@ src/
       passes/           liveness, release insertion
       demos/            explorer.py (+ explorer_blocks.py) and compare.py: web apps built on `demo`
       programs.py, views.py, qrisp_programs.py, qrisp_comparison.py
-    encodings/          Same program, different encodings (experiment.py is a stub)
+    encodings/          Same program, different encodings. The two binary encodings and Fourier are built; fourier-dual
+                        and angle are placeholders. experiment.py (the --encoding flag, pipelines, outcomes), encodings.py (the
+                        registry), passes/ (one lowering each), programs.py, readout.py, demos/comparison.py
 tests/           mirrors src/
 ```
 

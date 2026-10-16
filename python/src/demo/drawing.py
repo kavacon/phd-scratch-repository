@@ -1,7 +1,8 @@
 """
 Data for drawing circuits, shared by the demos (static/circuit.js draws it): one label per wire, and the gates placed
 in layers. Gates are plain dicts with a `kind` ("x" for an X with controls, "box" for a
-gate on one wire, "block" for a gate on several, "meter" for a measurement).
+gate on one wire with any controls attached, "block" for a gate on several wires that is not a controlled gate, "meter" for
+a measurement).
 """
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -47,7 +48,8 @@ def qiskit_diagram(circuit, labels: Optional[Sequence[str]] = None, groups: Opti
                    register_width: int = 0) -> Dict[str, Any]:
     """
     Data for drawing any Qiskit circuit (ours after Qiskit's optimiser, or one built by Qrisp). X gates with controls,
-    positive or negative, are drawn as such; other single-qubit gates as a box; anything wider as one tall box.
+    positive or negative, are drawn as such; other controlled gates (controlled phases) as a box on the target with the controls
+    attached; other single-qubit gates as a box; anything else as one tall box.
     `groups` says which variable each wire belongs to and `register_width` how many wires make a register, so the
     viewer can colour the labels alternately.
     """
@@ -64,6 +66,13 @@ def qiskit_diagram(circuit, labels: Optional[Sequence[str]] = None, groups: Opti
             count = getattr(operation, "num_ctrl_qubits", 0)
             state = getattr(operation, "ctrl_state", (1 << count) - 1)
             gates.append(_controlled_x(qubits[-1], [[qubits[i], bool((state >> i) & 1)] for i in range(count)], operation.name))
+        elif base is not None and getattr(operation, "num_ctrl_qubits", 0) > 0:  # a controlled phase or other controlled gate
+            count = operation.num_ctrl_qubits
+            state = getattr(operation, "ctrl_state", (1 << count) - 1)
+            gate = _box(base.name, qubits[-1], [p for p in base.params if isinstance(p, (int, float))])
+            gate["controls"] = [[qubits[i], bool((state >> i) & 1)] for i in range(count)]
+            gate["detail"] += f", {count} control{'' if count == 1 else 's'}"
+            gates.append(gate)
         elif len(qubits) == 1:
             gates.append(_box(operation.name, qubits[0], [p for p in operation.params if isinstance(p, (int, float))]))
         else:
