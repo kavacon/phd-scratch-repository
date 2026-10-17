@@ -9,7 +9,7 @@ from experiments.encodings.encodings import DEFAULT, ENCODINGS
 
 class EncodingsTestCase(unittest.TestCase):
     def test_every_encoding_has_a_lowering_that_is_a_circuit_pass(self):
-        self.assertEqual(["binary", "binary-ttk", "fourier", "fourier-dual"], list(ENCODINGS))
+        self.assertEqual(["binary", "binary-ttk", "fourier", "fourier-dual", "rns"], list(ENCODINGS))
         for encoding in ENCODINGS.values():
             self.assertEqual(CIRCUIT, encoding.lowering.compile_pass.gives, encoding.name)
 
