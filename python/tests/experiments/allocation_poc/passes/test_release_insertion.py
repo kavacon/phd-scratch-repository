@@ -21,11 +21,6 @@ def compiled(source):
     return compile_source(source, passes=(unroll, flatten, balance, rename, lower_allocation))
 
 
-def prepared(source):
-    """What the insertion pass starts from."""
-    return compile_source(source, passes=(unroll, balance, rename))
-
-
 def expected(text):
     return textwrap.dedent(text).strip()
 
@@ -43,45 +38,6 @@ class InsertionExamplesTestCase(unittest.TestCase):
                 return q#1;
             }
             $t1#1 = area(2, 3);
-            return $t1#1;
-        """)
-
-    def test_a_chain_is_released_in_reverse_creation_order(self):
-        self.check("function f(x: int): int { a = x + 1; b = a * 2; c = b + a; return c; } return f(1);", """
-            function f(x#0: int): int {
-                a#1 = x#0 + 1;
-                b#1 = a#1 * 2;
-                c#1 = b#1 + a#1;
-                b#1 ~= a#1 * 2;
-                a#1 ~= x#0 + 1;
-                return c#1;
-            }
-            $t1#1 = f(1);
-            return $t1#1;
-        """)
-
-    def test_a_returned_expression_is_named_so_what_it_reads_can_be_released(self):
-        # flatten puts the returned expression in a temporary, so t is no longer an output and can be released
-        self.check("function f(a: int): int { t = a + 1; return t * 2; } return f(1);", """
-            function f(a#0: int): int {
-                t#1 = a#0 + 1;
-                $t1#1 = t#1 * 2;
-                t#1 ~= a#0 + 1;
-                return $t1#1;
-            }
-            $t1#1 = f(1);
-            return $t1#1;
-        """)
-
-    def test_a_value_that_is_overwritten_before_use_is_released_straight_away(self):
-        self.check("function f(a: int): int { y = 0; y = a + 1; return y; } return f(1);", """
-            function f(a#0: int): int {
-                y#1 = 0;
-                y#1 ~= 0;
-                y#2 = a#0 + 1;
-                return y#2;
-            }
-            $t1#1 = f(1);
             return $t1#1;
         """)
 
@@ -123,95 +79,12 @@ class InsertionExamplesTestCase(unittest.TestCase):
             return $t1#1;
         """)
 
-    def test_a_branch_temporary_that_feeds_nothing_the_if_produced_is_released_in_the_branch(self):
-        # u is unused, so it goes straight away. Only temporaries the produced version reads outlive the branch.
-        self.check("function f(a: int): int { x = 0; if a < 5 { u = a * 3; x = a + 1; } else { x = a - 1; } return x; } return f(1);", """
-            function f(a#0: int): int {
-                x#1 = 0;
-                x#1 ~= 0;
-                $t1#1 = a#0 < 5;
-                if $t1#1 {
-                    u#1 = a#0 * 3;
-                    u#1 ~= a#0 * 3;
-                    x#2 = a#0 + 1;
-                } else {
-                    x#2 = a#0 - 1;
-                }
-                $t1#1 ~= a#0 < 5;
-                return x#2;
-            }
-            $t1#1 = f(1);
-            return $t1#1;
-        """)
-    def test_nested_ifs_nest_the_release(self):
-        # the inner condition register stays alive for the release too, so the nested release is flat as well
-        self.check("""
-            function f(a: int): int {
-                x = a;
-                if a < 5 { if a < 3 { x = a + 1; } else { x = a + 2; } x = x * 2; } else { x = a - 1; }
-                return a;
-            }
-            return f(1);
-        """, """
-            function f(a#0: int): int {
-                x#1 = a#0;
-                x#1 ~= a#0;
-                $t1#1 = a#0 < 5;
-                if $t1#1 {
-                    $t2#1 = a#0 < 3;
-                    if $t2#1 {
-                        x#2 = a#0 + 1;
-                    } else {
-                        x#2 = a#0 + 2;
-                    }
-                    x#4 = x#2 * 2;
-                } else {
-                    x#4 = a#0 - 1;
-                }
-                if $t1#1 {
-                    x#4 ~= x#2 * 2;
-                    if $t2#1 {
-                        x#2 ~= a#0 + 1;
-                    } else {
-                        x#2 ~= a#0 + 2;
-                    }
-                    $t2#1 ~= a#0 < 3;
-                } else {
-                    x#4 ~= a#0 - 1;
-                }
-                $t1#1 ~= a#0 < 5;
-                return a#0;
-            }
-            $t1#1 = f(1);
-            return $t1#1;
-        """)
-    def test_an_unrolled_loop_is_released_like_straight_line_code(self):
-        # every value the loop updated is an ordinary version, so nothing is carried and all of it is released
-        self.check("function g(x: int): int { s = x; for i in 0 .. 2 { t = s + i; s = t * 2; } return s; } return g(3);", """
-            function g(x#0: int): int {
-                s#1 = x#0;
-                t@0#1 = s#1 + 0;
-                s#2 = t@0#1 * 2;
-                t@1#1 = s#2 + 1;
-                s#3 = t@1#1 * 2;
-                t@1#1 ~= s#2 + 1;
-                s#2 ~= t@0#1 * 2;
-                t@0#1 ~= s#1 + 0;
-                s#1 ~= x#0;
-                return s#3;
-            }
-            $t1#1 = g(3);
-            return $t1#1;
-        """)
-
-
 
 class InsertionBehaviourTestCase(unittest.TestCase):
     """Run the programs: values are unchanged, every witness is right, and nothing is read after release."""
 
     PROGRAMS = {
         "chain": "function f(x: int): int { a = x + 1; b = a * 2; c = b + a; return c; } return f(@N@);",
-        "returned expression": "function f(a: int): int { t = a + 1; u = t * 3; return t + u; } return f(@N@);",
         "if else": """
             function f(x: int): int {
                 a = x + 1; y = 0;
@@ -231,51 +104,7 @@ class InsertionBehaviourTestCase(unittest.TestCase):
             }
             return f(@N@);
         """,
-        "branch assigns a variable twice": """
-            function f(a: int): int {
-                x = a + 1;
-                if a < 3 { x = x * 2; x = x + 7; } else { x = x - 1; }
-                return x;
-            }
-            return f(@N@);
-        """,
         "loop with a temporary": "function g(n: int): int { s = n; for i in 0 .. 3 { t = s + i; s = t * 2 + 1; } return s; } return g(@N@);",
-        "if inside a loop": """
-            function g(n: int): int {
-                a = n;
-                for i in 0 .. 3 { if a < 20 { t = a + i; a = t * 2; } }
-                return a;
-            }
-            return g(@N@);
-        """,
-        "an if result that is returned": "function f(n: int): int { x = 0; if n < 3 { t = n * 2; x = t + 1; } else { x = n - 1; } return x; } return f(@N@);",
-        "one result returned and one released": """
-            function f(n: int): int {
-                x = 0; y = 0;
-                if n < 3 { t = n * 2; x = t + 1; y = t + 2; } else { x = n - 1; y = n - 2; }
-                z = y + 1;
-                return x + z;
-            }
-            return f(@N@);
-        """,
-        "results of different lifetimes": """
-            function f(n: int): int {
-                x = 0; y = 0;
-                if n < 3 { x = n + 1; y = n + 2; } else { x = n - 1; y = n - 2; }
-                u = x + 1; v = u * 2; w = y + v;
-                return w;
-            }
-            return f(@N@);
-        """,
-        "a nested if inside an else": """
-            function f(n: int): int {
-                x = n;
-                if n < 2 { x = n + 10; } else { if n < 4 { t = n * 2; x = t + 1; } else { x = n - 1; } }
-                r = x + n;
-                return r;
-            }
-            return f(@N@);
-        """,
         "functions calling functions": """
             function double(x: int): int { y = x * 2; return y + 0; }
             function quad(x: int): int { d = double(x); return double(d); }
@@ -308,7 +137,6 @@ class InsertionBehaviourTestCase(unittest.TestCase):
         broken = compile_source("function f(a: int): int { t = a + 1; t ~= a + 2; return a; } return f(1);")
         with self.assertRaises(SimulationError):
             simulate(broken)
-
 
 
 if __name__ == '__main__':

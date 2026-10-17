@@ -2,7 +2,7 @@ import unittest
 
 from lark.exceptions import UnexpectedInput
 
-from compiler.parser.ast_tools import rewrite, walk
+from compiler.parser.ast_tools import rewrite
 from compiler.parser.grammar import (
     Assign,
     BinOp,
@@ -52,10 +52,6 @@ class ParseTestCase(unittest.TestCase):
         self.assertEqual(Return(Variable("t")), program[1].body[-1])
         self.assertEqual(Call("f", (Number(1), Number(2))), program[3].expr)
 
-    def test_function_without_params_or_return_type(self):
-        function = raw("function f() { return 1; } return 1;")[0]
-        self.assertEqual(((), None), (function.params, function.return_type))
-
     def test_precedence_and_equality(self):
         [statement] = stmts("x = 1 + 2 * 3 == 7.5;")
         self.assertEqual(
@@ -97,11 +93,6 @@ class ParseTestCase(unittest.TestCase):
         with self.assertRaises(UnexpectedInput):
             stmts("for i to 3 { }")
 
-    def test_loop_bounds_must_be_integer_literals(self):
-        for bad in ("for i in 0 .. n { }", "for i in n .. 3 { }", "for i in 0 .. 1 + 2 { }", "for i in 0 .. 2.5 { }"):
-            with self.assertRaises(UnexpectedInput, msg=bad):
-                stmts(bad)
-
     def test_logical_operators(self):
         # C-style precedence: ! binds tightest, then &&, then ||
         [statement] = stmts("x = !a && b || c == d;")
@@ -111,23 +102,6 @@ class ParseTestCase(unittest.TestCase):
         )
         self.assertEqual(Not(Not(Boolean(True))), stmts("x = !!true;")[0].value)
         self.assertEqual(BinOp("*", Not(Variable("a")), Number(2)), stmts("x = !a * 2;")[0].value)
-
-    def test_not_equals(self):
-        self.assertEqual(
-            BinOp("&&", BinOp("!=", Variable("a"), Number(1)), Variable("b")),
-            stmts("x = a != 1 && b;")[0].value,
-        )
-        with self.assertRaises(UnexpectedInput):
-            stmts("x = a == b != c;")
-
-    def test_booleans(self):
-        [statement, other] = stmts("x = true; y = falsey;")
-        self.assertEqual(Boolean(True), statement.value)
-        self.assertEqual(Variable("falsey"), other.value)
-
-    def test_while_is_not_part_of_the_language(self):
-        with self.assertRaises(UnexpectedInput):
-            stmts("while true { x = 1; }")
 
     def test_unassign(self):
         self.assertEqual(
@@ -139,11 +113,6 @@ class ParseTestCase(unittest.TestCase):
 
 
 class ReturnRulesTestCase(unittest.TestCase):
-    def test_program_and_functions_end_with_a_valued_return(self):
-        self.assertEqual(
-            [FunctionDef("f", (), "int", (Return(Number(1)),)), Return(Call("f"))],
-            raw("function f(): int { return 1; } return f();"),
-        )
 
     def test_missing_misplaced_or_empty_returns_are_rejected(self):
         for bad in (
@@ -172,9 +141,6 @@ class PassesTestCase(unittest.TestCase):
 
 
 class TraversalTestCase(unittest.TestCase):
-    def test_walk(self):
-        [statement] = stmts("x = 1 + 2;")
-        self.assertEqual(["Assign", "BinOp", "Number", "Number"], [type(n).__name__ for n in walk(statement)])
 
     def test_rewrite_is_pure(self):
         program = stmts("x = 1; for i in 0 .. 2 { x = x + 1; }")

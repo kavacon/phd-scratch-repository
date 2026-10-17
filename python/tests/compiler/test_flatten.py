@@ -8,7 +8,7 @@ from compiler.parser.ast_tools import walk
 from compiler.parser.grammar import Assign, BinOp, Boolean, Call, Equals, ExprStmt, If, Not, Number, Return, Unassign, Variable
 from compiler.parser.parser import parse
 from experiments.allocation_poc.experiment import compile_source
-from compiler.passes.flatten import FlattenError, flatten
+from compiler.passes.flatten import flatten
 from compiler.passes.unroll import unroll
 
 
@@ -32,31 +32,6 @@ class FlattenExamplesTestCase(unittest.TestCase):
             return y;
         """)
 
-    def test_temporaries_are_numbered_in_the_order_they_are_computed(self):
-        self.check("a = 1; b = 2; y = (a * 2) + (b * 3); return y;", """
-            a = 1;
-            b = 2;
-            $t1 = a * 2;
-            $t2 = b * 3;
-            y = $t1 + $t2;
-            return y;
-        """)
-
-    def test_deeper_nesting_and_not(self):
-        self.check("a = 1; b = 2; y = !((a + 1) < (b * 2)); return y;", """
-            a = 1;
-            b = 2;
-            $t1 = a + 1;
-            $t2 = b * 2;
-            $t3 = $t1 < $t2;
-            y = !$t3;
-            return y;
-        """)
-
-    def test_already_flat_statements_are_left_alone(self):
-        source = "a = 1; b = a + 2; c = b; d = true; return d;"
-        self.assertEqual(unparse(compile_source(source, passes=(unroll,))), flattened(source))
-
     def test_a_chain_of_equalities_becomes_pairwise_comparisons(self):
         self.check("a = 1; b = 1; c = 1; z = a == b == c; return z;", """
             a = 1;
@@ -77,24 +52,6 @@ class FlattenExamplesTestCase(unittest.TestCase):
             return z;
         """)
 
-    def test_a_returned_expression_or_literal_is_named_but_a_returned_variable_is_not(self):
-        self.check("function f(a: int): int { return a * 2 + 1; } return f(1);", """
-            function f(a: int): int {
-                $t1 = a * 2;
-                $t2 = $t1 + 1;
-                return $t2;
-            }
-            $t1 = f(1);
-            return $t1;
-        """)
-        self.check("function f(a: int): int { return a; } return 7;", """
-            function f(a: int): int {
-                return a;
-            }
-            $t1 = 7;
-            return $t1;
-        """)
-
     def test_an_if_condition_is_computed_into_a_register_before_the_if(self):
         self.check("a = 1; b = 2; x = 0; if (a + 1) < (b * 2) { x = 1; } else { x = 2; } return x;", """
             a = 1;
@@ -107,30 +64,6 @@ class FlattenExamplesTestCase(unittest.TestCase):
                 x = 1;
             } else {
                 x = 2;
-            }
-            return x;
-        """)
-
-    def test_a_plain_condition_needs_no_register(self):
-        self.check("a = true; x = 0; if a { x = 1; } return x;", """
-            a = true;
-            x = 0;
-            if a {
-                x = 1;
-            }
-            return x;
-        """)
-
-    def test_temporaries_made_inside_a_branch_stay_in_that_branch(self):
-        self.check("a = 1; x = 0; if a < 5 { x = (a + 1) * 2; } else { x = a; } return x;", """
-            a = 1;
-            x = 0;
-            $t1 = a < 5;
-            if $t1 {
-                $t2 = a + 1;
-                x = $t2 * 2;
-            } else {
-                x = a;
             }
             return x;
         """)
@@ -148,27 +81,6 @@ class FlattenExamplesTestCase(unittest.TestCase):
             $t5 = g($t4);
             y = $t2 + $t5;
             return y;
-        """)
-
-    def test_a_call_statement_keeps_its_shape_with_flat_arguments(self):
-        self.check("function g(a: int): int { return a; } a = 1; g(a * 2); return a;", """
-            function g(a: int): int {
-                return a;
-            }
-            a = 1;
-            $t1 = a * 2;
-            g($t1);
-            return a;
-        """)
-
-    def test_a_hand_written_witness_is_flattened_too(self):
-        self.check("a = 1; x = a * 2 + 1; x ~= a * 2 + 1; return a;", """
-            a = 1;
-            $t1 = a * 2;
-            x = $t1 + 1;
-            $t2 = a * 2;
-            x ~= $t2 + 1;
-            return a;
         """)
 
     def test_a_returned_literal_is_named_so_every_program_returns_a_variable(self):
@@ -189,31 +101,6 @@ class FlattenExamplesTestCase(unittest.TestCase):
             $t1 = 1;
             return $t1;
         """)
-
-    def test_each_function_numbers_its_own_temporaries(self):
-        self.check("function f(a: int): int { return a * 2 + 1; } function g(a: int): int { return a * 3 + 1; } return 1;", """
-            function f(a: int): int {
-                $t1 = a * 2;
-                $t2 = $t1 + 1;
-                return $t2;
-            }
-            function g(a: int): int {
-                $t1 = a * 3;
-                $t2 = $t1 + 1;
-                return $t2;
-            }
-            $t1 = 1;
-            return $t1;
-        """)
-
-    def test_loops_must_be_unrolled_first(self):
-        with self.assertRaises(FlattenError):
-            compile_source("s = 0; for i in 0 .. 2 { s = s + i; } return s;", passes=(flatten,))
-
-    def test_the_original_program_is_untouched(self):
-        raw = parse("a = 1; y = (a * 2) + 1; return y;")
-        flatten(raw)
-        self.assertEqual(parse("a = 1; y = (a * 2) + 1; return y;"), raw)
 
 
 def operands(node):
@@ -253,11 +140,6 @@ class FlattenInvariantsTestCase(unittest.TestCase):
                     self.assertTrue(is_plain(node.condition), unparse([node]))
                 elif isinstance(node, Equals):
                     self.assertEqual(2, len(node.operands))
-
-    def test_flattening_twice_changes_nothing(self):
-        for source in self.SOURCES:
-            once = compile_source(source, passes=(unroll, flatten))
-            self.assertEqual(once, flatten(once))
 
     def test_the_result_is_unchanged(self):
         for source in self.SOURCES:

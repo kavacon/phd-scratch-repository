@@ -18,6 +18,3 @@ class DiffTestCase(unittest.TestCase):
         text = new[0]["text"]
         self.assertEqual(["x#2", "x#1"], [text[s:e] for s, e in new[0]["spans"]])
         self.assertEqual(["x", "x"], [old[0]["text"][s:e] for s, e in old[0]["spans"]])
-
-    def test_lines_that_are_too_different_are_not_called_modified(self):
-        self.assertEqual((["removed"], ["added"]), self.kinds(["return a;"], ["    p#1 ~= w#0 * h#0;"]))

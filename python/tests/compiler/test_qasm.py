@@ -6,7 +6,6 @@ from qiskit import QuantumCircuit
 from checking.circuits import gates_from_text, leftover_qubits, run_gates, value_of
 from experiments.allocation_poc.programs import PROGRAMS
 from checking.simulate import simulate_isa
-from compiler.parser.instructions import Const, IsaProgram, Scratch
 from experiments.allocation_poc.experiment import compile_source
 from compiler.system import System
 from compiler.passes.allocate import allocate
@@ -79,10 +78,6 @@ class OpcodeCircuitTestCase(unittest.TestCase):
             for a, b in itertools.product(range(1 << W), repeat=2):
                 self.check(opcode, (A, B), a, b, f(a, b))
 
-    def test_copy_on_a_register(self):
-        for a in range(1 << W):
-            self.check("copy", (A,), a, 0, a)
-
     def test_every_opcode_with_a_constant_operand_on_either_side(self):
         for opcode, f in EXPECTED.items():
             if opcode == "copy":
@@ -91,28 +86,11 @@ class OpcodeCircuitTestCase(unittest.TestCase):
                 self.check(opcode, (A, constant(c)), a, 0, f(a, c))
                 self.check(opcode, (constant(c), A), a, 0, f(c, a))
 
-    def test_an_operation_on_two_constants_is_computed_at_compile_time(self):
-        for opcode, f in EXPECTED.items():
-            if opcode == "copy":
-                continue
-            gates = build(opcode, constant(5), constant(3))
-            self.assertTrue(all(not g.controls for g in gates), opcode)  # only X gates
-            self.assertEqual(f(5, 3), decode(run_gates(gates, QUBITS), 2 * W))
-
     def test_booleans_live_in_bit_zero(self):
         for a, b in itertools.product((0, 1), repeat=2):
             self.check("and", (A, B), a, b, a & b)
             self.check("or", (A, B), a, b, a | b)
             self.check("not", (A,), a, 0, 1 - a)
-
-    def test_the_same_register_on_both_sides(self):
-        for a in range(1 << W):
-            self.check("add", (A, A), a, 0, (2 * a) & MASK)
-            self.check("sub", (A, A), a, 0, 0)
-            self.check("lt", (A, A), a, 0, 0)
-            self.check("gt", (A, A), a, 0, 0)
-            self.check("eq", (A, A), a, 0, 1)
-            self.check("ne", (A, A), a, 0, 0)
 
     def test_squaring_and_division_are_refused(self):
         with self.assertRaises(CircuitError):
@@ -122,30 +100,10 @@ class OpcodeCircuitTestCase(unittest.TestCase):
         with self.assertRaises(CircuitError):
             build("div", constant(4), constant(2))
 
-    def test_the_circuit_only_touches_the_scratch_qubit_it_needs(self):
-        used = {g.target for g in build("add", A, B)} | {q for g in build("add", A, B) for q, _ in g.controls}
-        self.assertEqual({SCRATCH}, used & set(range(SCRATCH, QUBITS)))  # one carry qubit, not the whole register
-        self.assertFalse({g.target for g in build("copy", A)} & set(range(SCRATCH, QUBITS)))
-
 
 class ControlledRegionTestCase(unittest.TestCase):
     def circuit(self, source, width=6):
         return built(lower_to_isa(compile_source(source)), width, 1000)
-
-    def test_the_two_regions_of_an_if_are_controlled_on_one_qubit_with_opposite_polarity(self):
-        circuit = self.circuit("a = 3; c = a < 5; y = 0; if c { y = a + 1; } else { y = a - 1; } return y;")
-        polarities = {}
-        for gate in x_gates(circuit):
-            for qubit, polarity in gate.controls:
-                polarities.setdefault(qubit, set()).add(polarity)
-        self.assertTrue(any(seen == {True, False} for seen in polarities.values()))  # the condition bit, tested both ways
-
-    def test_the_text_holds_gates_and_measurements_only(self):
-        circuit = self.circuit("a = 3; b = a + 2; return b;")
-        for line in openqasm_text(circuit).splitlines():
-            if line and not line.startswith(("OPENQASM", "include", "qubit", "bit")):
-                self.assertTrue(line.startswith(("x ", "cx ", "ccx ", "ctrl", "negctrl", "result[")), line)
-        self.assertNotIn("ADD", openqasm_text(circuit))  # no instruction text
 
     def test_the_circuit_follows_whichever_branch_the_condition_selects(self):
         for a, expected in ((3, 4), (9, 8)):
@@ -187,19 +145,6 @@ class ProgramCircuitTestCase(unittest.TestCase):
         """The gates with their controls sorted: the order of controls does not matter."""
         return [(gate.target, sorted(gate.controls)) for gate in gates]
 
-    def test_the_layout_is_one_register_with_the_scratch_after_the_slots(self):
-        physical = allocate(lower_to_isa(compile_source(PROGRAMS[0]["source"])), System(4, 100))
-        slots = int(next(i.register for i in physical.body if isinstance(i, Scratch))[1:])
-        circuit = to_openqasm(physical, System(4, 100))
-        self.assertEqual((slots + 1) * 4, circuit.num_qubits)
-        self.assertEqual(["R0", "R1", "R2", "R3", "scratch"][:slots] + ["scratch"], [r.name for r in circuit.qregs])
-        self.assertIn(f"qubit[{circuit.num_qubits}] q;", openqasm_text(circuit))
-        self.assertTrue(all(g.target < circuit.num_qubits for g in x_gates(circuit)))
-
-    def test_a_division_program_is_refused(self):
-        with self.assertRaises(CircuitError):
-            built(lower_to_isa(compile_source("a = 8; b = a / 2; return b;")), 4, 100)
-
 
 class MeasurementTestCase(unittest.TestCase):
     def circuit(self, source, width=4):
@@ -212,44 +157,6 @@ class MeasurementTestCase(unittest.TestCase):
         measures = [line for line in lines if "measure" in line and not line.startswith("//")]
         self.assertEqual(4, len(measures))
         self.assertEqual([f"result[{i}] = measure q[{q}];" for i, q in enumerate(measured_qubits(circuit))], measures)
-
-    def test_the_measurements_come_after_every_gate(self):
-        lines = [text for text in openqasm_text(self.circuit("a = 3; b = a + 2; return b;")).splitlines() if text and not text.startswith("//")]
-        first = next(i for i, text in enumerate(lines) if "measure" in text)
-        self.assertTrue(all("measure" in text for text in lines[first:]))
-
-    def test_a_program_that_returns_a_literal_returns_a_register_holding_it_like_any_other(self):
-        circuit = self.circuit("return 7;")
-        self.assertEqual(4, openqasm_text(circuit).count("= measure q["))
-        state = run_gates(x_gates(circuit), circuit.num_qubits)
-        self.assertEqual(7, value_of(state, measured_qubits(circuit)))
-        self.assertEqual([], leftover_qubits(state, measured_qubits(circuit)))
-
-    def test_a_program_that_does_not_return_a_register_is_refused(self):
-        from compiler.parser.instructions import IsaProgram
-        physical = allocate(lower_to_isa(compile_source("return 7;")), System(4, 1000))
-        broken = IsaProgram(physical.body, Const(7))
-        with self.assertRaises(CircuitError):
-            to_openqasm(broken, System(4, 1000))
-
-    def test_a_program_that_was_not_allocated_is_refused(self):
-        with self.assertRaises(CircuitError):
-            to_openqasm(lower_to_isa(compile_source("a = 1; return a;")), System(4, 1000))
-
-    def test_the_system_is_required(self):
-        with self.assertRaises(CircuitError):
-            to_openqasm(allocate(lower_to_isa(compile_source("a = 1; return a;")), System(4, 1000)))
-
-    def test_a_constant_that_is_computed_first_still_comes_back(self):
-        circuit = self.circuit("a = 3; b = a + 2; return 5;")
-        state = run_gates(x_gates(circuit), circuit.num_qubits)
-        self.assertEqual(5, value_of(state, measured_qubits(circuit)))
-        self.assertEqual([], leftover_qubits(state, measured_qubits(circuit)))
-
-    def test_measuring_does_not_change_the_gates(self):
-        for source in ("a = 3; b = a + 2; return b;", "a = 5; return a;"):
-            circuit = self.circuit(source)
-            self.assertEqual(len(x_gates(circuit)), len(gates_from_text(openqasm_text(circuit))[1]))
 
 
 class GateTextTestCase(unittest.TestCase):

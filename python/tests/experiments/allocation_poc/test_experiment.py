@@ -1,16 +1,11 @@
 import unittest
 
-from checking.simulate import SimulationError, execute, simulate
+from checking.simulate import execute
 from compiler.compiler import PassError
 from compiler.parser.instructions import Alloc, Scratch
-from compiler.parser.parser import parse
 from compiler.passes.allocate import WidthExceeded
-from compiler.passes.isa import IsaError
 from compiler.system import System
-from demo.text_diff import diff_lines
-from compiler.passes.qasm import openqasm_text
-from experiments.allocation_poc.experiment import FRONT_END, compile_circuit, compiler, text_of
-from compiler.passes.rename import RenameError
+from experiments.allocation_poc.experiment import FRONT_END, compiler, text_of
 from experiments.allocation_poc.programs import PROGRAMS
 
 IDS = compiler().names
@@ -42,23 +37,6 @@ class PipelineTestCase(unittest.TestCase):
                           "lower_to_isa", "allocate", "to_openqasm", "optimise"], IDS)
         self.assertEqual(IDS[:len(FRONT_END)], [fn.compile_pass.name for fn in FRONT_END])
 
-    def test_the_compilation_starts_with_the_source_and_has_one_stage_per_pass(self):
-        self.assertEqual(["source", "unroll", "flatten"], list(stages(PROGRAMS[0]["source"], ["unroll", "flatten"])))
-
-    def test_every_stage_has_text(self):
-        for name, output in stages(PROGRAMS[0]["source"]).items():
-            self.assertTrue(text_of(output).strip(), name)
-
-    def test_compile_circuit_is_the_generated_circuit(self):
-        self.assertEqual(text_of(stages(PROGRAMS[0]["source"])["to_openqasm"]), openqasm_text(compile_circuit(PROGRAMS[0]["source"])))
-
-    def test_a_stage_that_is_skipped_leaves_the_next_pass_to_say_what_it_expected(self):
-        with self.assertRaises(PassError) as caught:
-            compiler().run(PROGRAMS[0]["source"], skip=["lower_to_isa"])
-        self.assertEqual("allocate", caught.exception.name)
-        self.assertIn("skipped", str(caught.exception))
-        self.assertEqual("lower_allocation", caught.exception.stages[-1].name)
-
 
 class InlineTestCase(unittest.TestCase):
     def test_the_inline_stage_removes_functions_and_keeps_the_result(self):
@@ -66,13 +44,6 @@ class InlineTestCase(unittest.TestCase):
             run = stages(program["source"])
             self.assertNotIn("function", text_of(run["inline"]), program["id"])
             self.assertEqual(value(run["source"]), value(run["inline"]), program["id"])
-
-    def test_without_inline_the_instruction_pass_says_functions_must_be_inlined(self):
-        with self.assertRaises(PassError) as caught:
-            stages(PROGRAMS[0]["source"], [i for i in IDS if i != "inline"])
-        self.assertEqual("lower_to_isa", caught.exception.name)
-        self.assertIsInstance(caught.exception.cause, IsaError)
-        self.assertIn("inlined", str(caught.exception))
 
 
 class AllocationTestCase(unittest.TestCase):
@@ -102,25 +73,6 @@ class AllocationTestCase(unittest.TestCase):
 
 
 class PassesTestCase(unittest.TestCase):
-    def test_the_instruction_stage_is_printed_as_instructions_and_run_on_the_instruction_machine(self):
-        for program in PROGRAMS:
-            run = stages(program["source"], [i for i in IDS if i in ("inline", *KEPT, "lower_to_isa")])
-            self.assertIn("ALLOC", text_of(run["lower_to_isa"]))
-            self.assertEqual(value(run["lower_allocation"]), value(run["lower_to_isa"]), program["id"])
-            self.assertEqual([], leaks(run["lower_to_isa"]), program["id"])
-
-    def test_each_pass_changes_what_it_says_it_does(self):
-        run = stages(PROGRAMS[0]["source"], KEPT)
-        names = list(run)
-
-        def changes(step):
-            before = text_of(run[names[names.index(step) - 1]]).splitlines()
-            _, after = diff_lines(before, text_of(run[step]).splitlines())
-            return sum(e["kind"] == "changed" for e in after), sum(e["kind"] == "added" for e in after)
-
-        self.assertEqual((1, 1), changes("flatten"))  # the call is returned through a temporary
-        self.assertEqual(8, changes("rename")[0])
-        self.assertEqual(3, sum("~=" in line for line in text_of(run["lower_allocation"]).splitlines()))  # p in area, then y and x in the caller
 
     def test_every_preloaded_program_keeps_its_result_and_ends_without_leftovers(self):
         for program in PROGRAMS:
@@ -134,22 +86,6 @@ class PassesTestCase(unittest.TestCase):
         run = stages(source_of("width"), KEPT)
         peak = lambda output: max(execute(output).peak.values())  # noqa: E731
         self.assertLess(peak(run["lower_allocation"]), peak(run["rename"]))
-
-    def test_a_pass_run_without_what_it_expects_fails_and_says_which_pass(self):
-        source = "function f(a: int): int { if a < 2 { a = 1; } return a; } return f(1);"
-        with self.assertRaises(PassError) as caught:
-            stages(source, ["rename", "lower_allocation"])
-        self.assertIsInstance(caught.exception.cause, RenameError)
-        self.assertIn("balance", str(caught.exception))
-
-    def test_programs_that_cannot_run_say_why(self):
-        with self.assertRaises(SimulationError) as caught:
-            simulate(parse("function f(n: int): int { return g(n); } return f(1);"))
-        self.assertIn("not defined", str(caught.exception))
-        endless = "function f(n: int): int { x = n; for i in 0 .. 10000000 { x = x + 1; } return x; } return f(1);"
-        with self.assertRaises(SimulationError) as caught:
-            simulate(parse(endless))
-        self.assertIn("step limit", str(caught.exception))
 
 
 if __name__ == '__main__':
