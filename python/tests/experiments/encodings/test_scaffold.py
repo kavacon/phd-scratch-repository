@@ -9,13 +9,9 @@ from experiments.encodings.encodings import DEFAULT, ENCODINGS
 
 class EncodingsTestCase(unittest.TestCase):
     def test_every_encoding_has_a_lowering_that_is_a_circuit_pass(self):
-        self.assertEqual(["binary", "binary-ttk", "fourier", "fourier-dual", "angle"], list(ENCODINGS))
+        self.assertEqual(["binary", "binary-ttk", "fourier", "fourier-dual"], list(ENCODINGS))
         for encoding in ENCODINGS.values():
             self.assertEqual(CIRCUIT, encoding.lowering.compile_pass.gives, encoding.name)
-
-    def test_an_encoding_not_built_yet_says_so_when_used(self):
-        with self.assertRaises(NotImplementedError):
-            experiment.run("return 1;", ["angle"])
 
     def test_the_command_line_prints_a_row_per_circuit_stage_of_each_default_encoding(self):
         buffer = io.StringIO()
