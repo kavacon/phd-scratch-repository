@@ -81,6 +81,10 @@ class _FourierBuilder(_Builder):
             if _constant(source) is None:
                 self.to_plain([bit.index for bit in source])
 
+    def prepare(self, opcode: str, srcs) -> None:
+        """Put the source registers of an add, subtract or multiply in the basis it needs them in: plain bits, here."""
+        self.plain_sources(srcs)
+
     def start_from_zero(self, dst: Sequence[int]) -> None:
         """
         The destination of an arithmetic instruction that always runs is zero, and the transform of zero is a Hadamard
@@ -153,6 +157,10 @@ class _FourierBuilder(_Builder):
                     for i, bit in enumerate(a):
                         self.rotate(dst, 2 ** (i + j), [(bit.index, True), (multiplier.index, True)])
 
+    def is_arithmetic(self, opcode: str, srcs) -> bool:
+        """Whether the instruction is built from rotations on a destination in the Fourier basis, not from plain-bit circuits."""
+        return opcode in ARITHMETIC
+
     def nothing_to_compute(self, opcode: str, srcs) -> bool:
         return opcode == "sub" and _same(*srcs)  # a - a is zero: the destination stays as it is
 
@@ -160,12 +168,12 @@ class _FourierBuilder(_Builder):
         if all(_constant(s) is not None for s in srcs):
             self.to_plain(dst)
             return super().op(opcode, dst, srcs)
-        if opcode in ARITHMETIC:
+        if self.is_arithmetic(opcode, srcs):
             if opcode == "mul" and _same(*srcs):
                 raise CircuitError("squaring a register needs a copy of it, which is not supported yet")
             if self.nothing_to_compute(opcode, srcs):
                 return
-            self.plain_sources(srcs)
+            self.prepare(opcode, srcs)
             self.start_from_zero(dst)
             self.arithmetic(opcode, dst, srcs)
         else:
@@ -175,13 +183,13 @@ class _FourierBuilder(_Builder):
 
     def unop(self, opcode: str, dst: Sequence[int], srcs) -> None:
         """The inverse of `op`, for an IOp: the same gates undone, bringing the destination back to zero."""
-        if all(_constant(s) is not None for s in srcs) or opcode not in ARITHMETIC:
+        if all(_constant(s) is not None for s in srcs) or not self.is_arithmetic(opcode, srcs):
             self.plain_sources(srcs)
             self.to_plain(dst)
             with self.undone():
                 super().op(opcode, dst, srcs)
         elif not self.nothing_to_compute(opcode, srcs):
-            self.plain_sources(srcs)
+            self.prepare(opcode, srcs)
             self.to_fourier(dst)
             with self.undone():
                 self.arithmetic(opcode, dst, srcs)
@@ -198,16 +206,8 @@ class _FourierBuilder(_Builder):
         self.accumulate(dst, src, 1 if opcode == "add" else -1)
 
 
-@compile_pass(
-    ISA, CIRCUIT,
-    title="Lower to a Fourier-encoded circuit",
-    summary=(
-        "Integers are phases while being added into and plain bits when read. Adding a constant is a rotation per "
-        "qubit; adding a register is a rotation controlled by each of its bits. Registers convert only when an "
-        "instruction needs the other basis."
-    ),
-)
-def to_circuit_fourier(program: IsaProgram, system: Optional[System] = None) -> QuantumCircuit:
+def lower(program: IsaProgram, system: Optional[System], builder_class) -> QuantumCircuit:
+    """The circuit for an allocated program, one instruction at a time, with the gates of `builder_class` (and its basis tracking)."""
     if system is None:
         raise CircuitError("the lowering needs the system the program was allocated for")
     width = system.register_width
@@ -220,8 +220,8 @@ def to_circuit_fourier(program: IsaProgram, system: Optional[System] = None) -> 
     regions: List[Tuple[int, bool]] = []
     basis: Set[int] = set()
 
-    def builder() -> _FourierBuilder:
-        return _FourierBuilder(circuit, width, scratch, regions, basis)
+    def builder():
+        return builder_class(circuit, width, scratch, regions, basis)
 
     def qubits(register: Reg) -> List[int]:
         return [bit.index for bit in _bits(register, width, needed)]
@@ -248,6 +248,7 @@ def to_circuit_fourier(program: IsaProgram, system: Optional[System] = None) -> 
         else:
             raise CircuitError(f"cannot turn {type(instruction).__name__} into gates")
     if program.result is None:  # just the instructions: nothing to read out, so nothing is converted back
+        circuit.metadata = {"left_in_fourier": sorted(basis)}
         return circuit
     if not isinstance(program.result, Reg):
         raise CircuitError("a program must return a register; run flatten first")
@@ -256,4 +257,18 @@ def to_circuit_fourier(program: IsaProgram, system: Optional[System] = None) -> 
     circuit.add_register(ClassicalRegister(len(result), "result"))
     for i, bit in enumerate(result):
         circuit.measure(circuit.qubits[bit.index], circuit.clbits[i])
+    circuit.metadata = {"left_in_fourier": sorted(basis)}  # the slots still in the Fourier basis at the end
     return Readout(shots=1, decode="signed-bits").attach(circuit)
+
+
+@compile_pass(
+    ISA, CIRCUIT,
+    title="Lower to a Fourier-encoded circuit",
+    summary=(
+        "Integers are phases while being added into and plain bits when read. Adding a constant is a rotation per "
+        "qubit; adding a register is a rotation controlled by each of its bits. Registers convert only when an "
+        "instruction needs the other basis."
+    ),
+)
+def to_circuit_fourier(program: IsaProgram, system: Optional[System] = None) -> QuantumCircuit:
+    return lower(program, system, _FourierBuilder)

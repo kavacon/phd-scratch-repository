@@ -34,4 +34,4 @@ ENCODINGS: Dict[str, Encoding] = {e.name: e for e in (
              to_circuit_angle),
 )}
 
-DEFAULT: Tuple[str, ...] = ("binary", "binary-ttk", "fourier")
+DEFAULT: Tuple[str, ...] = ("binary", "binary-ttk", "fourier", "fourier-dual")
