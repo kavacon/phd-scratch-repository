@@ -7,6 +7,7 @@ from demo.model import to_data
 from experiments.encodings.demos import instructions
 from experiments.encodings.encodings import ENCODINGS
 from experiments.encodings.isolated import VARIANTS
+from experiments.encodings.passes.fourier import _transform
 from compiler.system import System
 
 WIDTH = 3
@@ -43,6 +44,15 @@ def expected_registers(variant, values, slots):
     return registers
 
 
+def restored(circuit):
+    """The circuit followed by the inverse transform of each register it left in the Fourier basis, so values can be compared as bits."""
+    out = circuit.copy()
+    for slot in circuit.metadata.get("left_in_fourier", []):
+        for gate in reversed(_transform(list(range(slot * WIDTH, slot * WIDTH + WIDTH)))):
+            out.h(gate[1]) if gate[0] == "h" else out.cp(-gate[1], gate[2], gate[3])
+    return out
+
+
 def pattern(registers):
     return sum(value << (slot * WIDTH) for slot, value in enumerate(registers))
 
@@ -53,8 +63,8 @@ class InstructionsTestCase(unittest.TestCase):
         for variant in VARIANTS:
             registers_in = variant.operands.count("r") + (1 if variant.update else 0)
             values = range(2) if variant.opcode in ("and", "or", "not") else range(1 << WIDTH)
-            for name in ("binary", "binary-ttk", "fourier"):
-                circuit = ENCODINGS[name].lowering(variant.program(CONSTANT, returns=True), SYSTEM).remove_final_measurements(inplace=False)
+            for name in ("binary", "binary-ttk", "fourier", "fourier-dual"):
+                circuit = restored(ENCODINGS[name].lowering(variant.program(CONSTANT, returns=True), SYSTEM)).remove_final_measurements(inplace=False)
                 slots = circuit.num_qubits // WIDTH - 1
                 for inputs in itertools.product(values, repeat=registers_in):
                     final = Statevector.from_int(pattern(list(inputs) + [0] * (slots - registers_in)), 2 ** circuit.num_qubits).evolve(circuit)
