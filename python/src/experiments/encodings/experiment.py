@@ -12,13 +12,13 @@ output is a circuit (the lowering's, Qiskit's optimised one, and the same circui
 installed), because nothing is simulated until a circuit exists.
 """
 import argparse
+import math
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-import numpy as np
 from qiskit import QuantumCircuit, transpile
-from qiskit.quantum_info import Operator
 
 from checking import qiskit_tools
 from checking.simulate import simulate
@@ -69,7 +69,9 @@ class Outcome:
     ops: Dict[str, int]  # the circuit's gates by name, to show what the gate count is made of
     two_qubit: int = 0  # gates on more than one qubit: CNOTs after optimising, and a Toffoli is one gate in a circuit as built
     two_qubit_depth: int = 0  # the depth counting only those gates, which does not depend on how single-qubit gates are merged
-    non_clifford: int = 0  # single-qubit gates that are not Clifford, with the circuit written out as single-qubit gates and CNOTs
+    t_gates: Optional[int] = None  # the T gates it has exactly, written out in Clifford+T
+    rotations: Optional[int] = None  # rotations that are not a multiple of a quarter turn, which can only be approximated
+    t_cost: Optional[int] = None  # T gates in all, charging each of those rotations the T gates that approximate it
 
     @property
     def agrees(self) -> bool:
@@ -113,29 +115,42 @@ def reference(source: str, system: Optional[System] = None) -> int:
     return int(simulate(parse(source), system or SYSTEM).value)
 
 
-_PAULIS = [np.array(m, dtype=complex) for m in ([[0, 1], [1, 0]], [[0, -1j], [1j, 0]], [[1, 0], [0, -1]])]
+CLIFFORD_T = ["cx", "h", "s", "sdg", "t", "tdg", "x", "z", "rz"]
+PRECISION = 1e-10  # how closely a rotation that is not exactly Clifford+T is approximated by T gates (Qiskit's default)
+UNREADABLE = ("optimise",)  # Qiskit's circuit has its gates merged into u gates, so its T gates cannot be counted
 
 
-def _is_clifford(matrix: np.ndarray) -> bool:
-    """A single-qubit gate is Clifford when it turns X and Z into signed Paulis."""
-    for pauli in (_PAULIS[0], _PAULIS[2]):
-        conjugated = matrix @ pauli @ matrix.conj().T
-        if not any(np.allclose(conjugated, sign * other, atol=1e-8) for other in _PAULIS for sign in (1, -1)):
-            return False
-    return True
+@lru_cache(maxsize=None)
+def _synthesised(angle: float) -> int:
+    """The T gates it takes to approximate a rotation about Z by `angle` to PRECISION (gridsynth, Qiskit 2.5 or later)."""
+    from qiskit.synthesis import gridsynth_rz
+    counted = gridsynth_rz(angle, PRECISION).count_ops()
+    return counted.get("t", 0) + counted.get("tdg", 0)
 
 
-def non_clifford(circuit: QuantumCircuit) -> int:
+def t_cost(circuit: QuantumCircuit) -> Tuple[int, int, int]:
     """
-    The single-qubit gates that are not Clifford, once the circuit is written out as single-qubit gates and CNOTs with no
-    merging, so a T gate is one gate and a Toffoli is seven. A circuit whose single-qubit gates have already been merged
-    (Qiskit's optimised one) counts each merged gate once, which can be fewer than the T gates it came from.
+    What the circuit costs in T gates once it is written out in Clifford+T: the T gates it has exactly (a Toffoli is
+    seven, and a rotation by an odd multiple of a quarter turn is one), the rotations that are not a multiple of a
+    quarter turn and so can only be approximated, and the total with each of those charged its T gates at PRECISION.
     """
-    expanded = transpile(circuit.remove_final_measurements(inplace=False), basis_gates=["u", "cx"], optimization_level=0)
-    return sum(1 for item in expanded.data if item.operation.num_qubits == 1 and not _is_clifford(Operator(item.operation).data))
+    expanded = transpile(circuit.remove_final_measurements(inplace=False), basis_gates=CLIFFORD_T, optimization_level=0)
+    exact = rotations = synthesised = 0
+    for item in expanded.data:
+        if item.operation.name in ("t", "tdg"):
+            exact += 1
+        elif item.operation.name == "rz":
+            angle = float(item.operation.params[0]) % (2 * math.pi)
+            quarters = angle / (math.pi / 4)
+            if abs(quarters - round(quarters)) < 1e-9:
+                exact += int(round(quarters)) % 2  # odd multiples are one T gate, even ones are Clifford
+            else:
+                rotations += 1
+                synthesised += _synthesised(round(angle, 12))
+    return exact, rotations, exact + synthesised
 
 
-def count(circuit: QuantumCircuit) -> Dict[str, Any]:
+def count(circuit: QuantumCircuit, t: bool = True) -> Dict[str, Any]:
     """What a circuit is made of, as the fields of an `Outcome`: qubits touched, gates, depth, the gates by name (measurements left out), and the rest."""
     counted = qiskit_tools.measure(circuit)
     ops: Dict[str, int] = {}
@@ -146,7 +161,7 @@ def count(circuit: QuantumCircuit) -> Dict[str, Any]:
         "qubits_touched": counted["touched"], "gates": counted["gates"], "depth": counted["depth"], "ops": ops,
         "two_qubit": counted["two_qubit"],
         "two_qubit_depth": circuit.depth(filter_function=lambda item: item.operation.num_qubits > 1),
-        "non_clifford": non_clifford(circuit),
+        **(dict(zip(("t_gates", "rotations", "t_cost"), t_cost(circuit))) if t else {}),
     }
 
 
@@ -155,7 +170,7 @@ def measure(encoding: str, stage: str, circuit: QuantumCircuit, expected: int, s
     readout = readout_of(circuit)
     ran = qiskit_tools.execute(circuit, len(measured_qubits(circuit)), readout.shots)
     return Outcome(encoding, stage, decode(readout, ran["counts"], system.register_width), expected, readout.shots,
-                   **count(circuit))
+                   **count(circuit, t=stage not in UNREADABLE))
 
 
 def outcomes(source: str, compilations: Dict[str, Compilation], system: Optional[System] = None) -> List[Outcome]:
@@ -178,10 +193,10 @@ def plan(encodings: Sequence[str], system: Optional[System] = None) -> List[Tupl
 
 
 def table(rows: Sequence[Tuple[str, Outcome]]) -> str:
-    header = ("program", "encoding", "stage", "value", "reference", "ok", "shots", "qubits", "gates", "2q gates", "depth", "2q depth", "non-Clifford")
+    header = ("program", "encoding", "stage", "value", "reference", "ok", "shots", "qubits", "gates", "2q gates", "depth", "2q depth", "T cost")
     body = [(program, o.encoding, o.stage, str(o.value), str(o.reference), "yes" if o.agrees else "NO",
              str(o.shots), str(o.qubits_touched), str(o.gates), str(o.two_qubit), str(o.depth), str(o.two_qubit_depth),
-             str(o.non_clifford)) for program, o in rows]
+             "-" if o.t_cost is None else str(o.t_cost)) for program, o in rows]
     widths = [max(len(line[i]) for line in [header, *body]) for i in range(len(header))]
     return "\n".join("  ".join(cell.ljust(width) for cell, width in zip(line, widths)) for line in [header, *body])
 

@@ -1,3 +1,4 @@
+import math
 import unittest
 
 from qiskit import QuantumCircuit
@@ -27,12 +28,17 @@ class OptimiseZxTestCase(unittest.TestCase):
 
 
 class MetricsTestCase(unittest.TestCase):
-    def test_non_clifford_counts_t_like_gates_and_two_qubit_depth_only_the_multi_qubit_ones(self):
+    def test_a_toffoli_is_seven_t_gates_and_a_small_rotation_is_charged_the_gates_that_approximate_it(self):
         toffoli = QuantumCircuit(3)
         toffoli.ccx(0, 1, 2)
-        clifford = QuantumCircuit(2)
-        clifford.h(0); clifford.s(1); clifford.cx(0, 1)
-        self.assertEqual((7, 0), (experiment.non_clifford(toffoli), experiment.non_clifford(clifford)))
+        self.assertEqual((7, 0, 7), experiment.t_cost(toffoli))
+        rotation = QuantumCircuit(1)
+        rotation.rz(math.pi / 16, 0)
+        exact, rotations, cost = experiment.t_cost(rotation)
+        self.assertEqual((0, 1), (exact, rotations))
+        self.assertGreater(cost, 50)  # tens of T gates for one rotation, at the precision the experiment asks for
+
+    def test_two_qubit_depth_counts_only_the_gates_on_more_than_one_qubit(self):
         layered = QuantumCircuit(4)
         layered.cx(0, 1); layered.cx(2, 3); layered.h(0); layered.cx(1, 2)
         self.assertEqual(2, experiment.count(layered)["two_qubit_depth"])

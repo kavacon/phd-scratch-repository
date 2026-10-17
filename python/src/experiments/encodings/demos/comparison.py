@@ -33,7 +33,7 @@ def _results(rows: List[experiment.Outcome], reference: int, enabled: List[str],
             blocks.append(failures[name])
             continue
         blocks.append(Stats(
-            ("stage", "value", "agrees", "shots", "qubits touched", "gates", "two-qubit gates", "depth", "two-qubit depth", "non-Clifford"),
+            ("stage", "value", "agrees", "shots", "qubits touched", "gates", "two-qubit gates", "depth", "two-qubit depth", "T cost"),
             tuple(
                 Row(r.stage, note=mix(r.ops), cells=(
                     Cell(str(r.value), tone="good" if r.agrees else "bad"),
@@ -44,7 +44,7 @@ def _results(rows: List[experiment.Outcome], reference: int, enabled: List[str],
                     Cell(str(r.two_qubit)),
                     bar(r.depth, top["depth"]),
                     Cell(str(r.two_qubit_depth)),
-                    Cell(str(r.non_clifford)),
+                    Cell("–") if r.t_cost is None else Cell(str(r.t_cost), note=f"{r.t_gates} exact + {r.rotations} rotations"),
                 ))
                 for r in rows if r.encoding == name
             ),
@@ -55,7 +55,7 @@ def _results(rows: List[experiment.Outcome], reference: int, enabled: List[str],
 ALL = "all"  # the case that shows every program at once instead of one
 
 OPTIMISED = ("optimise", "optimise_zx")
-LABEL = {"built": "", "optimise": " · Qiskit", "optimise_zx": " · ZX"}
+LABEL = {"built": " · as built", "optimise": " · Qiskit", "optimise_zx": " · ZX"}
 
 # (title, meaning, the stages to read it at, what to read)
 MEASURES = (
@@ -65,7 +65,7 @@ MEASURES = (
     ("Two-qubit gates after optimising", "gates on two qubits in the optimised circuit", OPTIMISED, lambda o: o.two_qubit),
     ("Two-qubit depth after optimising", "layers counting only the two-qubit gates, which single-qubit merging does not change", OPTIMISED, lambda o: o.two_qubit_depth),
     ("Depth after optimising", "layers of all gates; Qiskit's circuit is in u and cx, ZX's in Clifford+T gates", OPTIMISED, lambda o: o.depth),
-    ("Non-Clifford gates after optimising", "single-qubit gates that are not Clifford, the T-like gates; Qiskit's count merges gates, so it can be low", OPTIMISED, lambda o: o.non_clifford),
+    ("T cost", f"T gates in Clifford+T, with each rotation that is not an exact quarter turn charged the T gates that approximate it to {experiment.PRECISION:g}; Qiskit's circuit merges its T gates, so it has none", ("built", "optimise_zx"), lambda o: o.t_cost),
 )
 
 
