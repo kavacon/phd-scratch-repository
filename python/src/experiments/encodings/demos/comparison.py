@@ -32,6 +32,9 @@ def _results(rows: List[experiment.Outcome], reference: int, enabled: List[str],
         if name in failures:
             blocks.append(failures[name])
             continue
+        own = {r.reference for r in rows if r.encoding == name} - {reference}
+        if own:  # an encoding whose range is not the register width's is checked against what the program returns in its own range
+            blocks.append(Note(f"Its range is not the register width's, so the reference for this encoding is {own.pop()}.", "muted"))
         blocks.append(Stats(
             ("stage", "value", "agrees", "shots", "qubits touched", "gates", "two-qubit gates", "depth", "two-qubit depth", "T cost"),
             tuple(

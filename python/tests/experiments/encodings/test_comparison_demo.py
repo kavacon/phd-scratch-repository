@@ -13,7 +13,7 @@ class ComparisonDemoTestCase(unittest.TestCase):
         return comparison.run(comparison.DEMO.clean_inputs({"case": case, **inputs}), list(enabled))
 
     def test_a_program_shows_its_source_a_results_table_per_encoding_and_the_circuits(self):
-        result = self.run_case("mixed")
+        result = self.run_case("negatives")
         self.assertIsNone(result.error)
         self.assertEqual(["source", "results", "circuits"], [s.id for s in result.stages])
         results = next(s for s in result.stages if s.id == "results")

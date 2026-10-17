@@ -110,9 +110,16 @@ def compile_all(source: str, encodings: Sequence[str], system: Optional[System] 
     return compilations
 
 
-def reference(source: str, system: Optional[System] = None) -> int:
-    """What the program returns on the reference machine, wrapping as the circuits do."""
-    return int(simulate(parse(source), system or SYSTEM).value)
+def reference(source: str, system: Optional[System] = None, modulus: Optional[int] = None) -> int:
+    """
+    What the program returns on the reference machine, wrapping as the circuits do: at the register width, or, for an
+    encoding whose range is not 2^width, into `modulus` values (signed, like two's complement). That wrap is taken on the
+    value the program returns without wrapping, which is right for programs made of add, subtract, multiply and equality.
+    """
+    if modulus is None:
+        return int(simulate(parse(source), system or SYSTEM).value)
+    value = int(simulate(parse(source)).value)
+    return (value + modulus // 2) % modulus - modulus // 2
 
 
 CLIFFORD_T = ["cx", "h", "s", "sdg", "t", "tdg", "x", "z", "rz"]
@@ -176,10 +183,13 @@ def measure(encoding: str, stage: str, circuit: QuantumCircuit, expected: int, s
 def outcomes(source: str, compilations: Dict[str, Compilation], system: Optional[System] = None) -> List[Outcome]:
     """A row for every circuit stage of every compilation."""
     system = system or SYSTEM
-    expected = reference(source, system)
-    return [measure(name, stage.name, stage.output, expected, system)
-            for name, compilation in compilations.items() for stage in compilation.stages
-            if isinstance(stage.output, QuantumCircuit)]
+    rows = []
+    for name, compilation in compilations.items():
+        modulus = ENCODINGS[name].modulus
+        expected = reference(source, system, modulus(system) if modulus else None)
+        rows += [measure(name, stage.name, stage.output, expected, system)
+                 for stage in compilation.stages if isinstance(stage.output, QuantumCircuit)]
+    return rows
 
 
 def run(source: str, encodings: Sequence[str], system: Optional[System] = None, zx: bool = True) -> List[Outcome]:
