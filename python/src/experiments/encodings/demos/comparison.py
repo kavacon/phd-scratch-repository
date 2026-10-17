@@ -4,6 +4,7 @@ reference, what it cost, and the circuits. A row is shown for each circuit stage
 
     PYTHONPATH=src .venv/bin/python -m experiments.encodings.demos.comparison
 """
+import threading
 from functools import lru_cache
 from typing import Any, Dict, List, Tuple
 
@@ -32,7 +33,7 @@ def _results(rows: List[experiment.Outcome], reference: int, enabled: List[str],
             blocks.append(failures[name])
             continue
         blocks.append(Stats(
-            ("stage", "value", "agrees", "shots", "qubits touched", "gates", "depth"),
+            ("stage", "value", "agrees", "shots", "qubits touched", "gates", "two-qubit gates", "depth", "two-qubit depth", "non-Clifford"),
             tuple(
                 Row(r.stage, note=mix(r.ops), cells=(
                     Cell(str(r.value), tone="good" if r.agrees else "bad"),
@@ -40,7 +41,10 @@ def _results(rows: List[experiment.Outcome], reference: int, enabled: List[str],
                     Cell(str(r.shots)),
                     bar(r.qubits_touched, top["qubits_touched"]),
                     bar(r.gates, top["gates"]),
+                    Cell(str(r.two_qubit)),
                     bar(r.depth, top["depth"]),
+                    Cell(str(r.two_qubit_depth)),
+                    Cell(str(r.non_clifford)),
                 ))
                 for r in rows if r.encoding == name
             ),
@@ -50,28 +54,39 @@ def _results(rows: List[experiment.Outcome], reference: int, enabled: List[str],
 
 ALL = "all"  # the case that shows every program at once instead of one
 
+OPTIMISED = ("optimise", "optimise_zx")
+LABEL = {"built": "", "optimise": " · Qiskit", "optimise_zx": " · ZX"}
+
+# (title, meaning, the stages to read it at, what to read)
 MEASURES = (
-    ("Qubits after optimising", "the qubits the optimised circuit touches", lambda built, optimised: optimised.qubits_touched),
-    ("Toffoli gates", "ccx gates in the circuit as built", lambda built, optimised: built.ops.get("ccx", 0)),
-    ("Multi-controlled gates", "mcx gates in the circuit as built, which Qiskit has to break up", lambda built, optimised: built.ops.get("mcx", 0)),
-    ("Two-qubit gates after optimising", "cx gates once Qiskit has rewritten everything into u and cx", lambda built, optimised: optimised.ops.get("cx", 0)),
-    ("Depth after optimising", "layers once Qiskit has rewritten everything into u and cx", lambda built, optimised: optimised.depth),
+    ("Qubits after optimising", "the qubits the optimised circuit touches", OPTIMISED, lambda o: o.qubits_touched),
+    ("Toffoli gates", "ccx gates in the circuit as built", ("built",), lambda o: o.ops.get("ccx", 0)),
+    ("Multi-controlled gates", "mcx gates in the circuit as built, which the optimisers have to break up", ("built",), lambda o: o.ops.get("mcx", 0)),
+    ("Two-qubit gates after optimising", "gates on two qubits in the optimised circuit", OPTIMISED, lambda o: o.two_qubit),
+    ("Two-qubit depth after optimising", "layers counting only the two-qubit gates, which single-qubit merging does not change", OPTIMISED, lambda o: o.two_qubit_depth),
+    ("Depth after optimising", "layers of all gates; Qiskit's circuit is in u and cx, ZX's in Clifford+T gates", OPTIMISED, lambda o: o.depth),
+    ("Non-Clifford gates after optimising", "single-qubit gates that are not Clifford, the T-like gates; Qiskit's count merges gates, so it can be low", OPTIMISED, lambda o: o.non_clifford),
 )
+
+
+def _by_stage(rows: List[experiment.Outcome]) -> Dict[str, experiment.Outcome]:
+    """One encoding's rows by what they are: the circuit as built (the first row), then each optimiser."""
+    return {"built": rows[0], **{r.stage: r for r in rows[1:]}}
 
 
 @lru_cache(maxsize=16)
 def _suite(width: int, enabled: Tuple[str, ...]):
     """
-    For each program and encoding, the circuit as built and the optimised one, and why an encoding gave nothing for any
-    program (a placeholder). A program one encoding cannot express is left out of that encoding's column.
+    For each program and encoding, its outcomes by stage, and why an encoding gave nothing for any program (a
+    placeholder). A program one encoding cannot express is left out of that encoding's columns.
     """
     system = System(width, experiment.SYSTEM.qubits)
-    suite: Dict[str, Dict[str, Tuple[experiment.Outcome, experiment.Outcome]]] = {p["name"]: {} for p in PROGRAMS}
+    suite: Dict[str, Dict[str, Dict[str, experiment.Outcome]]] = {p["name"]: {} for p in PROGRAMS}
     errors: Dict[str, Exception] = {}
     for program in PROGRAMS:
         for name in enabled:
             try:
-                suite[program["name"]][name] = tuple(experiment.run(program["source"], [name], system))
+                suite[program["name"]][name] = _by_stage(experiment.run(program["source"], [name], system))
             except Exception as error:
                 errors[name] = error
     return suite, {n: e for n, e in errors.items() if not any(n in per for per in suite.values())}
@@ -83,18 +98,17 @@ def _suite_tables(width: int, enabled: List[str]) -> List[Any]:
     blocks: List[Any] = [Note(f"{ENCODINGS[n].title}: {type(error).__name__}: {error}", "bad") for n, error in failed.items()]
     if not names:
         return blocks
-    for title, meaning, measure in MEASURES:
-        values = {program: {n: measure(*pair) for n, pair in per.items()} for program, per in suite.items()}
+    for title, meaning, stages, read in MEASURES:
+        columns = [(n, stage) for n in names for stage in stages if any(stage in per.get(n, {}) for per in suite.values())]
+        values = {program: {(n, st): read(per[n][st]) for n, st in columns if n in per and st in per[n]} for program, per in suite.items()}
         top = max((v for per in values.values() for v in per.values()), default=1) or 1
         rows = []
         for program, per in values.items():
             best, worst = min(per.values(), default=0), max(per.values(), default=0)
-            cells = tuple(
-                Cell(str(per[n]), tone="good" if best < worst and per[n] == best else "", bars=(Bar(per[n] / top, "series-1"),)) if n in per else Cell("–")
-                for n in names
-            )
-            rows.append(Row(program, cells))
-        blocks += [Note(title, "heading", (meaning,)), Stats(("program", *(ENCODINGS[n].title for n in names)), tuple(rows))]
+            rows.append(Row(program, tuple(
+                Cell(str(per[c]), tone="good" if best < worst and per[c] == best else "", bars=(Bar(per[c] / top, "series-1"),)) if c in per else Cell("–")
+                for c in columns)))
+        blocks += [Note(title, "heading", (meaning,)), Stats(("program", *(f"{n}{LABEL[st]}" for n, st in columns)), tuple(rows))]
     return blocks
 
 
@@ -144,8 +158,8 @@ DEMO = app.Demo(
         Number("register_width", "Qubits per register", experiment.SYSTEM.register_width, 2, 8,
                "Integers are two's complement and wrap at this width."),
     ),
-    cases=(Case(ALL, "All programs", "Every program side by side, one table per measure."),
-           *(Case(p["id"], p["name"], p["description"], {"source": p["source"]}) for p in PROGRAMS)),
+    cases=(*(Case(p["id"], p["name"], p["description"], {"source": p["source"]}) for p in PROGRAMS),
+           Case(ALL, "All programs", "Every program side by side, one table per measure. The first time takes about a minute.")),
     steps=tuple(Step(e.name, e.title, e.summary, enabled=e.name in DEFAULT) for e in ENCODINGS.values()),
     workflow=False,
     cases_label="Programs",
@@ -158,6 +172,8 @@ def make_server(port: int):
 
 
 def main() -> None:
+    # The all-programs tables take a minute to build and are kept, so build them for the usual settings while the page loads.
+    threading.Thread(target=_suite, args=(experiment.SYSTEM.register_width, tuple(DEFAULT)), daemon=True).start()
     app.serve(DEMO)
 
 

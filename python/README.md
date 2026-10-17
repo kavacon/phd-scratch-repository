@@ -18,7 +18,7 @@ src/
       programs.py, views.py, qrisp_programs.py, qrisp_comparison.py
     encodings/          Same program, different encodings. The two binary encodings and Fourier are built; fourier-dual
                         and angle are placeholders. experiment.py (the --encoding flag, pipelines, outcomes), encodings.py (the
-                        registry), passes/ (one lowering each), programs.py, isolated.py, readout.py, demos/comparison.py,
+                        registry), passes/ (one lowering each, and optimise_zx), programs.py, isolated.py, readout.py, demos/comparison.py,
                         demos/instructions.py
 tests/           mirrors src/
 ```
