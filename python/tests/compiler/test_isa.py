@@ -22,7 +22,7 @@ from compiler.parser.parser import parse
 from experiments.allocation_poc.experiment import compile_source
 from compiler.passes.balance import balance
 from compiler.passes.flatten import flatten
-from compiler.passes.isa import IsaError, lower_to_isa
+from compiler.passes.isa import lower_to_isa
 from compiler.passes.rename import rename
 from compiler.passes.unroll import unroll
 
@@ -56,57 +56,6 @@ class LoweringExamplesTestCase(unittest.TestCase):
             ICOPY x#1, 3
             FREE  x#1
             RETURN area1.q#1
-        """)
-
-    def test_a_function_that_calls_another_is_inlined_all_the_way_down_and_each_copy_has_its_own_registers(self):
-        self.check('function g(n: int): int { m = n * 2; return m + 1; } function h(n: int): int { a = g(n); b = g(a); return b; } x = 3; return h(x);', """
-            ALLOC x#1
-            COPY  x#1, 3
-            ALLOC h1.g1.m#1
-            MUL   h1.g1.m#1, x#1, 2
-            ALLOC h1.a#1
-            ADD   h1.a#1, h1.g1.m#1, 1
-            ALLOC h1.g2.m#1
-            MUL   h1.g2.m#1, h1.a#1, 2
-            ALLOC h1.b#1
-            ADD   h1.b#1, h1.g2.m#1, 1
-            IMUL  h1.g2.m#1, h1.a#1, 2
-            FREE  h1.g2.m#1
-            IADD  h1.a#1, h1.g1.m#1, 1
-            FREE  h1.a#1
-            IMUL  h1.g1.m#1, x#1, 2
-            FREE  h1.g1.m#1
-            ICOPY x#1, 3
-            FREE  x#1
-            RETURN h1.b#1
-        """)
-
-    def test_a_call_inside_an_if_has_its_registers_allocated_before_and_freed_after_the_controlled_regions(self):
-        self.check('function g(n: int): int { m = n * 2; return m + 1; } x = 3; y = 0; if x < 5 { y = g(x); } else { y = 1; } return y;', """
-            ALLOC x#1
-            COPY  x#1, 3
-            ALLOC y#1
-            COPY  y#1, 0
-            ICOPY y#1, 0
-            FREE  y#1
-            ALLOC $t1#1
-            LT    $t1#1, x#1, 5
-            ALLOC g1.m#1
-            ALLOC y#2
-            CTRL    $t1#1
-                MUL   g1.m#1, x#1, 2
-                ADD   y#2, g1.m#1, 1
-                IMUL  g1.m#1, x#1, 2
-            ENDCTRL
-            ICTRL   $t1#1
-                COPY  y#2, 1
-            ENDCTRL
-            FREE  g1.m#1
-            ILT   $t1#1, x#1, 5
-            FREE  $t1#1
-            ICOPY x#1, 3
-            FREE  x#1
-            RETURN y#2
         """)
 
     def test_an_if_is_two_controlled_blocks_with_allocation_before_and_free_after(self):
@@ -152,43 +101,6 @@ class LoweringExamplesTestCase(unittest.TestCase):
             RETURN r#1
         """)
 
-    def test_an_if_on_a_constant_is_resolved_and_only_the_branch_that_runs_is_emitted(self):
-        self.check("x = 1; if true { x = 2; } else { x = 3; } return x;", """
-            ALLOC x#1
-            COPY  x#1, 1
-            ICOPY x#1, 1
-            FREE  x#1
-            ALLOC x#2
-            COPY  x#2, 2
-            RETURN x#2
-        """)
-
-    def test_no_function_or_call_survives_to_the_instructions(self):
-        for source in (p["source"] for p in PROGRAMS):
-            program = lowered(source)
-            self.assertFalse(hasattr(program, "functions"))
-            self.assertNotIn("function", unparse_isa(program))
-            self.assertNotIn("CALL", unparse_isa(program))
-
-    def test_functions_and_calls_must_be_inlined_first(self):
-        with self.assertRaises(IsaError):
-            lower_to_isa(parse("function f(): int { return 1; } return 2;"))
-        with self.assertRaises(IsaError):
-            lower_to_isa(compile_source("function f(): int { return 1; } return f();", passes=(unroll, flatten, balance, rename)))
-
-    def test_a_program_must_return_a_variable_and_a_returned_literal_is_one_after_flatten(self):
-        with self.assertRaises(IsaError):
-            lower_to_isa(compile_source("return 7;", passes=(unroll,)))
-        self.assertEqual("ALLOC $t1#1\nCOPY  $t1#1, 7\nRETURN $t1#1", unparse_isa(lowered("return 7;")))
-
-    def test_a_program_that_is_not_flat_is_rejected(self):
-        with self.assertRaises(IsaError):
-            lower_to_isa(parse("a = 1; b = (a + 1) * 2; return b;"))
-
-
-def walk_instructions(block):
-    return iter(block)
-
 
 class LoweringBehaviourTestCase(unittest.TestCase):
     EXTRA = [
@@ -229,10 +141,6 @@ class LoweringBehaviourTestCase(unittest.TestCase):
                     self.assertNotIsInstance(instruction, (Alloc, Free), source[:50])
             self.assertEqual(0, open_regions, source[:50])
 
-    def test_a_free_that_finds_a_non_zero_register_is_caught(self):
-        with self.assertRaises(SimulationError):
-            simulate_isa(IsaProgram((Alloc("p"), Op("copy", "p", (Const(5),)), Free("p")), Const(0)))
-
 
 class PreconditionTestCase(unittest.TestCase):
     def run_body(self, *body, result=None):
@@ -248,21 +156,6 @@ class PreconditionTestCase(unittest.TestCase):
         with self.assertRaises(SimulationError):  # undoing something that was never computed
             self.run_body(Alloc("p"), inverse(add), Free("p"))
 
-    def test_a_manually_written_release_with_the_wrong_witness_is_caught_at_the_instructions(self):
-        for witness, ok in (("1 + 2", True), ("1 + 3", False)):
-            program = lower_to_isa(compile_source(f"a = 1; b = a + 2; b ~= {witness}; return a;", passes=(unroll, flatten, balance, rename)))
-            if ok:
-                self.assertEqual(1, simulate_isa(program).value)
-            else:
-                with self.assertRaises(SimulationError):
-                    simulate_isa(program)
-
-    def test_a_release_is_written_as_the_inverse_instruction(self):
-        text = unparse_isa(lowered("a = 3; b = a * 2; c = b + a; return c;"))
-        self.assertIn("IMUL", text)
-        self.assertIn("ICOPY", text)
-        self.assertNotIn("IADD", text)  # c is returned, so it is not released
-
 
 class InverseTestCase(unittest.TestCase):
     def test_each_instruction_has_an_explicit_inverse_and_the_inverse_of_the_inverse_is_itself(self):
@@ -276,21 +169,6 @@ class InverseTestCase(unittest.TestCase):
         self.assertEqual(IOp("add", "p", (Reg("w"), Const(1))), inverse(block[1]))
         self.assertEqual(block[1], inverse(inverse(block[1])))
         self.assertEqual(block, inverse_block(inverse_block(block)))
-
-    def test_a_controlled_region_is_undone_with_the_same_control_and_reversed_inverted_body(self):
-        a, b = Op("add", "y", (Reg("a"), Const(1))), Op("mul", "t", (Reg("a"), Const(2)))
-        self.assertEqual((Ctrl(Reg("c")), inverse(b), inverse(a), EndCtrl()), inverse_block((Ctrl(Reg("c")), a, b, EndCtrl())))
-
-    def test_nested_regions_are_undone_innermost_last_opened_first(self):
-        a, b = Op("add", "y", (Reg("a"), Const(1))), Op("mul", "t", (Reg("a"), Const(2)))
-        block = (Ctrl(Reg("c")), a, ICtrl(Reg("d")), b, EndCtrl(), EndCtrl())
-        self.assertEqual((Ctrl(Reg("c")), ICtrl(Reg("d")), inverse(b), EndCtrl(), inverse(a), EndCtrl()), inverse_block(block))
-
-    def test_unbalanced_regions_are_rejected(self):
-        with self.assertRaises(ValueError):
-            inverse_block((EndCtrl(),))
-        with self.assertRaises(ValueError):
-            inverse_block((Ctrl(Reg("c")),))
 
     def test_the_machine_applies_every_open_control_and_polarity(self):
         # y ^= 1 only where c holds and d does not

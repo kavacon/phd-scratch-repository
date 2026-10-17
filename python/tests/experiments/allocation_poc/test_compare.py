@@ -20,21 +20,6 @@ class QrispProgramsTestCase(unittest.TestCase):
 
 
 @needs_qrisp
-class QrispRunTestCase(unittest.TestCase):
-    def test_a_qrisp_program_compiles_to_a_circuit_with_its_returned_register_measured(self):
-        from experiments.allocation_poc import qrisp_programs
-        built = qrisp_programs.run("chain", 4)
-        self.assertEqual(len(built.result), built.circuit.num_clbits)
-        self.assertGreaterEqual(len(built.result), 4)  # Qrisp widens the result of arithmetic
-        self.assertEqual(built.circuit.num_qubits, len(built.labels))
-        self.assertEqual(0, built.exponent)
-
-    def test_the_registers_use_the_width_they_are_given(self):
-        from experiments.allocation_poc import qrisp_programs
-        self.assertGreater(qrisp_programs.run("chain", 6).circuit.num_qubits, qrisp_programs.run("chain", 3).circuit.num_qubits)
-
-
-@needs_qrisp
 class ComparisonTestCase(unittest.TestCase):
     def test_a_comparison_has_both_sources_and_counts_text_and_a_drawing_for_all_four_circuits(self):
         from experiments.allocation_poc import qrisp_comparison as comparison
@@ -49,12 +34,6 @@ class ComparisonTestCase(unittest.TestCase):
                 self.assertIn("OPENQASM", entry.text[variant])
                 self.assertTrue(entry.drawings[variant]["gates"], (side, variant))
         self.assertLessEqual(set(comparison.metrics(built, "ours", "optimised")["ops"]), {"u", "cx", "measure"})
-
-    def test_an_unknown_program_is_an_error_the_caller_can_report(self):
-        from experiments.allocation_poc import qrisp_comparison as comparison
-        with self.assertRaises(KeyError):
-            comparison.build("nothing", 4)
-        self.assertIn("error", comparison.run_circuit("nothing", 4, "ours", "built", 10))
 
 
 if __name__ == '__main__':

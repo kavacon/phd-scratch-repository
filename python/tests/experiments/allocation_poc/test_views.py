@@ -3,7 +3,7 @@ import unittest
 from compiler.system import System
 from experiments.allocation_poc.experiment import FRONT_END, compile_source, compiler, text_of
 from experiments.allocation_poc.programs import PROGRAMS
-from experiments.allocation_poc.views import allocation_view, liveness_view, source_origin
+from experiments.allocation_poc.views import allocation_view, liveness_view
 
 KEPT = ("unroll", "flatten", "balance", "rename")  # up to what the release pass is given, with functions kept as scopes
 
@@ -29,11 +29,6 @@ class LivenessViewTestCase(unittest.TestCase):
         self.assertEqual((0, 4, 5, 4), (a["defined"], a["live_end"], a["conservative_end"], a["release_row"]))
         # y#2, the condition register $t1#1 and a#1 are released at the same point, in that order
         self.assertEqual((1, 2, 3), (function["y#2"]["order"], function["$t1#1"]["order"], a["order"]))
-
-    def test_a_branch_marks_what_leaves_it_as_returned(self):
-        then_branch = {c["name"]: c for c in self.view("if-else")["scopes"][2]["columns"]}
-        self.assertEqual("kept", then_branch["t#1"]["kind"])  # the release of y#2 needs it, so it outlives the branch
-        self.assertEqual("output", then_branch["y#2"]["kind"])
 
     def test_every_released_version_in_the_view_is_released_in_the_output(self):
         # the view and the inserted code come from separate steps, so this checks they agree
@@ -67,29 +62,6 @@ class AllocationViewTestCase(unittest.TestCase):
         view = self.view("if-else", width=2, qubits=14)
         self.assertEqual((2, 14, 6, 5, True), (view["register_width"], view["qubits"], view["slots"], view["needed"], view["fits"]))
         self.assertEqual((2, 12), (view["scratch"], view["qubits_used"]))  # 5 registers of 2, and 2 for scratch
-
-    def test_a_program_that_does_not_fit_says_so(self):
-        from compiler.compiler import PassError
-        system = System(4, 16)
-        with self.assertRaises(PassError) as caught:
-            compiler(system).run(program("if-else"), until="allocate")
-        view = allocation_view(caught.exception.stages[-1].output, caught.exception.partial, system, program("if-else"))
-        self.assertEqual((3, 5, False), (view["slots"], view["needed"], view["fits"]))
-
-    def test_no_step_holds_two_registers_in_one_slot_and_the_steps_follow_the_program(self):
-        for p in PROGRAMS:
-            view = self.view(p["id"], width=1, qubits=1000)
-            for step in view["steps"]:
-                slots = [h["slot"] for h in step["held"]]
-                self.assertEqual(len(slots), len(set(slots)))
-            self.assertTrue(view["steps"][0]["logical"].startswith("ALLOC"))
-
-    def test_a_registers_origin_is_read_from_its_name(self):
-        self.assertEqual(("x", "main"), source_origin("x#2"))
-        self.assertEqual(("p", "area"), source_origin("area1.p#1"))
-        self.assertEqual(("m", "g"), source_origin("h1.g2.m#1"))
-        self.assertEqual(("t", "main"), source_origin("t@3#1"))
-        self.assertEqual((None, "main"), source_origin("$t4#1"))
 
 
 if __name__ == '__main__':

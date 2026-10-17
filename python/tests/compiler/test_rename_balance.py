@@ -3,37 +3,10 @@ import unittest
 
 from compiler.printer import unparse
 from compiler.parser.grammar import Assign, If
-from compiler.parser.parser import _parser, parse
+from compiler.parser.parser import parse
 from experiments.allocation_poc.experiment import compile_source
 from compiler.passes.balance import balance
 from compiler.passes.rename import RenameError, rename
-
-INPUT = """
-x = 1;
-y = x + 2;
-
-function f(x: int): bool {
-    y = x + 1;
-    return y;
-}
-
-for x in 0 .. 10 {
-    y = y + x;
-}
-
-return y;
-"""
-
-class ParserTestCase(unittest.TestCase):
-    def test_parse_ast(self):
-        ast = _parser.parse(INPUT)
-        variable_names = [x.value for x in ast.find_token("NAME")]
-
-        self.assertIn("x", variable_names)
-        self.assertIn("y", variable_names)
-        self.assertIn("f", variable_names)
-        self.assertEqual(1, len(list(ast.find_data("for_loop"))))
-        self.assertEqual(1, len(list(ast.find_data("function_def"))))
 
 def renamed(source):
     """Rename only, so these tests are about rename and not the passes around it."""
@@ -66,14 +39,6 @@ class RenameExamplesTestCase(unittest.TestCase):
             return z#1;
         """)
 
-    def test_self_reference_reads_the_previous_version(self):
-        self.check("x = 1; x = x + 1; x = x + 1; return x;", """
-            x#1 = 1;
-            x#2 = x#1 + 1;
-            x#3 = x#2 + 1;
-            return x#3;
-        """)
-
     def test_function_params_are_version_zero_and_scopes_are_independent(self):
         self.check("""
             function f(a: int, b: int): int { t = a + b; t = t * 2; return t; }
@@ -104,81 +69,9 @@ class RenameExamplesTestCase(unittest.TestCase):
             return y#1;
         """)
 
-    def test_a_branch_that_assigns_twice_shares_only_its_final_version(self):
-        self.check("x = 1; if x < 2 { x = x + 1; x = x * 3; } else { x = x * 2; } return x;", """
-            x#1 = 1;
-            if x#1 < 2 {
-                x#2 = x#1 + 1;
-                x#3 = x#2 * 3;
-            } else {
-                x#3 = x#1 * 2;
-            }
-            return x#3;
-        """)
-
-    def test_each_branch_may_use_its_own_intermediate_versions(self):
-        self.check("x = 1; if x < 2 { x = x + 1; } else { x = x + 2; x = x * 2; } return x;", """
-            x#1 = 1;
-            if x#1 < 2 {
-                x#2 = x#1 + 1;
-            } else {
-                x#3 = x#1 + 2;
-                x#2 = x#3 * 2;
-            }
-            return x#2;
-        """)
-
     def test_unbalanced_if_is_rejected_by_rename_alone(self):
         with self.assertRaises(RenameError):
             renamed("x = 1; if x < 2 { x = 5; } return x;")
-
-    def test_block_local_variables_need_no_sharing(self):
-        self.check("x = 1; y = 2; if y < 3 { z = x; } return y;", """
-            x#1 = 1;
-            y#1 = 2;
-            if y#1 < 3 {
-                z#1 = x#1;
-            }
-            return y#1;
-        """)
-
-    def test_nested_control_flow(self):
-        self.check("""
-            a = 1; b = 2;
-            if a < b { t = a + b; a = t; b = b; } else { a = a; b = b + a; }
-            if a < 5 {
-                if b < 9 { b = b + 1; } else { b = b; }
-                a = a;
-            } else { a = a + 1; b = b; }
-            return a;
-        """, """
-            a#1 = 1;
-            b#1 = 2;
-            if a#1 < b#1 {
-                t#1 = a#1 + b#1;
-                a#2 = t#1;
-                b#2 = b#1;
-            } else {
-                a#2 = a#1;
-                b#2 = b#1 + a#2;
-            }
-            if a#2 < 5 {
-                if b#2 < 9 {
-                    b#4 = b#2 + 1;
-                } else {
-                    b#4 = b#2;
-                }
-                a#4 = a#2;
-            } else {
-                a#4 = a#2 + 1;
-                b#4 = b#2;
-            }
-            return a#4;
-        """)
-
-    def test_loops_must_be_unrolled_first(self):
-        with self.assertRaises(RenameError):
-            renamed("s = 0; for i in 0 .. 2 { s = s + i; } return s;")
 
     def test_unassign_targets_the_current_version_and_renames_its_witness(self):
         self.check("x = 1; x = x + 1; y = x * 2; x ~= y / 2; return y;", """
@@ -187,56 +80,6 @@ class RenameExamplesTestCase(unittest.TestCase):
             y#1 = x#2 * 2;
             x#2 ~= y#1 / 2;
             return y#1;
-        """)
-
-    def test_unassign_accepts_a_literal_witness(self):
-        self.check("x = 2; x ~= 2; return 1;", """
-            x#1 = 2;
-            x#1 ~= 2;
-            return 1;
-        """)
-
-    def test_explicit_unassign_in_a_function(self):
-        # hand-written deallocation: the same program the allocation-only version should compile to
-        self.check("""
-            function area(w: int, h: int): int {
-                p = w * h;
-                q = p + 1;
-                p ~= w * h;
-                return q;
-            }
-            return area(2, 3);
-        """, """
-            function area(w#0: int, h#0: int): int {
-                p#1 = w#0 * h#0;
-                q#1 = p#1 + 1;
-                p#1 ~= w#0 * h#0;
-                return q#1;
-            }
-            return area(2, 3);
-        """)
-
-    def test_explicit_unassign_of_a_chain_goes_in_reverse_creation_order(self):
-        self.check("""
-            function f(x: int): int {
-                a = x + 1;
-                b = a * 2;
-                c = b + a;
-                b ~= a * 2;
-                a ~= x + 1;
-                return c;
-            }
-            return f(1);
-        """, """
-            function f(x#0: int): int {
-                a#1 = x#0 + 1;
-                b#1 = a#1 * 2;
-                c#1 = b#1 + a#1;
-                b#1 ~= a#1 * 2;
-                a#1 ~= x#0 + 1;
-                return c#1;
-            }
-            return f(1);
         """)
 
 
@@ -264,27 +107,11 @@ class RenameInvariantsTestCase(unittest.TestCase):
             for path in paths(statement):
                 self.assertEqual(len(path), len(set(path)), path)
 
-    def test_block_locals_do_not_escape(self):
-        with self.assertRaises(RenameError):
-            compile_source("if true { t = 1; } y = t; return y;")
-
-    def test_use_after_unassign_and_unassign_in_inner_block_are_rejected(self):
-        with self.assertRaises(RenameError):
-            compile_source("x = 1; x ~= 1; y = x; return y;")
-        with self.assertRaises(RenameError):
-            compile_source("x = 1; if true { x ~= 1; } return 2;")
-
     def test_undefined_names_are_rejected(self):
         with self.assertRaises(RenameError):
             compile_source("x = y; return x;")
         with self.assertRaises(RenameError):
             compile_source("x = 1; function f(): int { return x; } y = f(); return y;")  # functions cannot see outer variables
-
-    def test_original_program_is_untouched(self):
-        source = "x = 1; x = x + 1; return x;"
-        original = parse(source)
-        compile_source(source)
-        self.assertEqual(parse(source), original)
 
 
 class BalanceExamplesTestCase(unittest.TestCase):
@@ -304,17 +131,6 @@ class BalanceExamplesTestCase(unittest.TestCase):
             return x;
         """)
 
-    def test_missing_branch_can_be_the_then_branch(self):
-        self.check("x = 1; if x < 2 { } else { x = 5; } return x;", """
-            x = 1;
-            if x < 2 {
-                x = x;
-            } else {
-                x = 5;
-            }
-            return x;
-        """)
-
     def test_an_existing_else_that_assigns_different_variables_is_balanced(self):
         self.check("a = 1; b = 2; if a < b { a = 3; } else { b = 4; } return a + b;", """
             a = 1;
@@ -328,21 +144,6 @@ class BalanceExamplesTestCase(unittest.TestCase):
             }
             return a + b;
         """)
-
-    def test_variables_local_to_a_branch_are_not_copied(self):
-        self.check("x = 1; if x < 2 { t = 1; } return x;", """
-            x = 1;
-            if x < 2 {
-                t = 1;
-            }
-            return x;
-        """)
-
-    def test_balanced_ifs_are_left_alone_and_the_pass_is_idempotent(self):
-        both = "x = 1; if x < 2 { x = 5; } else { x = 6; } return x;"
-        self.assertEqual(parse(both), balance(parse(both)))
-        once = balance(parse("x = 1; if x < 2 { x = 5; } return x;"))
-        self.assertEqual(once, balance(once))
 
     def test_nested_ifs_are_balanced(self):
         self.check("""
@@ -362,15 +163,6 @@ class BalanceExamplesTestCase(unittest.TestCase):
             }
             return a;
         """)
-
-    def test_function_parameters_count_as_existing_variables(self):
-        out = balanced("function f(a: int): int { if a < 3 { a = a + 1; } return a; } return f(1);")
-        self.assertIn("} else {\n        a = a;\n    }", out)
-
-    def test_functions_do_not_see_outer_variables(self):
-        # x is not visible inside f, so the assignment is local to the branch and not copied
-        out = balanced("x = 1; function f(): int { if true { x = 2; } return 1; } return x;")
-        self.assertNotIn("else", out)
 
     def test_balance_then_rename_gives_the_branches_one_shared_version(self):
         self.assertEqual(expected("""

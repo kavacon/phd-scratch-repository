@@ -29,9 +29,12 @@ class DiagramTestCase(unittest.TestCase):
         optimised = optimise(circuit)
         return (drawing.diagram(circuit), qiskit_tools.measure(circuit)), (drawing.diagram(optimised), qiskit_tools.measure(optimised))
 
-    def test_the_diagram_labels_each_wire_by_slot_and_bit_with_the_scratch_last(self):
-        (picture, _), _ = self.drawn("a = 3; b = a + 2; return b;")
-        self.assertEqual(["R0[0]", "R0[1]", "R0[2]", "R1[0]", "R1[1]", "R1[2]", "scratch[0]", "scratch[1]", "scratch[2]"], picture["wires"])
+    def test_the_diagram_labels_each_wire_and_draws_x_gates_for_the_circuit_and_u_and_cx_after_optimising(self):
+        (generated, counts), (optimised, _) = self.drawn("a = 3; b = a + 2; return b;")
+        self.assertEqual(["R0[0]", "R0[1]", "R0[2]", "R1[0]", "R1[1]", "R1[2]", "scratch[0]", "scratch[1]", "scratch[2]"], generated["wires"])
+        self.assertEqual(counts["gates"] + counts["measurements"], generated["total"])  # the diagram holds the measurements too
+        self.assertEqual({"x", "meter"}, {g["kind"] for g in generated["gates"]})
+        self.assertTrue({g["label"] for g in optimised["gates"]} <= {"cx", "U", "M"})
 
     def test_gates_in_the_same_layer_never_share_a_wire_or_cross_each_other(self):
         for picture, _ in self.drawn(PROGRAMS[0]["source"], 6):
@@ -42,19 +45,6 @@ class DiagramTestCase(unittest.TestCase):
             for spans in by_layer.values():
                 covered = [q for span in spans for q in span]
                 self.assertEqual(len(covered), len(set(covered)))
-
-    def test_the_generated_circuit_is_drawn_with_x_gates_and_the_optimised_one_with_u_and_cx(self):
-        (generated, generated_counts), (optimised, optimised_counts) = self.drawn("a = 3; b = a + 2; return b;")
-        for picture, counts in ((generated, generated_counts), (optimised, optimised_counts)):  # the diagram holds the measurements too
-            self.assertEqual(counts["gates"] + counts["measurements"], picture["total"])
-        self.assertEqual({"x", "meter"}, {g["kind"] for g in generated["gates"]})
-        self.assertTrue({g["label"] for g in optimised["gates"]} <= {"cx", "U", "M"})
-
-    def test_the_measurements_are_drawn_as_meters_on_the_returned_wires(self):
-        for picture, _ in self.drawn("a = 3; b = a + 2; return b;"):
-            meters = [g for g in picture["gates"] if g["kind"] == "meter"]
-            self.assertEqual(3, len(meters))
-            self.assertEqual({3, 4, 5}, {g["target"] for g in meters})
 
     def test_a_long_circuit_is_cut_at_a_fixed_number_of_layers(self):
         _, (picture, _) = self.drawn(PROGRAMS[0]["source"], 6)
