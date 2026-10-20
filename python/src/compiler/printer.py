@@ -6,6 +6,7 @@ from compiler.parser.grammar import (
     BinOp,
     Boolean,
     Call,
+    Distribution,
     ExprStmt,
     ForLoop,
     FunctionDef,
@@ -33,6 +34,8 @@ def _expr(node: Node, nested: bool = False) -> str:
         return str(node.value if isinstance(node, Number) else node.name)
     if isinstance(node, Boolean):
         return "true" if node.value else "false"
+    if isinstance(node, Distribution):
+        return f"{_expr(node.start)}..{_expr(node.stop)}"
     if isinstance(node, Call):
         return f"{node.name}({', '.join(_expr(a) for a in node.args)})"
     if isinstance(node, Not):

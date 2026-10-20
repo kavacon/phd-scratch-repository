@@ -1,0 +1,96 @@
+start: (function_def | statement)* return_stmt
+
+?statement: assignment
+          | update_stmt
+          | for_loop
+          | if_stmt
+          | unassign_stmt
+          | expr_statement
+
+assignment: NAME "=" expr ";"
+
+// Updates the variable where it sits: only add and subtract, the two operations that can be undone in place.
+update_stmt: NAME "+=" expr ";"   -> add_update
+           | NAME "-=" expr ";"   -> sub_update
+
+function_def: "function" NAME "(" params? ")" return_type? function_body
+function_body: "{" statement* return_stmt "}"
+
+params: param ("," param)*
+param: NAME ":" type
+
+return_type: ":" type
+
+// Loop bounds are integer literals, so every loop can be unrolled into the circuit. Half-open.
+// TODO: this assumes there is no classical controller to run a loop. Review the restriction when moving to
+//  hybrid (classical and quantum) compilation, where a bound could be a runtime value.
+for_loop: "for" NAME "in" INT ".." INT block
+
+if_stmt: "if" expr block else_clause?
+else_clause: "else" block
+
+return_stmt: "return" expr ";"
+unassign_stmt: NAME "~=" expr ";"  // inverse of assignment: NAME currently equals expr
+
+expr_statement: expr ";"
+
+block: "{" statement* "}"
+
+?expr: or_expr
+
+?or_expr: and_expr
+       | or_expr "||" and_expr   -> or_
+
+?and_expr: equality
+        | and_expr "&&" equality -> and_
+
+?equality: comparison ("==" comparison)*
+         | comparison "!=" comparison  -> ne
+
+?comparison: sum
+           | sum "<" sum    -> lt
+           | sum ">" sum    -> gt
+
+?sum: product
+    | sum "+" product   -> add
+    | sum "-" product   -> sub
+
+?product: unary
+        | product "*" unary -> mul
+        | product "/" unary -> div
+
+?unary: atom
+      | "!" unary -> not_
+      | "-" unary -> neg
+
+?atom: NUMBER           -> number
+     | DISTRIBUTION     -> distribution
+     | "true"           -> true
+     | "false"          -> false
+     | NAME             -> variable
+     | function_call
+     | "(" expr ")"
+
+function_call: NAME "(" args? ")"
+
+args: expr ("," expr)*
+
+type: NAME
+
+COMMENT: "//" /[^\n]*/
+
+%import common.CNAME -> NAME
+%import common.NUMBER
+%import common.INT
+%import common.SIGNED_INT
+
+// v2 adds the distribution: a range such as 0..4 is an equal superposition of the integers from its first bound up to,
+// not including, its second, read in the language as a distribution. Bounds are integer literals and may be negative.
+// A distribution is an expression, so it carries on through ordinary arithmetic and conditionals.
+// It is a single terminal, and its priority is explicit because without one NUMBER sorts ahead of it and reads the
+// "0." of "0..4" as a decimal. Only a complete range matches, so a priority cannot take a plain number.
+// TODO: a computed bound (a distribution whose range depends on a value) is a later extension of the experiment.
+DISTRIBUTION.2: SIGNED_INT WS? ".." WS? SIGNED_INT
+%import common.WS
+%ignore WS
+%ignore COMMENT

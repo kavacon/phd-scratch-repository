@@ -3,7 +3,7 @@ Working with distributions: compile a program and produce an OpenQASM 3 circuit.
 
     PYTHONPATH=src .venv/bin/python -m experiments.distributions.experiment --file my_program.txt [--width 4]
 
-The pipeline is the shared front end, instructions, slots and circuit generation with no experiment-specific pass yet.
+The source is read with grammar v2, which adds `x = 0..4;` (an equal superposition of 0 to 3). The pipeline is the shared front end, instructions, slots and circuit generation with no experiment-specific pass yet.
 The passes that decide what becomes superposed, and that uncompute what it entangles, go in `passes/` and are loaded here.
 """
 import argparse
@@ -30,7 +30,7 @@ SYSTEM = System(register_width=4, qubits=100)
 
 
 def compiler(system: Optional[System] = None) -> Compiler:
-    return Compiler(system or SYSTEM).load(*PIPELINE)
+    return Compiler(system or SYSTEM, grammar="v2").load(*PIPELINE)
 
 
 def compile_circuit(source: str, system: Optional[System] = None) -> QuantumCircuit:

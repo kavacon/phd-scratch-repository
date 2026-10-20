@@ -1,6 +1,7 @@
 """Parsing source text into the typed AST. Passes over the AST are composed in `compiler.pipeline`."""
+import re
 from importlib.resources import files
-from typing import List
+from typing import Dict, List
 
 from lark import Lark, Transformer, v_args
 
@@ -9,6 +10,7 @@ from compiler.parser.grammar import (
     BinOp,
     Boolean,
     Call,
+    Distribution,
     Equals,
     ExprStmt,
     ForLoop,
@@ -23,8 +25,17 @@ from compiler.parser.grammar import (
     Variable,
 )
 
-_grammar = files("compiler.parser").joinpath("resources/grammar_v1.lark").read_text(encoding="utf-8")
-_parser = Lark(_grammar, parser="lalr", start="start")
+GRAMMARS = ("v1", "v2")  # resources/grammar_<name>.lark: each is a complete syntax, kept apart so an experiment picks its own
+_parsers: Dict[str, Lark] = {}
+
+
+def _parser(grammar: str) -> Lark:
+    if grammar not in GRAMMARS:
+        raise ValueError(f"no grammar named {grammar!r}: choose from {', '.join(GRAMMARS)}")
+    if grammar not in _parsers:
+        text = files("compiler.parser").joinpath(f"resources/grammar_{grammar}.lark").read_text(encoding="utf-8")
+        _parsers[grammar] = Lark(text, parser="lalr", start="start")
+    return _parsers[grammar]
 
 
 class _Params(tuple):
@@ -77,6 +88,12 @@ class _ToGrammar(Transformer):
     def sub_update(self, name, value):
         return Assign(str(name), BinOp("-", Variable(str(name)), value), inplace=True)
 
+    def distribution(self, text):
+        start, stop = (int(bound) for bound in re.fullmatch(r"(-?\d+)\s*\.\.\s*(-?\d+)", str(text)).groups())
+        if start >= stop:
+            raise ValueError(f"a distribution needs at least one value, but {start}..{stop} has none")
+        return Distribution(Number(start), Number(stop))
+
     def neg(self, operand):
         if isinstance(operand, Number):  # a negative literal
             return Number(-operand.value)
@@ -127,6 +144,6 @@ class _ToGrammar(Transformer):
         return FunctionDef(str(name), tuple(params), return_type, rest[-1])
 
 
-def parse(program: str) -> List[Node]:
-    """Parse source into the typed AST."""
-    return _ToGrammar().transform(_parser.parse(program))
+def parse(program: str, grammar: str = "v1") -> List[Node]:
+    """Parse source into the typed AST, with the named grammar."""
+    return _ToGrammar().transform(_parser(grammar).parse(program))
