@@ -19,6 +19,8 @@ src/
     encodings/          Same program, different encodings: two binary, two Fourier and a residue number system lowering. experiment.py (the
                         --encoding flag, pipelines, outcomes), encodings.py (the registry), passes/ (one lowering each,
                         and optimise_zx), programs.py, isolated.py, readout.py, demos/comparison.py, demos/instructions.py
+    distributions/      Working with distributions: what superposition and entanglement mean for the language, what the compiler converts to
+                        superposition, and uncomputation of what it entangles. experiment.py, passes/, programs.py, demos/ (scaffold only)
 tests/           mirrors src/
 ```
 
