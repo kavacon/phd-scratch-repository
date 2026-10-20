@@ -107,8 +107,9 @@ class Compilation:
 
 
 class Compiler:
-    def __init__(self, system: Optional[System] = None) -> None:
+    def __init__(self, system: Optional[System] = None, grammar: str = "v1") -> None:
         self.system = system or System()
+        self.grammar = grammar  # which syntax `run` reads the source with (see compiler.parser.parser.GRAMMARS)
         self.passes: List[Callable] = []
 
     def load(self, *passes: Callable) -> "Compiler":
@@ -140,7 +141,7 @@ class Compiler:
         """
         if until is not None and until not in self.names:
             raise ValueError(f"no pass named {until}")
-        output: Any = parse(source)
+        output: Any = parse(source, self.grammar)
         level = NODE
         stages = [Stage("source", NODE, output, title="Source")]
         for function in self.passes:

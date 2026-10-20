@@ -1,4 +1,4 @@
-"""Typed AST nodes mirroring grammar_v1.lark."""
+"""Typed AST nodes mirroring the grammars in resources/."""
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
@@ -81,6 +81,17 @@ class ForLoop(Node):
     start: Node  # a Number: loop bounds are constants for now (see the TODO in grammar_v1.lark)
     stop: Node  # a Number, exclusive
     body: Tuple[Node, ...]  # the unroll pass removes every loop, so later passes never see one
+
+
+@dataclass(frozen=True)
+class Distribution(Node):
+    """
+    `x = start..stop;` (grammar v2): an equal superposition of the integers from start up to, not including, stop, read
+    in the language as a distribution over them. Bounds are constants for now, as a loop's are; a range one value wide
+    is an ordinary definite value.
+    """
+    start: Node  # a Number
+    stop: Node  # a Number, exclusive
 
 
 @dataclass(frozen=True)
