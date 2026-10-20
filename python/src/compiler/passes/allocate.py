@@ -35,9 +35,11 @@ from compiler.parser.instructions import (
     Alloc,
     Const,
     Ctrl,
+    Dist,
     EndCtrl,
     Free,
     ICtrl,
+    IDist,
     Instruction,
     IOp,
     IsaProgram,
@@ -112,6 +114,8 @@ class _Allocator:
         if isinstance(instruction, (Op, IOp)):
             sources = tuple(self.operand(source) for source in instruction.sources)
             return type(instruction)(instruction.opcode, self.register(instruction.dst), sources)
+        if isinstance(instruction, (Dist, IDist)):
+            return type(instruction)(self.register(instruction.dst), instruction.start, instruction.stop)
         if isinstance(instruction, Update):
             return Update(instruction.opcode, self.register(instruction.dst), self.operand(instruction.source))
         if isinstance(instruction, (Ctrl, ICtrl)):

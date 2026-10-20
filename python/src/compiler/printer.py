@@ -18,7 +18,7 @@ from compiler.parser.grammar import (
     Unassign,
     Variable,
 )
-from compiler.parser.instructions import Alloc, Ctrl, EndCtrl, Free, ICtrl, IOp, Op, Reg, Scratch, Update
+from compiler.parser.instructions import Alloc, Ctrl, Dist, EndCtrl, Free, ICtrl, IDist, IOp, Op, Reg, Scratch, Update
 
 
 def unparse(program: Sequence[Node]) -> str:
@@ -92,6 +92,8 @@ def _instruction_lines(instruction, depth: int) -> List[str]:
         return [f"{pad}FREE  {instruction.register}"]
     if isinstance(instruction, Update):
         return [f"{pad}{instruction.opcode.upper() + '=':<5} {instruction.dst}, {_operand_text(instruction.source)}"]
+    if isinstance(instruction, (Dist, IDist)):
+        return [f"{pad}{'I' if isinstance(instruction, IDist) else ''}DIST  {instruction.dst}, {instruction.start}, {instruction.stop}"]
     if isinstance(instruction, Scratch):
         return [f"{pad}SCRATCH {instruction.register}"]
     if isinstance(instruction, (Op, IOp)):

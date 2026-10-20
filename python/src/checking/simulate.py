@@ -9,8 +9,9 @@ Each version is a register. `Assign` writes one and `~=` frees one. Registers a 
 parameters are not leaks. Loops run directly, so a program can be run before it is unrolled.
 It also records the most registers held at once in each scope (`peak`), a stand-in for circuit width.
 """
+import math
 import operator
-from typing import Any, Dict, List, NamedTuple, Optional
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 from compiler.parser.grammar import (
     Assign,
@@ -29,7 +30,7 @@ from compiler.parser.grammar import (
     Unassign,
     Variable,
 )
-from compiler.parser.instructions import Alloc, Const, Ctrl, EndCtrl, Free, ICtrl, IOp, IsaProgram, Op, Reg, Update
+from compiler.parser.instructions import Alloc, Const, Ctrl, Dist, EndCtrl, Free, ICtrl, IDist, IOp, IsaProgram, Op, Reg, Update
 from compiler.system import System
 
 
@@ -87,6 +88,7 @@ class Result(NamedTuple):
     value: Any
     leaks: Dict[str, set]  # registers still held on return, by scope ("<program>" or a function name)
     peak: Dict[str, int]  # most registers held at once, by scope
+    state: Optional[Tuple[Tuple[str, ...], Dict[tuple, complex]]] = None  # instruction machine only: the registers held, and each entry of the state vector
 
 
 class Machine:
@@ -208,95 +210,169 @@ _OPCODES = {**_BINARY, "copy": lambda a: a, "not": operator.not_}
 
 
 class _IsaMachine:
-    """Runs a program of instructions. `FREE` must find the register at zero, which checks every release."""
+    """
+    Runs a program of instructions on a sparse state vector: a map from the values of every register held, one entry per
+    basis state, to its amplitude. A program with no `DIST` only ever has one entry, so it runs as a plain register
+    machine. `FREE` must find the register at zero in every entry, which checks every release.
+
+    A controlled region applies to the entries where its control holds and leaves the rest alone, so a control that is
+    superposed splits the state coherently. Entries that come to hold the same values add their amplitudes.
+    """
 
     def __init__(self, system: Optional[System] = None) -> None:
         self.norm = normaliser(system)
-        self.registers: Dict[str, Any] = {}
+        self.names: List[str] = []  # the registers held, in the order each entry lists their values
+        self.state: Dict[tuple, complex] = {(): 1.0}
         self.peak = 0
         self.steps = 0
 
-    def read(self, operand):
+    def column(self, name: str, message: str) -> int:
+        if name not in self.names:
+            raise SimulationError(message.format(name))
+        return self.names.index(name)
+
+    def read(self, operand, key: tuple):
         if isinstance(operand, Const):
             return self.norm(operand.value)
-        if operand.name not in self.registers:
-            raise SimulationError(f"{operand.name} read but not held")
-        return self.registers[operand.name]
+        return key[self.column(operand.name, "{} read but not held")]
 
     def run(self, body) -> None:
-        regions: List[bool] = []  # for each open region, whether it is active (its control holds)
+        regions: List[tuple] = []  # for each open region, its control operand and the value it holds it to
         for instruction in body:
             self.steps += 1
             if self.steps > MAX_STEPS:
                 raise SimulationError("step limit reached")
             if isinstance(instruction, (Ctrl, ICtrl)):
-                regions.append(bool(self.read(instruction.control)) == isinstance(instruction, Ctrl))
+                if isinstance(instruction.control, Reg):
+                    self.column(instruction.control.name, "{} read but not held")
+                regions.append((instruction.control, isinstance(instruction, Ctrl)))
             elif isinstance(instruction, EndCtrl):
                 if not regions:
                     raise SimulationError("ENDCTRL with no open region")
                 regions.pop()
             elif regions and isinstance(instruction, (Alloc, Free)):
                 raise SimulationError("a controlled region may not allocate or free")
-            elif all(regions):  # inside a region whose control does not hold, an instruction has no effect
-                self.execute(instruction)
+            else:
+                self.execute(instruction, regions)
         if regions:
             raise SimulationError("a controlled region is never closed")
 
-    def execute(self, instruction) -> None:
+    def active(self, key: tuple, regions) -> bool:
+        return all(bool(self.read(control, key)) == polarity for control, polarity in regions)
+
+    def execute(self, instruction, regions) -> None:
         if isinstance(instruction, Alloc):
             self.alloc(instruction.register)
         elif isinstance(instruction, Free):
             self.free(instruction.register)
-        elif isinstance(instruction, (Op, IOp)):
-            self.operate(instruction)
-        elif isinstance(instruction, Update):
-            self.update(instruction)
+        elif isinstance(instruction, IDist):
+            self.undo_distribution(instruction, regions)
+        elif isinstance(instruction, (Op, IOp, Update, Dist)):
+            self.apply(instruction, regions)
 
     def alloc(self, name: str) -> None:
-        if name in self.registers:
+        if name in self.names:
             raise SimulationError(f"{name} allocated twice")
-        self.registers[name] = 0
-        self.peak = max(self.peak, len(self.registers))
+        self.names.append(name)
+        self.state = {key + (0,): amplitude for key, amplitude in self.state.items()}
+        self.peak = max(self.peak, len(self.names))
 
     def free(self, name: str) -> None:
-        if name not in self.registers:
-            raise SimulationError(f"{name} freed but not held")
-        if self.registers[name] != 0:
-            raise SimulationError(f"{name} freed while holding {self.registers[name]}")
-        del self.registers[name]
+        i = self.column(name, "{} freed but not held")
+        for key in self.state:
+            if key[i] != 0:
+                raise SimulationError(f"{name} freed while holding {key[i]}")
+        del self.names[i]
+        self.state = {key[:i] + key[i + 1:]: amplitude for key, amplitude in self.state.items()}
 
-    def update(self, instruction: Update) -> None:
-        name = instruction.dst
-        if name not in self.registers:
-            raise SimulationError(f"{name} updated but not allocated")
-        value = _OPCODES[instruction.opcode](self.registers[name], self.read(instruction.source))
-        self.registers[name] = self.norm(value)
+    def apply(self, instruction, regions) -> None:
+        """Each entry the regions leave active becomes the entries the instruction maps it to; the others are kept."""
+        after: Dict[tuple, complex] = {}
+        for key, amplitude in self.state.items():
+            moved = self.effect(instruction, key, amplitude) if self.active(key, regions) else [(key, amplitude)]
+            for new_key, new_amplitude in moved:
+                after[new_key] = after.get(new_key, 0) + new_amplitude
+        self.state = {key: amplitude for key, amplitude in after.items() if abs(amplitude) > 1e-12}
 
-    def operate(self, instruction) -> None:
-        value = _OPCODES[instruction.opcode](*(self.read(source) for source in instruction.sources))
+    def effect(self, instruction, key: tuple, amplitude: complex):
+        if isinstance(instruction, Update):
+            i = self.column(instruction.dst, "{} updated but not allocated")
+            value = self.norm(_OPCODES[instruction.opcode](key[i], self.read(instruction.source, key)))
+            return [(key[:i] + (value,) + key[i + 1:], amplitude)]
+        if isinstance(instruction, Dist):
+            return self.prepare(instruction, key, amplitude)
+        value = _OPCODES[instruction.opcode](*(self.read(source, key) for source in instruction.sources))
         if instruction.opcode in _ARITHMETIC:
             value = self.norm(value)
-        name = instruction.dst
-        if name not in self.registers:
-            raise SimulationError(f"{name} written but not allocated")
-        held = self.registers[name]
+        i = self.column(instruction.dst, "{} written but not allocated")
+        held = key[i]
         if isinstance(instruction, Op):  # computes into a register that is zero
             if held != 0:
-                raise SimulationError(f"{instruction.opcode.upper()} writes {name}, which holds {held}, not zero")
-            self.registers[name] = value
-        else:  # undoes it: the register must hold exactly what the instruction computes
-            if held != value:
-                raise SimulationError(f"I{instruction.opcode.upper()} expected {name} to hold {value} but it holds {held}")
-            self.registers[name] = 0
+                raise SimulationError(f"{instruction.opcode.upper()} writes {instruction.dst}, which holds {held}, not zero")
+            return [(key[:i] + (value,) + key[i + 1:], amplitude)]
+        if held != value:  # undoes it: the register must hold exactly what the instruction computes
+            raise SimulationError(f"I{instruction.opcode.upper()} expected {instruction.dst} to hold {value} but it holds {held}")
+        return [(key[:i] + (0,) + key[i + 1:], amplitude)]
+
+    def domain(self, instruction) -> List[int]:
+        values = [self.norm(v) for v in range(instruction.start, instruction.stop)]
+        if not values or values != list(range(instruction.start, instruction.stop)):
+            raise SimulationError(f"{instruction.start}..{instruction.stop} has no values or does not fit the register")
+        return values
+
+    def prepare(self, instruction: Dist, key: tuple, amplitude: complex):
+        i = self.column(instruction.dst, "{} written but not allocated")
+        if key[i] != 0:
+            raise SimulationError(f"DIST writes {instruction.dst}, which holds {key[i]}, not zero")
+        values = self.domain(instruction)
+        share = amplitude / math.sqrt(len(values))
+        return [(key[:i] + (value,) + key[i + 1:], share) for value in values]
+
+    def undo_distribution(self, instruction: IDist, regions) -> None:
+        """
+        Where the regions are active, the register must hold the equal superposition `DIST` makes, in every group of
+        entries that agree on the other registers, and is left zero carrying that group's weight.
+        """
+        i = self.column(instruction.dst, "{} written but not allocated")
+        values = self.domain(instruction)
+        groups: Dict[tuple, Dict[int, complex]] = {}
+        after: Dict[tuple, complex] = {}
+        for key, amplitude in self.state.items():
+            if self.active(key, regions):
+                groups.setdefault(key[:i] + key[i + 1:], {})[key[i]] = amplitude
+            else:
+                after[key] = amplitude
+        for rest, held in groups.items():
+            amplitudes = list(held.values())
+            if sorted(held) != sorted(values) or any(abs(a - amplitudes[0]) > 1e-9 for a in amplitudes):
+                raise SimulationError(f"IDIST expected {instruction.dst} to hold {instruction.start}..{instruction.stop} "
+                                      f"in equal superposition but it holds {dict(sorted(held.items()))}")
+            after[rest[:i] + (0,) + rest[i:]] = amplitudes[0] * math.sqrt(len(values))
+        self.state = after
+
+    def result(self, operand):
+        """The value of a register: a plain value if every entry agrees, otherwise each value's probability."""
+        if isinstance(operand, Const):
+            return self.norm(operand.value)
+        i = self.column(operand.name, "{} read but not held")
+        odds: Dict[Any, float] = {}
+        for key, amplitude in self.state.items():
+            odds[key[i]] = odds.get(key[i], 0.0) + abs(amplitude) ** 2
+        if len(odds) == 1:
+            return next(iter(odds))
+        return {value: round(p, 12) for value, p in sorted(odds.items())}
 
 
 def simulate_isa(program: IsaProgram, system: Optional[System] = None) -> Result:
-    """Run a program; returns its value, the registers left held and the most held at once."""
+    """
+    Run a program; returns its value, the registers left held and the most held at once. A register that ends up
+    holding several values has a value that maps each to its probability, and `state` gives every entry's amplitude.
+    """
     machine = _IsaMachine(system)
     machine.run(program.body)
-    value = None if program.result is None else machine.read(program.result)
-    held = set(machine.registers) - ({program.result.name} if isinstance(program.result, Reg) else set())
-    return Result(value, {"<program>": held}, {"<program>": machine.peak})
+    value = None if program.result is None else machine.result(program.result)
+    held = set(machine.names) - ({program.result.name} if isinstance(program.result, Reg) else set())
+    return Result(value, {"<program>": held}, {"<program>": machine.peak}, (tuple(machine.names), dict(machine.state)))
 
 
 def execute(output: Any, system: Optional[System] = None) -> Optional[Result]:
