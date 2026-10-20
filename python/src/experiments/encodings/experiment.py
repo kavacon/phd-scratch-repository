@@ -221,6 +221,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--list", action="store_true", help="list the encodings")
     parser.add_argument("--plan", action="store_true", help="show the passes each chosen encoding runs")
     parser.add_argument("--width", type=int, default=SYSTEM.register_width, help="qubits per register")
+    parser.add_argument("--no-zx", action="store_true", help="leave out the ZX optimised circuit, which is slow on large programs")
     args = parser.parse_args(argv)
     system = System(args.width, SYSTEM.qubits)
     if args.list:
@@ -235,7 +236,16 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         return
     sources = ([(args.file.name, args.file.read_text(encoding="utf-8"))] if args.file else
                [(p["id"], p["source"]) for p in PROGRAMS if args.program is None or p["id"] in args.program])
-    print(table([(name, row) for name, source in sources for row in run(source, args.encoding, system)]))
+    rows, refused = [], []
+    for name, source in sources:
+        for encoding in args.encoding:
+            try:
+                rows += [(name, row) for row in run(source, [encoding], system, zx=not args.no_zx)]
+            except Exception as error:  # an encoding that cannot express a program says why, and the run goes on
+                refused.append(f"{name}  {encoding}  refused: {error}")
+    print(table(rows))
+    for line in refused:
+        print(line)
 
 
 if __name__ == "__main__":
