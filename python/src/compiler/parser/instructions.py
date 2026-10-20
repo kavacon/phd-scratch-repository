@@ -13,6 +13,11 @@ no widths yet) and an instruction becomes a circuit fragment directly.
   negation of `c`. `EndCtrl` ends the most recent one that is still open, so regions nest and each extra open one
   adds a control. There are no jumps and no blocks: an `if` is a `Ctrl` region and an `ICtrl` region, and both
   are always in the circuit. A controlled region never allocates or frees; those are placed before and after it.
+- `Dist r, start, stop` takes a zero register and leaves it in an equal superposition of the integers from `start` up to,
+  not including, `stop`. It is the one place a superposition is created: how it is prepared (Hadamards for a power of two,
+  something more for other sizes) is the circuit lowering's concern, and which registers end up superposed or entangled
+  is read off the instruction list, not stored. `IDist` is its inverse: it needs `r` to hold exactly that state and
+  leaves it zero.
 
 A program is one flat list of these instructions and, usually, the value it returns. A program with no `result` is just
 a body: a lowering builds its instructions and nothing to read the result out. There is no call instruction: calls were
@@ -20,7 +25,7 @@ descoped for this version, and the inline pass has already copied every callee i
 reaches this level with no functions. A `CALL` to a separate instruction set could return if a target needs
 subroutines to stay first-class.
 
-Every instruction has an explicit inverse (`inverse`): `ALLOC`/`FREE`, `OP`/`IOP`, and a controlled region reversed.
+Every instruction has an explicit inverse (`inverse`): `ALLOC`/`FREE`, `OP`/`IOP`, `DIST`/`IDIST`, and a controlled region reversed.
 In-place forms (`x += y`, whose inverse `x -= y` is a different circuit) are not defined yet.
 """
 from dataclasses import dataclass
@@ -71,6 +76,22 @@ class Op(Instruction):
     opcode: str
     dst: str
     sources: Tuple[Operand, ...]
+
+
+@dataclass(frozen=True)
+class Dist(Instruction):
+    """`dst` is zero and becomes an equal superposition of the integers from `start` up to, not including, `stop`."""
+    dst: str
+    start: int
+    stop: int
+
+
+@dataclass(frozen=True)
+class IDist(Instruction):
+    """The inverse of `Dist` with the same fields: `dst` holds exactly that superposition and is left zero."""
+    dst: str
+    start: int
+    stop: int
 
 
 @dataclass(frozen=True)
@@ -125,6 +146,10 @@ def inverse(instruction: Instruction) -> Instruction:
         return IOp(instruction.opcode, instruction.dst, instruction.sources)
     if isinstance(instruction, IOp):
         return Op(instruction.opcode, instruction.dst, instruction.sources)
+    if isinstance(instruction, Dist):
+        return IDist(instruction.dst, instruction.start, instruction.stop)
+    if isinstance(instruction, IDist):
+        return Dist(instruction.dst, instruction.start, instruction.stop)
     if isinstance(instruction, Update):
         return Update({"add": "sub", "sub": "add"}[instruction.opcode], instruction.dst, instruction.source)
     raise TypeError(f"no inverse for {type(instruction).__name__} on its own")

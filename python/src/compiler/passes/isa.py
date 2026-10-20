@@ -4,7 +4,8 @@ Lowering to the instruction set (parser.instructions), after the passes up to an
 The result is one flat list of instructions with no blocks, and the value it returns. Calls were descoped for this
 version: the inline pass must have run, so there are no functions and no calls to lower.
 
-Each assignment is `ALLOC r` followed by one instruction that computes the value into it, and each `~=` is the
+Each assignment is `ALLOC r` followed by one instruction that computes the value into it (a distribution, `x = 0..4`, is
+`DIST r, 0, 4`), and each `~=` is the
 inverse instruction (`IMUL` undoes `MUL`) followed by `FREE r`. An `if` becomes a `CTRL c` region and an `ICTRL c` region, each closed by
 `ENDCTRL`, and both are always in the circuit (the second is controlled on the negation, so no negation is
 computed). A controlled region may not allocate or free, so every register an `if` touches is allocated before
@@ -22,6 +23,7 @@ from compiler.parser.grammar import (
     Assign,
     BinOp,
     Boolean,
+    Distribution,
     Equals,
     ExprStmt,
     FunctionDef,
@@ -40,6 +42,7 @@ from compiler.parser.instructions import (
     Alloc,
     Const,
     Ctrl,
+    Dist,
     EndCtrl,
     Free,
     ICtrl,
@@ -69,7 +72,9 @@ def _operand(node: Node, reg=lambda name: name) -> Operand:
 
 
 def _compute(dst: str, value: Node, reg=lambda name: name) -> Instruction:
-    """The instruction that XORs `value` into `dst`."""
+    """The instruction that XORs `value` into `dst`, or, for a distribution, prepares it there."""
+    if isinstance(value, Distribution):
+        return Dist(dst, value.start.value, value.stop.value)
     if isinstance(value, BinOp):
         return Op(_BINARY[value.op], dst, (_operand(value.left, reg), _operand(value.right, reg)))
     if isinstance(value, Not):
