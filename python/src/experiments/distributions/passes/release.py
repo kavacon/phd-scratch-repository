@@ -20,8 +20,11 @@ from, which is the garbage a unitary-only program cannot avoid.
 A register kept for good does not stop the registers it was computed from from being released, so the pass repeats with
 the registers left held marked as kept until that stops changing anything.
 
-Straight-line programs only. A program with a controlled region, or one that already releases, is returned unchanged
-with a warning: releasing inside a region needs the inverse emitted under the same control, which is not built yet.
+A controlled region is never split, so a release is only placed between regions. A step that ran under a control is
+undone under the same control, since the register is zero wherever the condition did not hold. Every register a region
+is controlled on counts as read by what the region writes, so it stays until those are released or kept. A register
+that has been cleared by an inverse under a control is not released, since its history is no longer the steps that
+wrote it. A program that already releases is returned unchanged with a warning.
 """
 import warnings
 from dataclasses import replace
@@ -48,6 +51,7 @@ from compiler.parser.instructions import (
 )
 from compiler.system import System
 from experiments.distributions.passes.entanglement import State, read_after
+from experiments.distributions.passes.history import Controls, undo
 
 History = Dict[str, List[Tuple[int, Instruction]]]
 
@@ -89,11 +93,23 @@ class _Releaser:
         self.result = program.result.name if isinstance(program.result, Reg) else None
         self.after = read_after(program)
         self.history: History = {}
+        self.controls: List[Controls] = []  # what each instruction runs under: a control and whether it had to hold
+        self.cleared = {i.dst for i in self.body if isinstance(i, (IOp, IDist))}
+        open_regions: List[Tuple[object, bool]] = []
         for k, instruction in enumerate(self.body):
+            if isinstance(instruction, (Ctrl, ICtrl)):
+                open_regions.append((instruction.control, isinstance(instruction, Ctrl)))
+            elif isinstance(instruction, EndCtrl):
+                open_regions.pop()
+            self.controls.append(tuple(open_regions))
             if isinstance(instruction, (Dist, Op, Update)):
                 self.history.setdefault(instruction.dst, []).append((k, instruction))
-        self.dependents = {r: {d for d, h in self.history.items() if d != r and any(r in _sources(i) for _, i in h)}
+        self.dependents = {r: {d for d, h in self.history.items() if d != r and any(r in self.reads(k, i) for k, i in h)}
                            for r in (i.register for i in self.body if isinstance(i, Alloc))}
+
+    def reads(self, k: int, instruction: Instruction) -> List[str]:
+        """What an instruction in the history needs intact to be undone: its sources and the controls it runs under."""
+        return _sources(instruction) + [c.name for c, _ in self.controls[k] if isinstance(c, Reg)]
 
     def run(self) -> List[Instruction]:
         kept: Set[str] = {self.result} if self.result else set()
@@ -110,10 +126,10 @@ class _Releaser:
         for k, instruction in enumerate(self.body):
             out.append(instruction)
             state.apply(instruction)
-            if isinstance(instruction, (Dist, Op, Update)):
+            if isinstance(instruction, (Dist, Op, Update, IOp, IDist)):
                 self.writes.setdefault(instruction.dst, []).append(k)
             point = k + 1
-            while True:
+            while not state.controls:  # a region is never split, so release only between regions
                 for register in reversed(state.held):
                     if register in kept or register in self.after[point]:
                         continue
@@ -133,7 +149,7 @@ class _Releaser:
     def intact(self, register: str, point: int, state: State) -> bool:
         """Every register the history of `register` read still holds what it held then."""
         for k, instruction in self.history.get(register, []):
-            for source in _sources(instruction):
+            for source in self.reads(k, instruction):
                 if source not in state.held or any(k < j < point for j in self.writes.get(source, [])):
                     return False
         return True
@@ -142,12 +158,14 @@ class _Releaser:
         history = self.history.get(register, [])
         if any(k >= point for k, _ in history):
             return None  # its own steps have not all run yet
+        if register in self.cleared:
+            return None
         if history and self.intact(register, point, state):
             prepared = any(isinstance(i, Dist) for _, i in history)
             if not prepared or state.group_of(register) == frozenset({register}):
-                return [inverse(i) for _, i in reversed(history)] + [Free(register)]
-        undo = self.invert(register, point, state)
-        return None if undo is None else [undo, Free(register)]
+                return undo([(i, self.controls[k]) for k, i in history]) + [Free(register)]
+        computed_back = self.invert(register, point, state)
+        return None if computed_back is None else [computed_back, Free(register)]
 
     def invert(self, register: str, point: int, state: State):
         """Compute the register back from the result, when the result was made from it in one step."""
@@ -158,8 +176,8 @@ class _Releaser:
         if len(made) != 1 or not isinstance(made[0][1], Op):
             return None
         k, op = made[0]
-        if k >= point:
-            return None
+        if k >= point or self.controls[k]:
+            return None  # not computed yet, or only when a condition held, so it does not determine the register
         if any(k < j < point for j in self.writes.get(register, [])):
             return None  # the register changed after the result was computed from it
         return _inverse_of_op(op, register, result, self.width)
@@ -172,8 +190,8 @@ class _Releaser:
             "backwards once nothing is entangled with it, or by computing it back from the result.",
 )
 def release_values(program: IsaProgram, system: Optional[System] = None) -> IsaProgram:
-    if any(isinstance(i, (Ctrl, ICtrl, EndCtrl, Free, IOp, IDist)) for i in program.body):
-        warnings.warn("release_values leaves a program with controlled regions or releases as it is")
+    if any(isinstance(i, Free) for i in program.body):
+        warnings.warn("release_values leaves a program that already frees registers as it is")
         return program
     width = (system or System()).register_width
     return replace(program, body=tuple(_Releaser(program, width).run()))
