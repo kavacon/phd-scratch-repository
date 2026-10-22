@@ -18,7 +18,9 @@ Registers none of this frees stay held to the end: the result, and whatever it i
 from, which is the garbage a unitary-only program cannot avoid.
 
 A register kept for good does not stop the registers it was computed from from being released, so the pass repeats with
-the registers left held marked as kept until that stops changing anything.
+the registers left held marked as kept until that stops changing anything. A register that is left held only because a
+register computed from it is not released yet is not marked: it can be undone once that one is known to be kept, so the
+registers marked are those that could not be undone at the end even with nothing waiting on them.
 
 A controlled region is never split, so a release is only placed between regions. A step that ran under a control is
 undone under the same control, since the register is zero wherever the condition did not hold. Every register a region
@@ -114,13 +116,13 @@ class _Releaser:
     def run(self) -> List[Instruction]:
         kept: Set[str] = {self.result} if self.result else set()
         while True:
-            out, released = self.simulate(kept)
-            left = {r for r in self.dependents if r not in released}
+            out, released, waiting = self.simulate(kept)
+            left = {r for r in self.dependents if r not in released and r not in waiting}
             if left <= kept:
                 return out
             kept |= left
 
-    def simulate(self, kept: Set[str]) -> Tuple[List[Instruction], Set[str]]:
+    def simulate(self, kept: Set[str]) -> Tuple[List[Instruction], Set[str], Set[str]]:
         state, out, released = State(), [], set()
         self.writes: Dict[str, List[int]] = {}
         for k, instruction in enumerate(self.body):
@@ -144,7 +146,9 @@ class _Releaser:
                         break
                 else:
                     break
-        return out, released
+        waiting = {r for r in state.held if r not in kept and r not in released
+                   and self.release(r, len(self.body), state) is not None}  # only held up by what is computed from them
+        return out, released, waiting
 
     def intact(self, register: str, point: int, state: State) -> bool:
         """Every register the history of `register` read still holds what it held then."""

@@ -34,9 +34,9 @@ class AnalysisTestCase(unittest.TestCase):
     def test_what_a_branch_writes_under_a_superposed_condition_is_superposed_and_joined_to_it(self):
         final = analyse(isa(CONDITIONAL, until="drop_noops"))[-1]
         self.assertIn("b#1", final.superposed)
-        self.assertEqual([["a#1", "b#1"]], names(final.groups))
+        self.assertEqual([["$b1#1", "a#1", "b#1"]], names(final.groups))  # the guard's own bit is entangled with a too
         copied = analyse(isa(CONDITIONAL))[-1]  # before the identity is aliased: b#2 is a copy of the constant b#1
-        self.assertEqual([["a#1", "b#2"], ["b#1"]], names(copied.groups))
+        self.assertEqual([["$b1#1", "a#1", "b#2"], ["b#1"]], names(copied.groups))
 
     def test_it_never_reports_less_entanglement_than_the_state_shows(self):
         programs = [p["source"] for p in PROGRAMS] + [CONDITIONAL, SHARED, XOR_LIKE, TWO_IDENTITIES, "a = 0..4;\nc = a * 3;\nreturn c;\n"]

@@ -5,7 +5,7 @@ Working with distributions: compile a program and produce an OpenQASM 3 circuit.
 
 The source is read with grammar v2, which adds `x = 0..4;` (an equal superposition of 0 to 3). The pipeline is the shared
 front end, then constants folded, unread values dropped, constant steps combined and updates made in place on the
-program before it is renamed, a rename that keeps the name of an in-place update, instructions with each register released as soon as it can be undone, multiplication by a power of two as a shift, slots, and circuit
+program before it is renamed, the guard of each conditional raised into a boolean variable, a rename that keeps the name of an in-place update, instructions with each register released as soon as it can be undone, multiplication by a power of two as a shift, slots, and circuit
 generation.
 """
 import argparse
@@ -26,6 +26,7 @@ from compiler.passes.unroll import unroll
 from compiler.system import System
 from experiments.distributions.passes.alias_identities import alias_identities
 from experiments.distributions.passes.collapse_updates import collapse_updates
+from experiments.distributions.passes.condition_bits import condition_bits
 from experiments.distributions.passes.drop_noops import drop_noops
 from experiments.distributions.passes.drop_unread import drop_unread, drop_unread_versions
 from experiments.distributions.passes.flatten_conditionals import flatten_conditionals
@@ -37,7 +38,7 @@ from experiments.distributions.passes.rename import rename
 from experiments.distributions.passes.shifts import shift_multiplications
 
 FRONT_END = (inline, unroll, flatten, flatten_conditionals, balance)
-PIPELINE = (*FRONT_END, fold_constants, drop_unread, fuse_steps, collapse_updates, rename, drop_unread_versions,
+PIPELINE = (*FRONT_END, fold_constants, drop_unread, fuse_steps, collapse_updates, condition_bits, rename, drop_unread_versions,
             lower_to_isa, alias_identities, drop_noops, flatten_controls,
             release_values, shift_multiplications, allocate, to_openqasm, optimise)
 SYSTEM = System(register_width=4, qubits=100)

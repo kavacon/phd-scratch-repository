@@ -3,37 +3,56 @@ Pipeline explorer: pick a program or write your own, choose the passes, and step
 
 Every stage shows the program before and after the pass with the changes marked. Once the program is instructions, the
 instruction machine runs it and the stage shows what it returns, the state vector it ends in, and which registers are
-entangled: by the state itself, and by the rule that any operation acting on several variables entangles them. The
-circuit stages are not built yet, so the run stops at the physical allocation.
+entangled: by the state itself, and by the rule that any operation acting on several variables entangles them. The last
+two stages are the circuit as built and as Qiskit's optimiser leaves it, with what each costs and a drawing.
 
     PYTHONPATH=src .venv/bin/python -m experiments.distributions.demos.explorer
 """
 from typing import Any, Dict, List, Sequence, Tuple
 
 from lark.exceptions import UnexpectedInput
+from qiskit import QuantumCircuit
 
+from checking import qiskit_tools
 from checking.simulate import SimulationError, simulate_isa
 from compiler.compiler import PassError
 from compiler.parser.errors import SourceProblem, describe_parse_error
 from compiler.parser.instructions import Ctrl, Dist, EndCtrl, ICtrl, IDist, IOp, IsaProgram, Op, Update
+from compiler.passes.qasm import openqasm_text
 from compiler.printer import unparse, unparse_isa
 from compiler.system import System
 from demo import app
-from demo.model import Bar, Card, Case, Cell, Columns, Diff, Metrics, Note, Number, Result, Row, SourceError, Stage, Stats, Step, Text
+from demo.drawing import diagram
+from demo.model import Bar, Card, Case, Cell, Code, Columns, Diagram, Diff, Metrics, Note, Number, Result, Row, SourceError, Stage, Stats, Step, Text
 from experiments.distributions import experiment
 from experiments.distributions.passes.entanglement import analyse
 from experiments.distributions.programs import PROGRAMS
 from experiments.distributions.views import entangled_groups, groups_by_joint_operation
 
 SPECS = [fn.compile_pass for fn in experiment.compiler().passes]
-LAST = next(n for n, spec in enumerate(SPECS) if spec.name == "allocate")  # the circuit stages are not built yet
-STEPS = SPECS[:LAST + 1]
+STEPS = SPECS
 SUMMARY = {spec.name: spec.summary for spec in SPECS} | {"source": "Your program, parsed and printed back out."}
 MOST_ENTRIES = 24  # of the state vector, in the listing
 
 
 def text_of(output: Any) -> str:
+    if isinstance(output, QuantumCircuit):
+        return openqasm_text(output)
     return unparse_isa(output) if isinstance(output, IsaProgram) else unparse(output)
+
+
+def _circuit_blocks(circuit: QuantumCircuit) -> List[Any]:
+    counts = qiskit_tools.measure(circuit)
+    return [
+        Metrics((
+            Card("Qubits touched", str(counts["touched"]), f"of {counts['wires']} wires"),
+            Card("Gates", str(counts["gates"]), ", ".join(f"{n} {name}" for name, n in sorted(counts["ops"].items()) if name != "measure")),
+            Card("Two-qubit gates", str(counts["two_qubit"])),
+            Card("Depth", str(counts["depth"])),
+        )),
+        Diagram(diagram(circuit)),
+        Code.of(openqasm_text(circuit), "OpenQASM 3"),
+    ]
 
 
 def _groups(groups: List[List[str]]) -> Tuple[str, ...]:
@@ -99,7 +118,8 @@ def _state_blocks(program: IsaProgram, system: System) -> List[Any]:
 
 def _stage(stage, previous: str, system: System) -> Tuple[Stage, str]:
     text = text_of(stage.output)
-    blocks: List[Any] = [Diff.of(previous if previous != "" else None, text, "Before", "After")]
+    circuit = isinstance(stage.output, QuantumCircuit)
+    blocks: List[Any] = _circuit_blocks(stage.output) if circuit else [Diff.of(previous if previous != "" else None, text, "Before", "After")]
     blocks += [Note(w, "warn") for w in stage.warnings]
     if isinstance(stage.output, IsaProgram):
         blocks += _state_blocks(stage.output, system)
