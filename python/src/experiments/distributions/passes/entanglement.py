@@ -11,7 +11,8 @@ joins nothing.
   control that is superposed, even when it writes a constant. An in-place update keeps its register's status and joins
   it to a superposed operand or control.
 - A register that is released (its inverse has run, so it is zero) leaves the graph, and what it joined stays joined to
-  each other. That is conservative: they may be independent again, and are never reported so.
+  each other. That is conservative: they may be independent again, and are never reported so. An inverse that runs
+  under a control only undoes the register where the control holds, so it is joined to the control and not released.
 - A register is live at a point if a later instruction reads it, or it is entangled with a register that is live (the
   paper's Definition 3), or it is the program's result.
 
@@ -122,7 +123,12 @@ class State:
                 self.superposed.add(instruction.dst)
                 self._join(instruction.dst, joined)
         elif isinstance(instruction, (IOp, IDist)):
-            self._forget(instruction.dst)
+            if self.controls:  # undone only where the region holds, so the register is not zero everywhere
+                if under:
+                    self.superposed.add(instruction.dst)
+                    self._join(instruction.dst, under)
+            else:
+                self._forget(instruction.dst)
 
 
 class Point(NamedTuple):

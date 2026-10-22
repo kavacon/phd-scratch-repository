@@ -40,11 +40,14 @@ class ReleaseTestCase(unittest.TestCase):
         self.assertEqual({"u#1"}, run(SOURCES["fused"])[1])  # 3 * 5 combine, 15 is odd, so a is computed back from u
         self.assertEqual({"a#1", "u#1"}, run(SOURCES["temporary"])[1])  # t is reversed; a stays
 
-    def test_a_program_with_a_controlled_region_is_left_as_it_is_with_a_warning(self):
-        source = "a = 0..2;\nb = 3;\nif a {\n    b = 5;\n}\nreturn b;\n"
-        compilation = experiment.compiler().run(source, until="release_values")
-        self.assertTrue(compilation.stages[-1].warnings)
-        self.assertEqual(compilation["lower_to_isa"], compilation.output)
+    def test_a_register_computed_before_a_region_is_released_after_it_and_one_written_inside_is_undone_under_its_control(self):
+        arms = SOURCES["branch-arms"]  # $t1 = a < 2 is computed before the branch and only read as its control
+        _, held, value = run(arms)
+        self.assertEqual({"a#1", "x#2"}, held)
+        self.assertEqual(value, run(arms, pass_on=False)[2])
+        program, held, _ = run(SOURCES["branch-temporary"])
+        self.assertTrue(any(isinstance(i, IOp) and i.opcode == "mul" and i.dst == "t#1" for i in program.body))
+        self.assertEqual({"a#1", "x#1"}, held)  # t is written under a control and undone under the same control
 
 
 if __name__ == '__main__':

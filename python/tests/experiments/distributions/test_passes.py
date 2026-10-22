@@ -35,6 +35,32 @@ class FoldConstantsTestCase(unittest.TestCase):
         self.assertEqual("x = 6;\nreturn x;", unparse(stage("x = 5;\nx = 6;\nreturn x;\n", "drop_unread")))
 
 
+class IdentityTestCase(unittest.TestCase):
+    SOURCE = "a = 0..3;\nx = 1;\nif a {\n    x = a + 5;\n}\nreturn x;\n"
+
+    def test_an_identity_is_not_folded_and_lowers_to_no_operation_with_the_other_arm_clearing_the_old_value(self):
+        self.assertIn("x = x;", unparse(stage(self.SOURCE, "fold_constants")))
+        text = unparse_isa(stage(self.SOURCE, "drop_noops"))
+        self.assertNotIn("COPY  x#2", text)  # no copy of the old version into the new one, and one register for x
+        self.assertIn("ICOPY x#1, 1", text)  # the arm that assigns clears the 1 first, under its control
+        with_alias = simulate_isa(stage(self.SOURCE, "drop_noops"), experiment.SYSTEM)
+        without = simulate_isa(experiment.compiler().run(self.SOURCE, until="release_values", skip=["alias_identities"]).output,
+                               experiment.SYSTEM)
+        self.assertEqual(without.value, with_alias.value)
+
+    def test_two_identity_arms_of_a_nested_conditional_leave_the_value_unchanged_on_both_paths(self):
+        source = "a = 0..2;\nb = 0..2;\nx = 1;\nif a {\n    if b {\n        x = 3;\n    }\n}\nreturn x;\n"
+        skip = ["flatten_conditionals"]
+        program = experiment.compiler().run(source, until="drop_noops", skip=skip).output
+        self.assertEqual({1: 0.75, 3: 0.25}, simulate_isa(program, experiment.SYSTEM).value)  # x is 1 unless a and b are 1
+        self.assertEqual(1, unparse_isa(program).count("ALLOC x"))
+
+    def test_a_load_of_zero_and_the_region_it_leaves_empty_are_dropped(self):
+        source = "a = 0..2;\nb = 0;\nif a {\n    b = 1;\n}\nreturn b;\n"
+        self.assertNotIn("ICTRL", unparse_isa(stage(source, "drop_noops")))
+        self.assertNotIn("COPY  b#1, 0", unparse_isa(stage(source, "drop_noops")))
+
+
 class FuseStepsTestCase(unittest.TestCase):
     def test_two_steps_of_the_same_kind_through_an_intermediate_nothing_else_reads_become_one(self):
         self.assertEqual("a = 0..4;\nu = a * 15;\nreturn u;",  # exact: 15 wraps when the program is lowered, not here

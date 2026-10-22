@@ -11,8 +11,9 @@ are the exception, because there the width changes the answer (a sum that wraps 
 so they read their operands at the system's register width, as the machine does. A range one value wide is a constant.
 An `if` on a known condition is replaced by the branch that runs.
 
-Left alone: division, which is not exact, and the returned variable, which stays a variable because the instruction
-lowering needs a register to return.
+Left alone: division, which is not exact; the returned variable, which stays a variable because the instruction lowering
+needs a register to return; and an identity (`x = x`, which balancing gives the arm of an `if` that does not assign x),
+which says the variable is unchanged and is not folded into a constant, so the lowering can treat it as no operation.
 """
 import operator
 from dataclasses import replace
@@ -84,7 +85,9 @@ def _fold(node: Node, known: Known, norm) -> Node:
 def _block(body: Sequence[Node], known: Known, norm) -> List[Node]:
     out: List[Node] = []
     for statement in body:
-        if isinstance(statement, Assign):
+        if isinstance(statement, Assign) and isinstance(statement.value, Variable) and statement.value.name == statement.name:
+            out.append(statement)  # an identity (`x = x`) says the variable is unchanged, and is left for the lowering
+        elif isinstance(statement, Assign):
             value = _fold(statement.value, known, norm)
             kept_in_place = (statement.inplace and isinstance(value, BinOp) and isinstance(value.left, Variable)
                              and value.left.name == statement.value.left.name)

@@ -24,18 +24,22 @@ from compiler.passes.optimise import optimise
 from compiler.passes.qasm import openqasm_text, to_openqasm
 from compiler.passes.unroll import unroll
 from compiler.system import System
+from experiments.distributions.passes.alias_identities import alias_identities
 from experiments.distributions.passes.collapse_updates import collapse_updates
+from experiments.distributions.passes.drop_noops import drop_noops
 from experiments.distributions.passes.drop_unread import drop_unread, drop_unread_versions
+from experiments.distributions.passes.flatten_conditionals import flatten_conditionals
+from experiments.distributions.passes.flatten_controls import flatten_controls
 from experiments.distributions.passes.fold_constants import fold_constants
 from experiments.distributions.passes.fuse_steps import fuse_steps
 from experiments.distributions.passes.release import release_values
 from experiments.distributions.passes.rename import rename
 from experiments.distributions.passes.shifts import shift_multiplications
 
-FRONT_END = (inline, unroll, flatten, balance)
+FRONT_END = (inline, unroll, flatten, flatten_conditionals, balance)
 PIPELINE = (*FRONT_END, fold_constants, drop_unread, fuse_steps, collapse_updates, rename, drop_unread_versions,
-            lower_to_isa, release_values,
-            shift_multiplications, allocate, to_openqasm, optimise)
+            lower_to_isa, alias_identities, drop_noops, flatten_controls,
+            release_values, shift_multiplications, allocate, to_openqasm, optimise)
 SYSTEM = System(register_width=4, qubits=100)
 
 
