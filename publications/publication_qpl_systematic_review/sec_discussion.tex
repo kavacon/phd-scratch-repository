@@ -13,28 +13,30 @@ High-level systems simplify additional obligations but only partially meet the p
 Tier assignments do not capture all differences in structured reversal, observation handling and composition.
 Q\#, Quff, Qutes and Qwerty provide program-like organisation or alternative expression mechanisms, yet their recorded profiles remain Framework because other obligations persist.
 
-\subsection{RQ2: A new quantum programming language is justified}\label{subsec:discussion:rq2}
-OpenQASM, QIR and Q-MLIR retain explicit instruction or compiler representations and resource identities.
-Qiskit and PennyLane add library reuse and execution tooling without replacing circuit-oriented authoring.
-Q\#'s typed operations and structured reversal and Silq's program-level values and compiler-managed safety simplify construction without eliminating quantum-specific constructs and observation requirements~\cite{MicrosoftQSharpOverview,bichsel2020silq}.
+\subsection{RQ2: Extension pathways and barriers}\label{subsec:discussion:rq2}
+The constrained outcomes identify abstraction mechanisms to extend, not merely obligations that systems fail to remove.
+Silq's typed values and automatic uncomputation move programming away from explicit wire management~\cite{bichsel2020silq}.
+Qmod's numeric and structured quantum types similarly separate value-level operations from circuit synthesis, although explicit allocation remains~\cite{vax2025qmodexpressivehighlevelquantum}.
+Their constrained identity outcomes and passing composition outcomes in Table~\ref{tab:system_assessments:system_summary} distinguish this progress from circuit-library reuse.
+A concrete extension would retain value-level composition while transferring allocation and lifetime decisions behind those interfaces, rather than requiring programmers to recover the underlying qubit representation.
 
-Qmod provides synthesis, Quff runtime inversion and Qutes task-specific implicit operations, improving composition and result extraction without removing every obligation across the suite~\cite{vax2025qmodexpressivehighlevelquantum,wright2024quff,faro2025qutes}.
-Qutes' membership operation passes all nine conditions, but that success does not extend across its remaining constructions.
-Qwerty's basis-oriented programming changes the authoring representation, yet retains explicit staging, observation and phase reasoning elsewhere in the suite~\cite{adams2024qwerty}.
-Its artefact and resource-identity passes in Deutsch--Jozsa and Grover likewise do not extend across the complete task suite.
+Entanglement need not be exposed solely through programmer-managed resources.
+Qutes' reversible-lifetime approach uses conservative dependency, liveness and entanglement analysis to determine safe reclamation points~\cite{reversiblelifetime2026}.
+Together with Silq's type-directed safety, this suggests a pathway through compiler-maintained resource and correlation information.
+Such mechanisms could support abstract values whose safe use and disposal are checked without requiring programmers to track their constituent wires.
+The unresolved issue is whether these guarantees can be maintained across composed routines without exposing quantum-specific annotations or manual recovery obligations.
+The existing analyses provide mechanisms for that investigation, not evidence that unrestricted inference is possible.
 
-Required quantum knowledge persists across these authoring models, particularly in phase estimation.
-This pattern is consistent with practitioner evidence identifying quantum vocabulary and insufficient higher-level abstraction as adoption barriers~\cite{ferreira2024qplusage}.
+Task-local results show that this separation is achievable in some constructions.
+Qutes' membership operation removes all assessed obligations, while Qwerty's Deutsch--Jozsa and Grover constructions pass the artefact and identity conditions.
+Their remaining observation and task-dependent constraints show why removing wires is insufficient.
+Extending this relief would require compositional result interfaces that manage extraction, alongside authoring abstractions that avoid reintroducing phase and entanglement reasoning.
+The phase-estimation findings in Section~\ref{subsec:system_assessments:knowledge} identify where that broader contract remains unfulfilled; constructed examples limit the inference to the assessed workflows.
 
-Quantum constraints on copying, observation and temporary-value disposal must be respected by the implementation~\cite{yuan2025foundationalabstractions}.
-They do not by themselves determine which responsibilities must remain in the programmer's working model.
-
-Tower provides familiar data structures and an associated control machine model while retaining explicit reversibility obligations~\cite{yuan2025foundationalabstractions}.
-Its exclusion prevents treating it as a demonstrated quantum-implicit solution, but its design supports considering alternatives to circuit-centred authoring.
-
-Across the assessed tasks, the gap is structural rather than simply a shortage of reusable functions, compiler assistance or higher-level syntax.
-A new language that makes quantum realisation an implementation responsibility is therefore justified.
-The comparison does not establish that every possible adaptation of an existing system would fail.
+Quantum constraints must be respected by implementations, but do not prescribe their visibility to programmers~\cite{yuan2025foundationalabstractions}.
+Tower illustrates an alternative representational starting point without establishing quantum-implicitness under this instrument.
+The evidence therefore supports borrowing and extending existing value, safety and lifetime mechanisms while identifying the boundaries those extensions must cross.
+A new language integrating these responsibilities is a justified design direction, not an established necessity; whether adaptation can achieve the same separation remains an implementation and evaluation question.
 
 \subsection{Methodological reflections}\label{subsec:discussion:methodological_reflections}
 OpenQASM's C7 passes despite the expected Assembly profile because the examples do not require timing, topology or pulse-level calibration.
@@ -46,25 +48,10 @@ A missing outcome can reflect an unexercised capability, an obligation absent fr
 It must not be interpreted as either satisfied abstraction or demonstrated lack of capability.
 
 \subsection{Design implications}\label{subsec:discussion:implications}
-The comparison supports four requirements for a quantum-implicit design, consistent with the abstract-machine concerns identified in the literature~\cite{nunez_corrales2025betterabstractmachines}.
+The findings motivate four requirements for either extension or a new language, consistent with the abstract-machine concerns identified in the literature.
+Programs should be authored over abstract values rather than circuit objects, with resource identity and lifetime managed behind those interfaces.
+Result extraction should likewise be governed by language and runtime contracts rather than programmer-selected measurement operations.
+These separations must hold across composed routines, not only within specialised operations.
 
-\paragraph{Quantum data model first}
-The authoring model should express programs over values, with circuits derived through compilation rather than manipulated as the primary artefact.
-Persistent C2 constraints despite improved C9 outcomes distinguish this requirement from modularity alone.
-Program-first syntax is insufficient where ordinary use reintroduces qubit identity or explicit observation.
-
-\paragraph{Computation model separation}
-The computation model should operate over language abstractions without requiring programmers to name, index or manage implementation qubits.
-Safety mechanisms and library conveniences simplify particular obligations, but the recorded identity constraints remain.
-Quantum resource guarantees must not make execution-level bookkeeping a prerequisite of representative programming.
-
-\paragraph{Measurement as system policy}
-The language and runtime should manage result extraction rather than requiring programmers to select and wire observation into ordinary programs.
-A compact measurement builtin reduces bookkeeping but still exposes the observation boundary.
-Programs should consume usable results without requiring explicit measurement operations, sampling strategies or observable interfaces.
-
-\paragraph{Vocabulary-free by default, expert access preserved}
-The common programming path should permit programs to be written, tested and reasoned about without amplitude, phase or entanglement vocabulary.
-Task-dependent C8 failures distinguish this requirement from improved function structure.
-Explicit opt-ins should preserve expert access for optimisation, verification and low-level control.
-This priority addresses the quantum vocabulary and abstraction barriers identified in practitioner evidence~\cite{ferreira2024qplusage}.
+The default programming path should permit programs to be reasoned about without requiring amplitude, phase or entanglement vocabulary.
+Explicit opt-ins should preserve expert control without making that expertise a prerequisite for the common path.

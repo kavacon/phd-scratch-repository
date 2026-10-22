@@ -15,12 +15,12 @@ The searches retrieved 852 records from arXiv, 1{,}295 from ACM Digital Library 
 The combined 2{,}851 records yielded 2{,}233 unique records after deduplication.
 Per-database counts, search strings and URLs are published in Appendix~A of~\cite{kavadias2026qplSurveySupplementary}.
 
-Supplementary AI-assisted discovery used a scheduled agent to surface candidates from project context fortnightly.
+Supplementary AI-assisted discovery used project context to identify candidate systems potentially missed by keyword-based searches of the other sources.
 Its dynamically generated queries are not reproducible verbatim and do not constitute a primary database search.
 All candidates underwent the same eligibility screening.
 
 \subsection{Screening and selection}\label{subsec:methodology:screening}
-A bounded, pre-specified seed set informed search design and validation.
+An initial seed of approximately eight language-focused paper records collected before April 2026 informed search design and validation.
 Database searches provided primary discovery; extraction concerns included systems' authoritative papers, specifications and documentation rather than the full retrieved corpus.
 
 Systems must satisfy at least three of four inclusion criteria:
@@ -34,8 +34,8 @@ Exclusions comprise marketing-only primary materials, projects inactive for more
 Assessment uses the latest stable major release or specification available at the cutoff; earlier versions serve only as labelled historical contrasts.
 
 Screening was conducted by one reviewer, with full-text exclusion rationales in Appendix~B of~\cite{kavadias2026qplSurveySupplementary}.
-Two additional reviewers participated in independent assessment and calibration reconciliation.
-The bounded review did not permit dual screening of the full inclusion corpus, which remains a review-process limitation~\cite{page2021prisma}.
+The reported system-task assessments were also recorded by one reviewer.
+The absence of dual screening and independently replicated assessment remains a review-process limitation~\cite{page2021prisma}.
 
 \subsection{Evidence quality, extraction and synthesis}\label{subsec:methodology:quality}
 Source quality was assessed before extraction using a hierarchy adapted from evidence-based software engineering guidelines~\cite{KitchenhamCharters2007SLR}.
@@ -71,12 +71,12 @@ The mechanism's preprint status remains a limitation.
 
 The principal validity threats and mitigations are:
 \begin{itemize}
-    \item \textit{Assessment subjectivity}: independent assessment, calibration, evidence quotes and predefined rules for ambiguity.
-    \item \textit{Task-suite dependence}: protocol-defined tasks and documented, prospective post-calibration amendments~\cite{kavadias2026qplSurveyProtocol}.
+    \item \textit{Assessment subjectivity}: single-reviewer judgements remain a limitation; evidence quotes, explicit outcome justifications and predefined rules for ambiguity support auditability.
+    \item \textit{Task-suite dependence}: protocol-defined tasks and documented amendments make the assessment scope explicit~\cite{kavadias2026qplSurveyProtocol}.
     \item \textit{Ecosystem maturity}: source tiers and per-claim confidence ratings.
     \item \textit{Version churn}: consistent assessment of stable releases available by 2026-04-08.
     \item \textit{Publication bias}: specifications and maintainer documentation reduce the risk of under-representing IR-tier and industry-produced frameworks~\cite{KitchenhamCharters2007SLR,page2021prisma}.
     \item \textit{Evidence availability and representativeness}: uneven canonical coverage requires constructed examples, which can over-approximate idiomatic workflows.
     These are labelled, supported by primary sources and document required low-level operations.
-    \item \textit{Interpretation drift}: common condition ladders, shared-subset calibration, outcome justifications and conservative treatment of ambiguous evidence.
+    \item \textit{Interpretation drift}: common condition ladders, outcome justifications and conservative treatment of ambiguous evidence support consistent application, but do not substitute for independent assessment.
 \end{itemize}

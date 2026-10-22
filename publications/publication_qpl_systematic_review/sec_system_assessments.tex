@@ -4,6 +4,9 @@ Appendices~C and~D publish extraction data and assessed code~\cite{kavadias2026q
 Tower is excluded from primary assessment.
 Constructed examples comprise OpenQASM T1--T2; QIR T1--T3; Q-MLIR and Quff T1, T3 and T4; Q\# and Qmod T3; and Silq and Qutes T3--T4.
 
+No aggregated profile passes all four gates, C2, C3, C6 and C9, so none meets the quantum-implicit requirements within the assessed systems, tasks and evidence.
+Section~\ref{sec:discussion} considers the implications.
+
 \begin{table}[htbp]
     \centering
     \caption{Aggregated system assessments; `-' denotes unassessable.}
@@ -95,12 +98,7 @@ Qwerty's basis-oriented initiation instead yields the only aggregate C1=C\@.
 C7 passes across all eleven profiles because the representative constructions do not require hardware-specific authoring.
 OpenQASM's examples omit timing and calibration features, while Q-MLIR uses an abstract gate namespace without removing explicit qubits and gates.
 
-\subsection{Result summary and quantum-implicit gap}\label{subsec:system_assessments:summary}
-No aggregated profile passes all four gates, C2, C3, C6 and C9, so none meets the quantum-implicit requirements within the assessed systems, tasks and evidence.
-Section~\ref{sec:discussion} considers the implications.
-
 \ifthesis
-
 \subsubsection{Systems $\times$ conditions heatmap}\label{subsubsec:system_assessments:condition_heatmap}
 Figure~\ref{fig:system_assessments:condition_heatmap} visualises the aggregated profiles in Table~\ref{tab:system_assessments:system_summary}.
 It highlights uniform C7 passes, persistent artefact and identity constraints, Qwerty's distinctive C1 outcome and QIR's unassessable observation condition.

@@ -1,19 +1,18 @@
 \section{Introduction}\label{sec:introduction}
-Quantum software development has produced languages, frameworks and execution models seeking to reduce programmer friction and improve expressivity~\cite{DiMatteo2024AbstractionHierarchy}.
-Productive quantum programming requires separation between a \textit{programming} layer that expresses algorithmic intent, an \textit{execution} layer that determines and optimises its realisation and a \textit{hardware} layer that implements device-specific instructions~\cite{DiMatteo2024AbstractionHierarchy}.
+Quantum software development has produced languages, frameworks and execution models seeking to reduce programmer friction and improve expressivity.
+Productive quantum programming requires separation between a \textit{programming} layer that expresses algorithmic intent, an \textit{execution} layer that determines and optimises its realisation and a \textit{hardware} layer that implements device-specific instructions.
 \textit{Bleed-through} occurs when execution- or hardware-layer concerns become obligations at the programming layer~\cite{DiMatteo2024AbstractionHierarchy}.
 Circuit-centred authoring requires programmers to specify quantum operations and resources rather than leaving their realisation entirely to the implementation.
 Better abstract machines and stronger layer boundaries are therefore proposed as requirements for productive quantum programming~\cite{nunez_corrales2025betterabstractmachines}.
 
 This review examines whether contemporary systems simplify quantum programming or make quantum-specific knowledge non-mandatory.
 
-\subsection{Abstraction and productivity}\label{subsec:introduction:abstraction_productivity}
+\subsection{Quantum bias and developer friction}\label{subsec:introduction:quantum_bias}
 A comparison of scripting languages (Perl, Python, Rexx and Tcl) with imperative languages (C, C++ and Java) found that scripting-language users completed comparable tasks in roughly half the time and produced solutions half the length~\cite{Prechelt2000EmpiricalComparison}.
 These findings motivate examining abstraction, rather than establishing its effect on quantum programming productivity.
 Higher-level abstraction has been argued to be necessary for productive quantum programming~\cite{cobb2022higherlevelabstractions}.
 The present review examines programming requirements rather than measuring productivity gains.
 
-\subsection{Quantum bias and developer friction}\label{subsec:introduction:quantum_bias}
 Programming languages are user interfaces whose design determines the concepts programmers must understand~\cite{Myers2016PLUsabilitySIG}.
 This review terms the quantum-specific component of that requirement \textit{quantum bias}: the degree to which gates, qubits, measurement and other quantum-mechanical concerns are required to understand and productively use a language.
 Quantum bias remains when ordinary mathematical or computational intent must be reformulated through quantum-specific constructs.
@@ -26,21 +25,27 @@ The evaluation instrument examines these concerns through representative tasks a
 \subsection{Research questions}\label{subsec:introduction:research_questions}
 \begin{description}
     \item[RQ1] What is the current state of abstraction in quantum programming systems, and to what extent do existing systems meet the abstraction requirements identified in prior work on productive quantum programming?
-    \item[RQ2] Given the abstraction gap identified in RQ1, is the development of a new quantum programming language targeting higher abstraction justified, or can existing systems be adapted to close the gap?
+    \item[RQ2] What pathways and barriers do existing systems reveal for extending their structural approaches to meet quantum-implicit requirements, and what are the implications for new language design?
 \end{description}
 
 RQ1 is answered through systematic assessment of eleven systems using four representative tasks and nine evidence-backed conditions.
-RQ2 draws on the comparative findings and practitioner evidence to assess the implications for language design~\cite{ferreira2024qplusage}.
+RQ2 draws on the comparative findings to examine which obligations existing mechanisms relieve, which remain across tasks and what extending those mechanisms would need to address.
+Practitioner evidence contextualises the implications for language design.
 
 \subsection{Contributions}\label{subsec:introduction:contributions}
 \begin{enumerate}
     \item A five-tier abstraction taxonomy with explicit quantum-implicit criteria.
     \item An evidence-first evaluation instrument comprising four tasks, nine conditions, expected tier profiles and quantum-implicit gating constraints.
     \item An operationalisation of quantum bias through required concepts and programming obligations.
-    \item Systematic assessments of eleven systems, producing condition profiles and comparative findings on abstraction requirements.
-    \item Evidence-grounded design implications for quantum-implicit programming.
+    \item A task-based assessment of eleven systems against four representative tasks and nine conditions, finding that no assessed system meets the quantum-implicit gating requirements across the suite.
+    \item An analysis of existing abstraction mechanisms and persistent structural barriers, identifying requirements for extension and supporting new language design as a justified direction without establishing its necessity.
 \end{enumerate}
 
-Section~\ref{sec:taxonomy} defines the abstraction tiers, Section~\ref{sec:evaluation_instrument} their requirements through tasks and conditions.
-Section~\ref{sec:methodology} describes evidence selection and assessment and Section~\ref{sec:system_assessments} presents comparative findings.
+Section~\ref{sec:background} presents background and related work.
+Section~\ref{sec:taxonomy} defines the abstraction tiers and Section~\ref{sec:evaluation_instrument} their requirements through tasks and conditions.
+Section~\ref{sec:methodology} describes evidence selection and assessment.
+\ifthesis
+Section~\ref{sec:system_descriptions} introduces the systems and their programming models.
+\fi
+Section~\ref{sec:system_assessments} presents comparative findings.
 Section~\ref{sec:discussion} answers the research questions and Section~\ref{sec:conclusion} summarises the findings, limitations and future work.
