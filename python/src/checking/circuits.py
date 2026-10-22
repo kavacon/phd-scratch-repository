@@ -90,3 +90,28 @@ def report(outcome: Dict[str, Any], *, shots: int, expected: Any, scale: int = 1
         "expected": expected,
         "matches": expected is not None and len(counts) == 1 and next(iter(counts)) == expected,
     }
+
+
+# --- the state a circuit ends in ---------------------------------------------------------------------------------
+
+def register_probabilities(circuit, width: int) -> Dict[Tuple[int, ...], float]:
+    """
+    The probability of each combination of register values (signed, in the circuit's register order) the circuit ends in,
+    from its state vector with the final measurements left out. It holds every qubit in memory, so it is for small
+    circuits: the instruction machine's state is what to compare it with.
+    """
+    from qiskit.quantum_info import Statevector
+
+    run = circuit.remove_final_measurements(inplace=False)
+    probabilities: Dict[Tuple[int, ...], float] = {}
+    for index, p in enumerate(Statevector.from_instruction(run).probabilities()):
+        if p < 1e-12:
+            continue
+        values = []
+        for register in run.qregs:
+            value = sum(((index >> run.find_bit(q).index) & 1) << i for i, q in enumerate(register))
+            values.append(to_signed(value, width))
+        key = tuple(values)
+        probabilities[key] = probabilities.get(key, 0.0) + p
+    return probabilities
+
