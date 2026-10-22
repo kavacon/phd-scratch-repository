@@ -12,19 +12,18 @@ KNOWN = {"code", "diff", "metrics", "stats", "switcher", "grid", "timeline", "no
 
 
 class ExplorerTestCase(unittest.TestCase):
-    def test_every_program_describes_to_known_blocks_that_serialise_and_stops_at_allocation(self):
+    def test_every_program_describes_to_known_blocks_that_serialise_and_ends_with_the_optimised_circuit(self):
         for case in explorer.DEMO.cases:
             with self.subTest(program=case.id):
                 result = explorer.run(explorer.DEMO.clean_inputs({"case": case.id}), [s.id for s in explorer.DEMO.steps])
                 self.assertIsNone(result.error)
-                self.assertEqual(["source", "allocate"], [result.stages[0].id, result.stages[-1].id])
+                self.assertEqual(["source", "optimise"], [result.stages[0].id, result.stages[-1].id])
                 for block in walk([block for stage in result.stages for block in stage.blocks]):
                     self.assertIn(to_data(block)["type"], KNOWN)
                 json.dumps(to_data(result))
 
-    def test_the_steps_are_the_passes_up_to_allocation(self):
-        names = [fn.compile_pass.name for fn in experiment.compiler().passes]
-        self.assertEqual(names[:names.index("allocate") + 1], [s.id for s in explorer.DEMO.steps])
+    def test_the_steps_are_the_passes(self):
+        self.assertEqual([fn.compile_pass.name for fn in experiment.compiler().passes], [s.id for s in explorer.DEMO.steps])
 
 
 class EntanglementGroupsTestCase(unittest.TestCase):

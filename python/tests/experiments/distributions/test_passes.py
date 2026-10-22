@@ -61,6 +61,20 @@ class IdentityTestCase(unittest.TestCase):
         self.assertNotIn("COPY  b#1, 0", unparse_isa(stage(source, "drop_noops")))
 
 
+class ConditionBitsTestCase(unittest.TestCase):
+    def test_a_guard_that_is_not_a_boolean_is_raised_into_one_and_a_boolean_guard_is_left_unless_the_conditional_reads_it(self):
+        self.assertIn("$b1 = a != 0;\nif $b1 {", unparse(stage("a = 0..4;\nx = 1;\nif a {\n    x = 5;\n}\nreturn x;\n", "condition_bits")))
+        comparison = "a = 0..4;\nc = a < 2;\nx = 1;\nif c {\n    x = 5;\n}\nreturn x;\n"
+        self.assertNotIn("$b", unparse(stage(comparison, "condition_bits")))
+        reads_it = unparse(stage("a = 0..4;\nc = a < 2;\nx = 1;\nif c {\n    x = c + 5;\n}\nreturn x;\n", "condition_bits"))
+        self.assertIn("$b1 = c && true;", reads_it)
+
+    def test_the_variable_is_shared_by_conditionals_on_the_same_guard_until_the_guard_is_assigned_again(self):
+        source = "a = 0..4;\nx = 1;\ny = 1;\nif a {\n    x = 5;\n}\nif a {\n    y = 5;\n}\na = 0..2;\nif a {\n    x = 7;\n}\nreturn x + y;\n"
+        text = unparse(stage(source, "condition_bits"))
+        self.assertEqual(2, text.count("!= 0;"))  # one for the two conditionals before a changes, one after
+
+
 class FuseStepsTestCase(unittest.TestCase):
     def test_two_steps_of_the_same_kind_through_an_intermediate_nothing_else_reads_become_one(self):
         self.assertEqual("a = 0..4;\nu = a * 15;\nreturn u;",  # exact: 15 wraps when the program is lowered, not here

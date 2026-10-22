@@ -50,5 +50,10 @@ class ReleaseTestCase(unittest.TestCase):
         self.assertEqual({"a#1", "x#1"}, held)  # t is written under a control and undone under the same control
 
 
+    def test_a_guard_bit_shared_by_two_conditionals_is_undone_after_the_last_of_them(self):
+        source = "a = 0..4;\nx = 1;\ny = 1;\nif a {\n    x = 5;\n}\nif a {\n    y = 5;\n}\nreturn x + y;\n"
+        _, held, _ = run(source)
+        self.assertEqual([], [name for name in held if name.startswith("$")])  # the bit made for the guard is released
+
 if __name__ == '__main__':
     unittest.main()
