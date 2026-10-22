@@ -57,7 +57,7 @@ _OPS = {  # the source operators, by the opcode they lower to
 
 MAX_STEPS = 200_000
 
-_ARITHMETIC = ("+", "-", "*", "add", "sub", "mul")
+_ARITHMETIC = ("+", "-", "*", "add", "sub", "mul", "shl", "shr")
 
 
 def normaliser(system: Optional[System]):
@@ -206,7 +206,7 @@ def simulate(program: List[Node], system: Optional[System] = None) -> Result:
     return Result(value, machine.leaks, machine.peak)
 
 
-_OPCODES = {**_BINARY, "copy": lambda a: a, "not": operator.not_}
+_OPCODES = {**_BINARY, "copy": lambda a: a, "not": operator.not_, "shl": operator.lshift, "shr": operator.rshift}
 
 
 class _IsaMachine:
@@ -221,6 +221,7 @@ class _IsaMachine:
 
     def __init__(self, system: Optional[System] = None) -> None:
         self.norm = normaliser(system)
+        self.width = system.register_width if system else None
         self.names: List[str] = []  # the registers held, in the order each entry lists their values
         self.state: Dict[tuple, complex] = {(): 1.0}
         self.peak = 0
@@ -301,7 +302,10 @@ class _IsaMachine:
             return [(key[:i] + (value,) + key[i + 1:], amplitude)]
         if isinstance(instruction, Dist):
             return self.prepare(instruction, key, amplitude)
-        value = _OPCODES[instruction.opcode](*(self.read(source, key) for source in instruction.sources))
+        operands = [self.read(source, key) for source in instruction.sources]
+        if instruction.opcode == "shr" and self.width:  # a right shift reads the register as an unsigned number
+            operands[0] &= (1 << self.width) - 1
+        value = _OPCODES[instruction.opcode](*operands)
         if instruction.opcode in _ARITHMETIC:
             value = self.norm(value)
         i = self.column(instruction.dst, "{} written but not allocated")
