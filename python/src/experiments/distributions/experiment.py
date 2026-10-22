@@ -3,9 +3,10 @@ Working with distributions: compile a program and produce an OpenQASM 3 circuit.
 
     PYTHONPATH=src .venv/bin/python -m experiments.distributions.experiment --file my_program.txt [--width 4]
 
-The source is read with grammar v2, which adds `x = 0..4;` (an equal superposition of 0 to 3). The pipeline is the shared front end, then updates made in place, constants folded and unread values dropped on the
-renamed program, instructions with multiplication by a power of two as a shift, slots, and circuit generation. The passes that decide what is entangled and
-release it go in `passes/` and are loaded here.
+The source is read with grammar v2, which adds `x = 0..4;` (an equal superposition of 0 to 3). The pipeline is the shared
+front end, then constants folded, unread values dropped, constant steps combined and updates made in place on the
+program before it is renamed, a rename that keeps the name of an in-place update, instructions with each register released as soon as it can be undone, multiplication by a power of two as a shift, slots, and circuit
+generation.
 """
 import argparse
 from pathlib import Path
@@ -21,17 +22,20 @@ from compiler.passes.inline import inline
 from compiler.passes.isa import lower_to_isa
 from compiler.passes.optimise import optimise
 from compiler.passes.qasm import openqasm_text, to_openqasm
-from compiler.passes.rename import rename
 from compiler.passes.unroll import unroll
 from compiler.system import System
 from experiments.distributions.passes.collapse_updates import collapse_updates
-from experiments.distributions.passes.drop_unread import drop_unread
+from experiments.distributions.passes.drop_unread import drop_unread, drop_unread_versions
 from experiments.distributions.passes.fold_constants import fold_constants
+from experiments.distributions.passes.fuse_steps import fuse_steps
+from experiments.distributions.passes.release import release_values
+from experiments.distributions.passes.rename import rename
 from experiments.distributions.passes.shifts import shift_multiplications
 
 FRONT_END = (inline, unroll, flatten, balance)
-PIPELINE = (*FRONT_END, collapse_updates, rename, fold_constants, drop_unread, lower_to_isa, shift_multiplications,
-            allocate, to_openqasm, optimise)
+PIPELINE = (*FRONT_END, fold_constants, drop_unread, fuse_steps, collapse_updates, rename, drop_unread_versions,
+            lower_to_isa, release_values,
+            shift_multiplications, allocate, to_openqasm, optimise)
 SYSTEM = System(register_width=4, qubits=100)
 
 

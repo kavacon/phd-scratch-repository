@@ -1,11 +1,15 @@
 """
-Constant folding on the renamed AST: a variable whose value is known is replaced by that value, and an expression of known
+Constant folding, before rename: a variable whose value is known is replaced by that value, and an expression of known
 values is evaluated. The assignments left unread are dropped by the pass after this one.
 
-After rename every version is assigned once, so substituting a known version is safe anywhere it appears. A program
-here has no inputs, so every value that does not depend on a distribution is known, and this removes those chains
-before they become registers once the unread ones are dropped. Arithmetic wraps at the system's register width, the way the circuits do. A range one
-value wide is a constant. An `if` on a known condition is replaced by the branch that runs.
+A name can be assigned more than once here, so what is known is tracked as the program runs and forgotten when the name
+is assigned something unknown, and, after an `if` that cannot be decided, for every name either branch assigns. A program
+has no inputs, so every value that does not depend on a distribution is known, and this removes those chains before they
+become registers once the unread ones are dropped. Addition, subtraction and multiplication are kept exact: wrapping at
+the register width happens when the program is lowered or run, so the rewrite does not depend on the width. Comparisons
+are the exception, because there the width changes the answer (a sum that wraps to a negative number is less than zero),
+so they read their operands at the system's register width, as the machine does. A range one value wide is a constant.
+An `if` on a known condition is replaced by the branch that runs.
 
 Left alone: division, which is not exact, and the returned variable, which stays a variable because the instruction
 lowering needs a register to return.
@@ -27,16 +31,15 @@ from compiler.parser.grammar import (
     Node,
     Not,
     Number,
-    Return,
     Variable,
 )
-from compiler.passes.names import read
+from compiler.passes.names import assigned
 from compiler.system import System
 
 Known = Dict[str, Union[int, bool]]
-_WRAPPED = {"+": operator.add, "-": operator.sub, "*": operator.mul}
-_PLAIN = {"<": operator.lt, ">": operator.gt, "!=": operator.ne,
-          "&&": lambda a, b: a and b, "||": lambda a, b: a or b}
+_ARITHMETIC = {"+": operator.add, "-": operator.sub, "*": operator.mul}
+_COMPARISON = {"<": operator.lt, ">": operator.gt, "!=": operator.ne}
+_LOGICAL = {"&&": lambda a, b: a and b, "||": lambda a, b: a or b}
 
 
 def _value(node: Node) -> Optional[Union[int, bool]]:
@@ -59,10 +62,12 @@ def _fold(node: Node, known: Known, norm) -> Node:
         left, right = _fold(node.left, known, norm), _fold(node.right, known, norm)
         a, b = _value(left), _value(right)
         if a is not None and b is not None:
-            if node.op in _WRAPPED:
-                return _node(norm(_WRAPPED[node.op](a, b)))
-            if node.op in _PLAIN:
-                return _node(_PLAIN[node.op](a, b))
+            if node.op in _ARITHMETIC:
+                return _node(_ARITHMETIC[node.op](a, b))
+            if node.op in _COMPARISON:
+                return _node(_COMPARISON[node.op](norm(a), norm(b)))
+            if node.op in _LOGICAL:
+                return _node(_LOGICAL[node.op](a, b))
         return replace(node, left=left, right=right)
     if isinstance(node, Not):
         operand = _fold(node.operand, known, norm)
@@ -71,7 +76,7 @@ def _fold(node: Node, known: Known, norm) -> Node:
         operands = tuple(_fold(o, known, norm) for o in node.operands)
         values = [_value(o) for o in operands]
         if all(v is not None for v in values):
-            return _node(all(x == y for x, y in zip(values, values[1:], strict=False)))
+            return _node(all(norm(x) == norm(y) for x, y in zip(values, values[1:], strict=False)))
         return replace(node, operands=operands)
     return node
 
@@ -86,16 +91,20 @@ def _block(body: Sequence[Node], known: Known, norm) -> List[Node]:
             out.append(replace(statement, value=value, inplace=kept_in_place))
             if _value(value) is not None:
                 known[statement.name] = _value(value)
+            else:
+                known.pop(statement.name, None)
         elif isinstance(statement, If):
             condition = _fold(statement.condition, known, norm)
             if _value(condition) is not None:  # decided now: only the branch that runs is kept
                 out += _block(statement.body if _value(condition) else statement.orelse, known, norm)
-            else:  # what a branch learns is true only inside it
+            else:  # what a branch learns is true only inside it, and what it assigns is unknown after it
                 out.append(replace(
                     statement, condition=condition,
                     body=tuple(_block(statement.body, dict(known), norm)),
                     orelse=tuple(_block(statement.orelse, dict(known), norm)),
                 ))
+                for name in assigned(statement.body + statement.orelse):
+                    known.pop(name, None)
         elif isinstance(statement, ExprStmt):
             out.append(replace(statement, expr=_fold(statement.expr, known, norm)))
         else:
@@ -106,10 +115,10 @@ def _block(body: Sequence[Node], known: Known, norm) -> List[Node]:
 @compile_pass(
     NODE, NODE,
     title="Fold constants",
-    requires=("rename",),
+    requires=("unroll",),
     summary=(
-        "Replaces known values with their value, evaluates constant expressions at the register width, and "
-        "resolves conditionals on a known value."
+        "Replaces known values with their value, evaluates constant expressions exactly (comparisons at the "
+        "register width), and resolves conditionals on a known value."
     ),
 )
 def fold_constants(program: List[Node], system: Optional[System] = None) -> List[Node]:

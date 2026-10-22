@@ -16,17 +16,39 @@ def stage(source, name):
 class FoldConstantsTestCase(unittest.TestCase):
     def test_a_chain_of_constants_is_folded_into_its_use_and_the_unread_values_are_dropped(self):
         source = next(p["source"] for p in PROGRAMS if p["id"] == "mixed")
-        self.assertEqual("a#1 = 0..3;\na#2 = a#1 + 1;  // in place\na#3 = a#2 + 3;  // in place\nreturn a#3;",
-                         unparse(stage(source, "drop_unread")))
+        self.assertEqual("a = 0..3;\nb = a + 1;\nd = b + 3;\nreturn d;", unparse(stage(source, "drop_unread")))
 
-    def test_arithmetic_wraps_and_a_known_condition_picks_its_branch(self):
-        self.assertIn("+ -8", unparse(stage("x = 7;\ny = x + 1;\nz = 0..2;\nw = z + y;\nreturn w;\n", "fold_constants")))
-        folded = stage("c = 1;\nx = 5;\nif c {\n    x = 6;\n}\nreturn x;\n", "drop_unread")
-        self.assertFalse(any(isinstance(s, If) for s in folded))
-        self.assertEqual(6, simulate_isa(lower_to_isa(folded), experiment.SYSTEM).value)
+    def test_arithmetic_is_kept_exact_a_comparison_reads_the_register_width_and_a_known_condition_picks_its_branch(self):
+        self.assertIn("+ 8", unparse(stage("x = 7;\ny = x + 1;\nz = 0..2;\nw = z + y;\nreturn w;\n", "fold_constants")))
+        self.assertIn("c = true;", unparse(stage("x = 7;\ny = x + 1;\nc = y < 0;\nreturn c;\n", "fold_constants")))  # 8 is -8 at 4 bits
+        source = "c = 1;\nx = 5;\nif c {\n    x = 6;\n}\nreturn x;\n"
+        self.assertFalse(any(isinstance(s, If) for s in stage(source, "drop_unread")))
+        self.assertEqual(6, simulate_isa(stage(source, "lower_to_isa"), experiment.SYSTEM).value)
 
-    def test_a_value_nothing_reads_is_dropped_even_when_it_is_not_a_constant(self):
-        self.assertEqual("p#1 = 0..4;\nreturn p#1;", unparse(stage("p = 0..4;\nq = p * 3;\nreturn p;\n", "drop_unread")))
+    def test_a_value_is_forgotten_when_it_is_assigned_something_unknown_or_in_a_branch_that_may_not_run(self):
+        self.assertIn("y = x + 1;", unparse(stage("x = 3;\nx = 0..2;\ny = x + 1;\nreturn y;\n", "fold_constants")))
+        branch = unparse(stage("a = 0..2;\nx = 3;\nif a {\n    x = 4;\n}\ny = x + 1;\nreturn y;\n", "fold_constants"))
+        self.assertIn("y = x + 1;", branch)  # x is 3 or 4 afterwards, so it is not substituted
+
+    def test_a_value_nothing_reads_is_dropped_even_when_it_is_not_a_constant_or_is_overwritten_first(self):
+        self.assertEqual("p = 0..4;\nreturn p;", unparse(stage("p = 0..4;\nq = p * 3;\nreturn p;\n", "drop_unread")))
+        self.assertEqual("x = 6;\nreturn x;", unparse(stage("x = 5;\nx = 6;\nreturn x;\n", "drop_unread")))
+
+
+class FuseStepsTestCase(unittest.TestCase):
+    def test_two_steps_of_the_same_kind_through_an_intermediate_nothing_else_reads_become_one(self):
+        self.assertEqual("a = 0..4;\nu = a * 15;\nreturn u;",  # exact: 15 wraps when the program is lowered, not here
+                         unparse(stage("a = 0..4;\nt = a * 3;\nu = t * 5;\nreturn u;\n", "fuse_steps")))
+        self.assertEqual("a = 0..3;\nd = a + 11;\nreturn d;",
+                         unparse(stage("a = 0..3;\nb = a + 6;\nd = b + 5;\nreturn d;\n", "fuse_steps")))
+        self.assertEqual("a = 0..3;\nd = a + 4;\nreturn d;",
+                         unparse(stage("a = 0..3;\nb = a + 1;\nd = b - -3;\nreturn d;\n", "fuse_steps")))
+
+    def test_the_intermediate_is_kept_when_it_is_read_again_and_a_multiply_and_an_add_do_not_combine(self):
+        read_twice = "a = 0..4;\nt = a * 3;\nu = t * 5;\nv = t + u;\nreturn v;\n"
+        self.assertEqual(unparse(stage(read_twice, "drop_unread")), unparse(stage(read_twice, "fuse_steps")))
+        mixed_kinds = "a = 0..4;\nt = a * 3;\nu = t + 5;\nreturn u;\n"
+        self.assertEqual(unparse(stage(mixed_kinds, "drop_unread")), unparse(stage(mixed_kinds, "fuse_steps")))
 
 
 class CollapseUpdatesTestCase(unittest.TestCase):
@@ -38,13 +60,22 @@ class CollapseUpdatesTestCase(unittest.TestCase):
     def test_it_is_left_alone_while_the_source_is_read_or_either_name_is_assigned_again(self):
         read_again = unparse(stage("a = 0..4;\nb = a + 3;\nc = a + b;\nreturn c;\n", "collapse_updates"))
         self.assertEqual("a = 0..4;\nb = a + 3;\na += b;\nreturn a;", read_again)  # b stays; c = a + b is the last read of a
-        assigned_again = unparse(stage("a = 0..4;\nb = a + 3;\na = 7;\nc = a + b;\nreturn c;\n", "collapse_updates"))
+        assigned_again = unparse(stage("a = 0..4;\nb = a + 3;\na = 0..2;\nc = a + b;\nreturn c;\n", "collapse_updates"))
         self.assertIn("b = a + 3;", assigned_again)
-        for source in ("a = 0..4;\nb = a + 3;\nc = b * 2;\nreturn c;\n", "a = 0..4;\nb = a + 3;\na = 7;\nc = a + b;\nreturn c;\n"):
+        for source in ("a = 0..4;\nb = a + 3;\nc = b * 2;\nreturn c;\n", "a = 0..4;\nb = a + 3;\na = 0..2;\nc = a + b;\nreturn c;\n"):
             with_pass = simulate_isa(experiment.compiler().run(source, until="allocate").output, experiment.SYSTEM).value
             without = simulate_isa(experiment.compiler().run(
                 source, until="allocate", skip=["collapse_updates"]).output, experiment.SYSTEM).value
             self.assertEqual(without, with_pass)
+
+
+class RenameTestCase(unittest.TestCase):
+    def test_an_in_place_update_keeps_its_name_outside_a_branch_and_gets_a_version_inside_one(self):
+        self.assertEqual("a#1 = 0..4;\na#1 += 3;\nreturn a#1;", unparse(stage("a = 0..4;\na += 3;\nreturn a;\n", "rename")))
+        branch = unparse(experiment.compiler().run(  # without folding, which would settle x
+            "a = 0..2;\nx = 1;\nif a {\n    x += 1;\n}\nreturn x;\n", until="rename", skip=["fold_constants", "drop_unread"]).output)
+        self.assertIn("x#2 = x#1 + 1;  // in place", branch)  # both branches give x the version x#2
+        self.assertIn("x#2 = x#1;", branch)
 
 
 class ShiftTestCase(unittest.TestCase):
