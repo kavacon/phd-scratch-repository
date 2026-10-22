@@ -19,8 +19,9 @@ from compiler.parser.instructions import IsaProgram
 from compiler.printer import unparse, unparse_isa
 from compiler.system import System
 from demo import app
-from demo.model import Bar, Card, Case, Cell, Code, Columns, Diff, Metrics, Note, Number, Result, Row, SourceError, Stage, Stats, Step, Text
+from demo.model import Bar, Card, Case, Cell, Columns, Diff, Metrics, Note, Number, Result, Row, SourceError, Stage, Stats, Step, Text
 from experiments.distributions import experiment
+from experiments.distributions.passes.entanglement import analyse
 from experiments.distributions.programs import PROGRAMS
 from experiments.distributions.views import entangled_groups, groups_by_joint_operation
 
@@ -57,17 +58,26 @@ def _state_blocks(program: IsaProgram, system: System) -> List[Any]:
         Card("Held at the end", str(len(names)), ", ".join(names) or "none"),
     ))]
     if isinstance(value, dict):
+        most = max(value.values())  # bars are scaled to the likeliest value, here and in the state vector below
         blocks.append(Stats(("value", "probability", ""), tuple(
-            Row(str(v), (Cell(f"{p:.3f}"), Cell(bars=(Bar(p, "series-1"),)))) for v, p in value.items())))
-    listing = [", ".join(f"{n}={v}" for n, v in zip(names, key, strict=True)) + f"   amplitude {_amplitude(amplitude)}"
-               for key, amplitude in sorted(state.items())]
-    blocks.append(Code.of("\n".join(listing[:MOST_ENTRIES]), "State vector", f"{len(state)} entries" + (f", first {MOST_ENTRIES}" if len(state) > MOST_ENTRIES else "")))
+            Row(str(v), (Cell(f"{p:.0%}"), Cell(bars=(Bar(p / most, "series-1"),)))) for v, p in value.items())))
+    blocks.append(Note(f"State vector: one bar per basis state, its length the probability of that combination of register "
+                       f"values ({len(state)} entries{f', first {MOST_ENTRIES}' if len(state) > MOST_ENTRIES else ''}). "
+                       f"Registers whose values move together are entangled.", "muted"))
+    top = max((abs(a) ** 2 for a in state.values()), default=1)
+    shown = sorted(state.items())[:MOST_ENTRIES]
+    blocks.append(Stats(("basis state", "probability", ""), tuple(
+        Row(", ".join(f"{n}={v}" for n, v in zip(names, key, strict=True)) or "(no registers)",
+            (Cell(f"{abs(a) ** 2:.0%}"), Cell(bars=(Bar(abs(a) ** 2 / top, "series-1" if complex(a).real >= 0 else "series-2"),))),
+            f"amplitude {_amplitude(a)}")
+        for key, a in shown)))
     try:
         actual = Note("Entangled, from the state: registers in one group are", "", _groups(entangled_groups(names, state)))
     except ValueError as error:
         actual = Note(str(error), "muted")
+    reported = Note("By the analysis (never fewer than the state):", "", _groups(sorted(sorted(g) for g in analyse(program)[-1].groups)))
     rule = Note("By the existing rule (any joint operation):", "", _groups(groups_by_joint_operation(program)))
-    blocks.append(Columns(((actual,), (rule,))))
+    blocks.append(Columns(((actual,), (reported,), (rule,))))
     return blocks
 
 
