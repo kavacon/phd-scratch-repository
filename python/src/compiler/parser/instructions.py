@@ -44,7 +44,7 @@ class Const:
 
 Operand = Union[Reg, Const]
 
-OPCODES = ("copy", "add", "sub", "mul", "div", "lt", "gt", "eq", "ne", "and", "or", "not")
+OPCODES = ("copy", "add", "sub", "mul", "shl", "shr", "div", "lt", "gt", "eq", "ne", "and", "or", "not")
 
 
 @dataclass(frozen=True)
