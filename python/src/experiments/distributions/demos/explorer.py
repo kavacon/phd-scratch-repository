@@ -15,7 +15,7 @@ from lark.exceptions import UnexpectedInput
 from checking.simulate import SimulationError, simulate_isa
 from compiler.compiler import PassError
 from compiler.parser.errors import SourceProblem, describe_parse_error
-from compiler.parser.instructions import IsaProgram
+from compiler.parser.instructions import Ctrl, Dist, EndCtrl, ICtrl, IDist, IOp, IsaProgram, Op, Update
 from compiler.printer import unparse, unparse_isa
 from compiler.system import System
 from demo import app
@@ -44,6 +44,20 @@ def _amplitude(amplitude: complex) -> str:
     return f"{amplitude.real:.4f}" if not complex(amplitude).imag else f"{complex(amplitude):.4f}"
 
 
+def _counts(program: IsaProgram) -> Tuple[int, int, int]:
+    """How many operations the program has, how many controls they run under in all, and how deep regions nest."""
+    depth = deepest = ops = uses = 0
+    for instruction in program.body:
+        if isinstance(instruction, (Ctrl, ICtrl)):
+            depth += 1
+            deepest = max(deepest, depth)
+        elif isinstance(instruction, EndCtrl):
+            depth -= 1
+        elif isinstance(instruction, (Op, Update, Dist, IOp, IDist)):
+            ops, uses = ops + 1, uses + depth
+    return ops, uses, deepest
+
+
 def _state_blocks(program: IsaProgram, system: System) -> List[Any]:
     """What the instruction machine makes of the program."""
     try:
@@ -52,10 +66,12 @@ def _state_blocks(program: IsaProgram, system: System) -> List[Any]:
         return [Note(f"The instruction machine refused this program: {error}", "bad")]
     names, state = result.state
     value = result.value
+    ops, uses, deepest = _counts(program)
     blocks: List[Any] = [Metrics((
         Card("Returns", str(value) if not isinstance(value, dict) else f"{len(value)} values", "each with the probability below" if isinstance(value, dict) else "a definite value"),
         Card("Registers at most", str(result.peak["<program>"]), "held at once"),
         Card("Held at the end", str(len(names)), ", ".join(names) or "none"),
+        Card("Operations", str(ops), f"{uses} control uses, regions up to {deepest} deep"),
     ))]
     if isinstance(value, dict):
         most = max(value.values())  # bars are scaled to the likeliest value, here and in the state vector below
