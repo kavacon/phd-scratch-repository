@@ -26,6 +26,13 @@ The circuits:
 - `lt` copies the borrow out of `a - b`, computed as the carry of `(not a) + b` along a MAJ chain that is run
   backwards afterwards; `gt` swaps the operands. A constant needs only a few mixed-polarity multi-controlled X gates.
 - `div` is not supported.
+- `shl` and `shr` copy each bit of the source a fixed number of places up or down, one CNOT per bit that stays, and
+  drop the bits that fall off (`shr` reads the register as unsigned, so it fills with zeros).
+- `DIST` prepares an equal superposition of the integers from `start` up to, not including, `stop`. A power of two
+  in number is a Hadamard on the low bits, with X on the high bits of `start` if it is a multiple of that number and
+  otherwise a constant add of `start` afterwards. Any other number is Qiskit's state preparation of the equal
+  superposition. `IDIST` is the reversed circuit. Inside a `CTRL` region every gate gains the region's controls, so a
+  preparation can be controlled. These are the only gates here that are not X gates.
 Measurement. The program's returned register is measured at the end into a classical register `result`, bit `i` from
 qubit `i`; nothing else is measured, because everything else has been returned to zero. A program always returns a
 register: flatten names a returned literal, so `return 2;` is a variable holding 2 like any other. Operations on a
@@ -37,15 +44,17 @@ from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple, Union
 
 from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister, qasm3
-from qiskit.circuit.library import CCXGate, CXGate, MCXGate, XGate
+from qiskit.circuit.library import CCXGate, CXGate, HGate, MCXGate, StatePreparation, XGate
 
 from compiler.parser.instructions import (
     Alloc,
     Const,
     Ctrl,
+    Dist,
     EndCtrl,
     Free,
     ICtrl,
+    IDist,
     IOp,
     Op,
     Operand,
@@ -172,6 +181,36 @@ class _Builder:
             return
         self.circuit.append(_x_gate(kept), [self.circuit.qubits[q] for q, _ in kept] + [self.circuit.qubits[target]])
 
+    def controlled(self, operation, qubits: Sequence[int]) -> None:
+        """A gate that is not an X on `qubits`, with the controls of the regions it sits in."""
+        kept = _distinct(self.extra + self.regions)
+        if kept is None:
+            return
+        if kept:
+            state = sum(int(polarity) << i for i, (_, polarity) in enumerate(kept))
+            operation = operation.control(len(kept), ctrl_state=state)
+        self.circuit.append(operation, [self.circuit.qubits[q] for q, _ in kept] + [self.circuit.qubits[q] for q in qubits])
+
+    def prepare(self, dst: Sequence[int], start: int, stop: int) -> None:
+        """dst, which is zero, becomes an equal superposition of the integers from start up to, not including, stop."""
+        count, mask = stop - start, (1 << self.w) - 1
+        if count < 1 or count > 1 << self.w:
+            raise CircuitError(f"{start}..{stop} has no values or does not fit a register of {self.w} qubits")
+        low = start & mask
+        if count & (count - 1) == 0:  # a power of two: Hadamards on the low bits
+            bits = count.bit_length() - 1
+            if low % count == 0:
+                self.load(dst, low)
+            for q in dst[:bits]:
+                self.controlled(HGate(), [q])
+            if low % count:
+                self.add_constant(dst, low)
+            return
+        amplitudes = [0.0] * (1 << self.w)
+        for k in range(count):
+            amplitudes[(start + k) & mask] = count ** -0.5
+        self.controlled(StatePreparation(amplitudes), list(dst))
+
     def gate(self, target: int, controls: Sequence[Tuple[Bit, bool]] = ()) -> None:
         kept = []
         for bit, polarity in controls:
@@ -269,6 +308,7 @@ class _Builder:
             "gt": lambda a, b: int(signed(a) > signed(b)),
             "eq": lambda a, b: int(a == b), "ne": lambda a, b: int(a != b),
             "and": lambda a, b: (a & b) & 1, "or": lambda a, b: (a | b) & 1, "not": lambda a: 1 - (a & 1),
+            "shl": lambda a, b: (a << b) & mask, "shr": lambda a, b: a >> b,
         }
         if opcode not in table:
             raise CircuitError(f"{opcode} is not supported yet")
@@ -281,6 +321,20 @@ class _Builder:
 
     def op_copy(self, dst, a):
         self.copy(dst, a)
+
+    def op_shl(self, dst, a, amount):
+        shift = _constant(amount)
+        if shift is None:
+            raise CircuitError("a shift needs a constant amount")
+        for i in range(self.w - shift):
+            self.gate(dst[i + shift], [(a[i], True)])
+
+    def op_shr(self, dst, a, amount):
+        shift = _constant(amount)
+        if shift is None:
+            raise CircuitError("a shift needs a constant amount")
+        for i in range(self.w - shift):
+            self.gate(dst[i], [(a[i + shift], True)])
 
     def op_not(self, dst, a):
         self.gate(dst[0])
@@ -462,8 +516,8 @@ def openqasm_text(circuit: QuantumCircuit) -> str:
     ISA, CIRCUIT,
     title="Generate OpenQASM",
     summary=(
-        "Writes each instruction as X gates with controls on a Qiskit circuit (a register per slot, plus "
-        "scratch) and measures the returned register."
+        "Writes each instruction as gates on a Qiskit circuit (a register per slot, plus scratch): X gates with "
+        "controls, and for a distribution Hadamards or a state preparation. Measures the returned register."
     ),
 )
 def to_openqasm(program: IsaProgram, system: Optional[System] = None) -> QuantumCircuit:
@@ -494,6 +548,14 @@ def to_openqasm(program: IsaProgram, system: Optional[System] = None) -> Quantum
             _Builder(target, width, scratch, regions).op(instruction.opcode, dst, sources)
             if isinstance(instruction, IOp):  # the inverse instruction is the same gates in reverse order
                 circuit.compose(target.inverse(), inplace=True)
+        elif isinstance(instruction, (Dist, IDist)):
+            dst = [bit.index for bit in _bits(Reg(instruction.dst), width, needed)]
+            if isinstance(instruction, Dist):
+                _Builder(circuit, width, scratch, regions).prepare(dst, instruction.start, instruction.stop)
+            else:  # the inverse is the same gates reversed, as for every other instruction
+                inner = QuantumCircuit(*circuit.qregs)
+                _Builder(inner, width, scratch, regions).prepare(dst, instruction.start, instruction.stop)
+                circuit.compose(inner.inverse(), inplace=True)
         elif isinstance(instruction, Update):
             dst = [bit.index for bit in _bits(Reg(instruction.dst), width, needed)]
             _Builder(circuit, width, scratch, regions).update(instruction.opcode, dst, _bits(instruction.source, width, needed))
