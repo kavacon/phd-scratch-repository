@@ -3,7 +3,7 @@ Checking generated circuits against the program they came from. Nothing here is 
 X gates on bits (to check them against the instruction machine), reads OpenQASM back, and reports a simulator run against
 the value the program should return. The Qiskit side is in `checking.qiskit_tools`.
 """
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from compiler.passes.qasm import Gate
 
@@ -92,6 +92,26 @@ def report(outcome: Dict[str, Any], *, shots: int, expected: Any, scale: int = 1
     }
 
 
+def distribution_report(outcome: Dict[str, Any], *, shots: int, expected: Dict[int, float], scale: int = 1) -> Dict[str, Any]:
+    """
+    A run's outcome as the apps show it when the program returns a distribution: for each value, the probability the program
+    should give it and the fraction of shots that returned it, and how far apart the two are (half the sum of the absolute
+    differences). The run agrees if that distance is within what `shots` samples would give by chance.
+    """
+    counts = {value * scale: count for value, count in outcome["counts"].items()}
+    values = sorted(set(expected) | set(counts))
+    rows = [[v, expected.get(v, 0.0), counts.get(v, 0) / shots] for v in values]
+    distance = 0.5 * sum(abs(p - q) for _, p, q in rows)
+    return {
+        "shots": shots,
+        "distribution": rows,
+        "distance": distance,
+        "tolerance": 2 / shots ** 0.5,
+        "leaked": [f"q[{q}]" for q in outcome["leaked"]],
+        "matches": distance <= 2 / shots ** 0.5,
+    }
+
+
 # --- the state a circuit ends in ---------------------------------------------------------------------------------
 
 def register_probabilities(circuit, width: int) -> Dict[Tuple[int, ...], float]:
@@ -115,3 +135,67 @@ def register_probabilities(circuit, width: int) -> Dict[Tuple[int, ...], float]:
         probabilities[key] = probabilities.get(key, 0.0) + p
     return probabilities
 
+
+
+def state_report(circuit, names: Sequence[str], *, reference: Optional[Dict[tuple, float]] = None) -> Dict[str, Any]:
+    """
+    The state a circuit ends in, by register: `names` gives the register each qubit belongs to and the measured qubits are the
+    result. It lists each state the circuit can end in (the value of each register, and its probability), which registers
+    other than the result still hold something, and for each whether the result is entangled with it: the probabilities of
+    the result and of that register together are not the product of the two, which a state with no entanglement cannot give,
+    and whether the result determines it (each value of the result goes with one value of the register). A held register that
+    is not entangled, or is determined by the result, could have been released, the first by undoing it and the second by
+    computing it back from the result. One that is entangled and not determined is garbage a unitary program cannot avoid. A `reference`, the
+    same states from another source (a dictionary from the non-zero (register, value) pairs, sorted, to probability), is
+    compared with the registers' states and the report says whether they agree.
+    """
+    from checking import qiskit_tools
+
+    result = qiskit_tools.measured_qubits(circuit)
+    kept, probabilities = qiskit_tools.final_probabilities(circuit)
+    position = {q: k for k, q in enumerate(kept)}
+    registers = [names[result[0]]]
+    bits: Dict[str, List[int]] = {registers[0]: [position[q] for q in result]}
+    for q in kept:
+        if names[q] not in bits:
+            registers.append(names[q])
+            bits[names[q]] = []
+        if q not in result:
+            bits[names[q]].append(position[q])
+    table: Dict[Tuple[int, ...], float] = {}
+    for state, p in probabilities.items():
+        values = tuple(sum(((state >> at) & 1) << i for i, at in enumerate(bits[r])) for r in registers)
+        table[values] = table.get(values, 0.0) + p
+
+    def entangled(columns: Sequence[int]) -> bool:
+        joint: Dict[tuple, float] = {}
+        first: Dict[int, float] = {}
+        rest: Dict[tuple, float] = {}
+        for values, p in table.items():
+            key = tuple(values[k] for k in columns)
+            joint[values[0], key] = joint.get((values[0], key), 0.0) + p
+            first[values[0]] = first.get(values[0], 0.0) + p
+            rest[key] = rest.get(key, 0.0) + p
+        return any(abs(joint.get((a, b), 0.0) - first[a] * rest[b]) > 1e-6 for a in first for b in rest)
+
+    def determined(k: int) -> bool:
+        seen: Dict[int, int] = {}
+        return all(seen.setdefault(values[0], values[k]) == values[k] for values in table)
+
+    held = [k for k in range(1, len(registers)) if any(values[k] for values in table)]
+    report = {
+        "registers": registers,
+        "states": sorted(([*values, p] for values, p in table.items()), key=lambda row: row[:-1]),
+        "qubits": len(kept),
+        "result_qubits": len(result),
+        "held": {registers[k]: {"qubits": len(bits[registers[k]]), "entangled": entangled([k]), "determined": determined(k)} for k in held},
+        "result_entangled": entangled(held) if held else False,
+        "reference": None,
+    }
+    if reference is not None:
+        mine = {}
+        for values, p in table.items():
+            key = tuple(sorted((r, v) for r, v in zip(registers, values) if v))
+            mine[key] = mine.get(key, 0.0) + p
+        report["reference"] = {"matches": mine.keys() == reference.keys() and all(abs(mine[k] - reference[k]) < 1e-6 for k in mine)}
+    return report

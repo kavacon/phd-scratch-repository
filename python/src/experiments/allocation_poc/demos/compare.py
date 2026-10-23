@@ -7,23 +7,13 @@ It needs the optional dependencies: pip install '.[circuits,compare]'
 """
 from typing import Any, Dict, List, Sequence
 
+from demo import comparison_blocks
 from experiments.allocation_poc import qrisp_comparison as comparison
 from experiments.allocation_poc.programs import PROGRAMS
 from demo import app
 from demo.blocks import measurement
-from demo.model import (
-    Action, Bar, Case, Cell, Code, Columns, Diagram, Field, LegendItem, Note, Number, Option, Result, Row, Stage, Stats, Switcher,
-)
-from demo.text import shorten
+from demo.model import Case, Code, Columns, Note, Number, Result, Stage
 
-SIDES = (("ours", "Ours"), ("qrisp", "Qrisp"))
-VARIANT_NAMES = {"built": "as built", "optimised": "optimised"}
-ROWS = (
-    ("Wires used", "touched", lambda m: f"{m['wires']} declared"),
-    ("Gates", "gates", lambda m: "multi-controlled X counts as one as built"),
-    ("Two-qubit gates", "two_qubit", lambda m: "gates on two or more qubits"),
-    ("Depth", "depth", lambda m: "layers that cannot overlap"),
-)
 EXPLANATION = (
     "Ours: inline the functions, insert the releases, pack registers into fixed slots with one shared scratch register, and "
     "write the gates (a Cuccaro adder, shift-and-add multiply, multi-controlled X comparisons).",
@@ -44,56 +34,6 @@ EXPLANATION = (
 )
 
 
-def _ratio(ours: int, theirs: int) -> str:
-    if ours == theirs:
-        return "same"
-    return "—" if not ours else f"×{theirs / ours:.2f}"
-
-
-def _statistics(built: comparison.Built) -> List[Any]:
-    measured = {(side, variant): comparison.metrics(built, side, variant) for side, _ in SIDES for variant in comparison.VARIANTS}
-    rows = []
-    for label, key, note in ROWS:
-        cells = []
-        for variant in comparison.VARIANTS:
-            ours, theirs = measured["ours", variant][key], measured["qrisp", variant][key]
-            top = max(ours, theirs, 1)
-            cells.append(Cell(f"ours {ours:,} · Qrisp {theirs:,}", bars=(Bar(ours / top, "series-1"), Bar(theirs / top, "series-2"))))
-            cells.append(Cell(_ratio(ours, theirs), "Qrisp ÷ ours"))
-        rows.append(Row(label, tuple(cells), note(measured["ours", "built"])))
-    mix = [
-        f"{name} {VARIANT_NAMES[variant]}: " + " · ".join(
-            f"{op} {n:,}" for op, n in sorted(measured[side, variant]["ops"].items(), key=lambda item: -item[1]))
-        for variant in comparison.VARIANTS for side, name in SIDES
-    ]
-    table = Stats(("", "As built", "", "Optimised", ""), tuple(rows), (LegendItem("ours", "series-1"), LegendItem("Qrisp", "series-2")))
-    return [table, Note("Gate mix", "muted", tuple(mix))]
-
-
-def _circuit_pane(built: comparison.Built, side: str, title: str, variant: str, view: str, program: str, width: int):
-    entry = built.sides[side]
-    metrics = comparison.metrics(built, side, variant)
-    name = f"{title} · {VARIANT_NAMES[variant]}"
-    if view == "diagram":
-        picture = entry.drawings[variant]
-        meta = (f"first {picture['layers']} layers, {picture['shown']:,} of {picture['total']:,} gates"
-                if picture["shown"] < picture["total"] else f"{picture['layers']} layers")
-        shown = Diagram(picture, name, meta)
-    else:
-        shown = Code.of(shorten(entry.text[variant]), name, f"{metrics['gates']:,} gates")
-    run = Action("Run on simulator", "simulate", {"side": side, "variant": variant}, (Field("shots", "shots", 100, 1, 4096),), "Qiskit Aer")
-    return (shown, run)
-
-
-def _circuits(built: comparison.Built, program: str, width: int) -> Switcher:
-    def view(variant: str) -> Switcher:
-        return Switcher("circuit-view", tuple(
-            Option(name, label, (Columns(tuple(
-                _circuit_pane(built, side, title, variant, name, program, width) for side, title in SIDES)),))
-            for name, label in (("diagram", "Diagram"), ("text", "OpenQASM text"))))
-    return Switcher("circuit-variant", tuple(Option(v, VARIANT_NAMES[v].capitalize(), (view(v),)) for v in comparison.VARIANTS))
-
-
 def _case(inputs: Dict[str, Any]) -> str:
     return inputs["case"] or PROGRAMS[0]["id"]
 
@@ -112,8 +52,8 @@ def run(inputs: Dict[str, Any], enabled: List[str]) -> Result:
                   (Code.of(built.sources["ours"], "Ours · source language", "compiler inserts the releases"),),
                   (Code.of(built.sources["qrisp"], "Qrisp · Python", "@auto_uncompute"),),
               )), Note("What is and is not equivalent", "muted", EXPLANATION))),
-        Stage("statistics", "Statistics", "", tuple(_statistics(built))),
-        Stage("circuits", "Circuits", "", (_circuits(built, program, width),)),
+        Stage("statistics", "Statistics", "", tuple(comparison_blocks.statistics(built))),
+        Stage("circuits", "Circuits", "", (comparison_blocks.circuits(built),)),
     ))
 
 
