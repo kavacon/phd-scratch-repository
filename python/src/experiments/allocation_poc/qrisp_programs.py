@@ -14,10 +14,9 @@ multiplying by 2 only shifts the exponent, after which Qrisp refuses to add an o
 low), so doubling is written `a + a`. Where our source assigns a name again inside an `if`, the Qrisp updates one
 register in place under the condition, but copies first where that would stop Qrisp uncomputing the condition.
 """
-import contextlib
-import io
-from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict
+
+from checking.qrisp_tools import QrispCircuit, build
 
 SOURCES: Dict[str, str] = {
     "area": '''from qrisp import QuantumFloat, auto_uncompute
@@ -225,15 +224,6 @@ def main():
 }
 
 
-@dataclass(frozen=True)
-class QrispCircuit:
-    circuit: object  # a Qiskit QuantumCircuit, with the returned register measured
-    result: Tuple[int, ...]  # the qubit of each bit of the returned register (its mantissa), least significant first
-    exponent: int  # a QuantumFloat holds mantissa * 2 ** exponent
-    labels: Tuple[str, ...]  # a label per wire, from the Qrisp variable it belongs to
-    groups: Tuple[int, ...]  # which variable each wire belongs to, to colour labels
-
-
 def source_text(program_id: str, width: int) -> str:
     """The program as it runs, with the register width filled in."""
     return SOURCES[program_id].replace("WIDTH = 0", f"WIDTH = {width}", 1)
@@ -241,23 +231,4 @@ def source_text(program_id: str, width: int) -> str:
 
 def run(program_id: str, width: int) -> QrispCircuit:
     """Run a Qrisp program and compile it to a Qiskit circuit with the returned register measured."""
-    from qiskit import ClassicalRegister
-
-    namespace: Dict[str, object] = {}
-    exec(source_text(program_id, width), namespace)  # trusted: the programs above, exactly what the app displays
-    with contextlib.redirect_stdout(io.StringIO()):  # Qrisp prints progress while it simulates
-        result = namespace["main"]()
-        compiled = result.qs.compile(intended_measurements=list(result.reg))
-        indices = tuple(compiled.qubits.index(q) for q in result.reg)
-        circuit = compiled.to_qiskit()
-        exponent = int(result.exponent)
-    labels, groups, seen = [], [], {}
-    for qubit in circuit.qubits:
-        registers = circuit.find_bit(qubit).registers
-        label = registers[0][0].name if registers else str(len(labels))
-        labels.append(label)
-        groups.append(seen.setdefault(label.split(".")[0], len(seen)))
-    circuit.add_register(ClassicalRegister(len(indices), "result"))
-    for position, qubit in enumerate(indices):
-        circuit.measure(qubit, position)
-    return QrispCircuit(circuit, indices, exponent, tuple(labels), tuple(groups))
+    return build(source_text(program_id, width))

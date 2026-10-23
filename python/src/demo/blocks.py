@@ -17,6 +17,8 @@ def measurement(report: Dict[str, Any]) -> List[Any]:
     """A simulator run (checking.circuits.report) as a verdict, any qubits left set, and the measured counts."""
     if "error" in report:
         return [Note(report["error"], "bad")]
+    if "distribution" in report:
+        return _distribution(report)
     expected = report["expected"]
     if expected is None:
         verdict = Note("No expected value to compare with.")
@@ -36,3 +38,25 @@ def measurement(report: Dict[str, Any]) -> List[Any]:
     )
     blocks.append(Stats(("measured", "shots", ""), rows))
     return blocks
+
+
+def _distribution(report: Dict[str, Any]) -> List[Any]:
+    """A run of a program that returns a distribution: each value's expected probability beside the fraction measured."""
+    close = report["matches"]
+    verdict = Note(
+        f"The measured fractions are within {report['tolerance']:.2f} of the expected probabilities ({report['distance']:.3f} apart)."
+        if close else
+        f"The measured fractions are {report['distance']:.3f} from the expected probabilities, more than the {report['tolerance']:.2f} "
+        "that chance would give.", "good" if close else "bad")
+    blocks: List[Any] = [verdict]
+    if report["leaked"]:
+        blocks.append(Note(
+            f"Qubits that were set at the end in some shots: {len(report['leaked'])}. A program whose result is entangled with its "
+            "inputs cannot clear them, so this is expected for those that are.", "muted"))
+    rows = tuple(
+        Row(str(value), (Cell(f"{expected:.0%} expected"), Cell(f"{measured:.0%} measured",
+                                                              bars=(Bar(expected, "series-1"), Bar(measured, "series-2")))))
+        for value, expected, measured in report["distribution"])
+    blocks.append(Stats(("value", "expected", "measured"), rows))
+    return blocks
+

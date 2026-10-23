@@ -3,7 +3,7 @@ Thin helpers over Qiskit and Qiskit Aer (Aer and the OpenQASM reader are optiona
 wires, and running a circuit on a simulator. The optimiser is a compiler pass (`compiler.passes.optimise`).
 """
 import importlib.util
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 from compiler.passes.optimise import BASIS, optimise, qiskit_available  # noqa: F401  (re-exported)
 
@@ -84,3 +84,42 @@ def execute(circuit, result_bits: int, shots: int = 8) -> Dict[str, Any]:
                 leftover.add(rest[position])
     return {"counts": values, "value": next(iter(values)) if len(values) == 1 else None,
             "leaked": sorted(leftover), "deterministic": len(values) == 1}
+
+
+def measured_qubits(circuit) -> List[int]:
+    """The qubit measured into each classical bit, in the order of the bits (so least significant first for a register)."""
+    by_bit = {circuit.find_bit(i.clbits[0]).index: circuit.find_bit(i.qubits[0]).index
+              for i in circuit.data if i.operation.name == "measure"}
+    return [by_bit[bit] for bit in sorted(by_bit)]
+
+
+def final_probabilities(circuit) -> Tuple[List[int], Dict[int, float]]:
+    """
+    The probability of each state of every qubit a circuit uses (or measures) at its end, with the final measurements left
+    out: the qubits, and a dictionary from the state (bit k of the number is the k-th of those qubits) to its probability.
+    The matrix product state method of Qiskit Aer gives these exactly for the circuits here, which are too wide for a
+    state vector: it finds the qubits that are ever set and lists the states of just those. Phases are not part of it.
+    """
+    from qiskit import QuantumCircuit, transpile
+    from qiskit_aer import AerSimulator
+
+    run = circuit.remove_final_measurements(inplace=False)
+    used = {run.find_bit(q).index for i in run.data for q in i.qubits} | set(measured_qubits(circuit))
+    kept = sorted(used)
+    position = {q: k for k, q in enumerate(kept)}
+    reduced = QuantumCircuit(len(kept))
+    for instruction in run.data:
+        if instruction.operation.name != "barrier":
+            reduced.append(instruction.operation, [position[run.find_bit(q).index] for q in instruction.qubits])
+    runnable = transpile(reduced, basis_gates=BASIS, optimization_level=0)
+    simulator = AerSimulator(method="matrix_product_state")
+    probe = runnable.copy()  # first, which qubits are ever set, so the full list of states only needs those
+    for k in range(len(kept)):
+        probe.save_probabilities(qubits=[k], label=f"q{k}")
+    saved = simulator.run(probe).result().data(0)
+    active = [k for k in range(len(kept)) if saved[f"q{k}"][1] > 1e-9]
+    if not active:
+        return kept, {0: 1.0}
+    runnable.save_probabilities_dict(qubits=active)
+    states = simulator.run(runnable).result().data(0)["probabilities"]
+    return kept, {sum(((state >> j) & 1) << k for j, k in enumerate(active)): p for state, p in states.items() if p > 1e-9}
