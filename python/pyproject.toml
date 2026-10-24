@@ -22,6 +22,12 @@ zx = [
 compare = [
     "qrisp",
 ]
+# The existing_ir experiment: xDSL (a Python equivalent of MLIR) for its translation and passes, and MQT's compiler
+# collection (the QC and QCO dialects, their passes and exporters) for the quantum side.
+mlir = [
+    "xdsl",
+    "mqt.core==4.1.1",
+]
 
 [build-system]
 requires = ["setuptools>=69", "wheel"]
