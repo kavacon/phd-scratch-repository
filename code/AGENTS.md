@@ -19,8 +19,9 @@ demo/python/demo/              the demo-app framework: model.py (what a demo des
 demo/resources/                the one generic page that draws a demo (app.html, app.js, app.css, circuit.js)
 helper/resources/              the grammars (grammar_v1.lark, grammar_v2.lark), shared by whatever parses the language
 experiment_<name>/python/experiment_<name>/   one experiment: experiment.py, its passes/, its demos/, anything else specific to it
-helper/cpp/                    the C++ toolchain setup and MQT's MLIR libraries, built from source (`setup.sh`; `cleanup.sh` undoes it)
+helper/cpp/                    the C++ toolchain setup (`setup.sh` builds MQT's MLIR libraries from source; `cleanup.sh` undoes it)
 experiment_<name>/cpp/         that experiment's C++, built by its own `build.sh` against helper/cpp
+build/                         everything the C++ builds generate (MQT's sources and build, each experiment's build); git ignores it
 <folder>/tests/                that folder's tests; helper/tests/test_layering.py checks the layering of all of them
 ```
 

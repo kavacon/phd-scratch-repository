@@ -174,5 +174,4 @@ cython_debug/
 .pypirc
 /.idea/
 /publications/publication_qpl_systematic_review/build/
-code/helper/cpp/external/
-code/experiment_*/cpp/build/
+code/build/

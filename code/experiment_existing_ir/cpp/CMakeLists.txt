@@ -9,9 +9,11 @@ include(AddMLIR)
 include(HandleLLVMOptions)
 
 set(CMAKE_CXX_STANDARD 17)
-# MQT, built from source by helper/cpp/setup.sh: its headers and the static libraries of its MLIR part.
-set(MQT_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/../../helper/cpp/external/mqt-core)
-set(MQT_BUILD ${CMAKE_CURRENT_SOURCE_DIR}/../../helper/cpp/external/mqt-build)
+# MQT, built from source by helper/cpp/setup.sh (build.sh passes the two locations): its headers and the static libraries
+# of its MLIR part.
+if(NOT MQT_SOURCE OR NOT MQT_BUILD)
+  message(FATAL_ERROR "Build with build.sh, which says where MQT is")
+endif()
 file(GLOB_RECURSE MQT_LIBS ${MQT_BUILD}/mlir/lib/*.a)
 include_directories(${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
                     ${MQT_SOURCE}/mlir/include ${MQT_BUILD}/mlir/include)
