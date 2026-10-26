@@ -1,46 +1,33 @@
 """
-A source program taken through the pipeline: translated to `func` and `arith`, optimised by xDSL's standard passes,
-lowered to QC by our pattern pass, handed to MQT, exported as OpenQASM 3 and run on Qiskit Aer, with the source
-interpreter's value for comparison. The passes are one list, so another experiment is another list.
+Source programs taken through the pipeline: translated to MLIR text, optimised and lowered to QC by the C++ tool,
+handed to MQT, exported as OpenQASM 3 and run on Qiskit Aer. The passes are one list, so another experiment is another
+list. The tool prints the program after every pass, which shows what each one did.
 
-    PYTHONPATH=src .venv/bin/python -m experiment_existing_ir.experiment
+    . ./env.sh && .venv/bin/python -m experiment_existing_ir.experiment
+
+Needs the tool built first: `helper/cpp/setup.sh`, then `experiment_existing_ir/cpp/build.sh`.
 """
-from xdsl.passes import PassPipeline
-from xdsl.transforms.canonicalize import CanonicalizePass
-from xdsl.transforms.dead_code_elimination import DeadCodeElimination
+import subprocess
 
-from checking.simulate import simulate
-from compiler.parser.parser import parse as parse_source
-from experiment_existing_ir.ir import context, show
-from experiment_existing_ir.ranges import ranges
-from experiment_existing_ir.rewrites.to_qc import LowerToQC
-from experiment_existing_ir.simulate import execute, mqt
+from compiler.parser.parser import parse
+from experiment_existing_ir import simulate
 from experiment_existing_ir.translate import translate
 
-SOURCE = "x = 5; y = x + 3; y = y - 1; return y;"
-
-PASSES = (CanonicalizePass(), DeadCodeElimination(), LowerToQC())
-
-
-def show_between(done, module, upcoming) -> None:
-    """Called before the first pass and after each one: the program and the range of each value."""
-    if isinstance(done, LowerToQC):  # printed in full below, as MQT reads it
-        return
-    print(f"\nafter {done.name if done else 'translation'}:\n{show(module)}")
-    found = ranges(module)
-    for op in module.walk():
-        if op.results and op.results[0] in found:
-            print(f"  {op.name:15} range {tuple(found[op.results[0]])} -> {found[op.results[0]].width} qubits")
+PASSES = ("--canonicalize", "--lower-to-qc")
+PROGRAMS = {
+    "arithmetic": ("x = 5; y = x + 3; y = y - 1; return y;", "v1"),
+    "conditional on a distribution": ("a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;", "v2"),
+}
 
 
 def main() -> None:
-    print(f"source: {SOURCE}\nsource interpreter: {simulate(parse_source(SOURCE)).value}")
-    module = translate(parse_source(SOURCE))
-    PassPipeline(PASSES, show_between).apply(context(), module)
-    print(f"\nlowered to QC, as MQT prints it:\n{mqt(module).ir}")
-    outcome = execute(module)
-    print(f"\nrun on Qiskit Aer via OpenQASM 3: value {outcome['value']}, qubits left set outside the result "
-          f"{outcome['leaked']}")
+    for title, (source, grammar) in PROGRAMS.items():
+        program = translate(parse(source, grammar))
+        print(f"\n==== {title}\n{source}\n\ntranslated:\n{program}")
+        stages = subprocess.run([simulate.TOOL, *PASSES, "--mlir-print-ir-after-all"], input=program, capture_output=True,
+                                text=True, check=True).stderr
+        print(f"\nafter each pass:\n{stages}")
+        print(f"run on Qiskit Aer via OpenQASM 3: {simulate.run(program, PASSES)}")
 
 
 if __name__ == "__main__":

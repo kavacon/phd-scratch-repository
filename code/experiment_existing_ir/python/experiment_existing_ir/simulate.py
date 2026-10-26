@@ -1,43 +1,49 @@
 """
-Run a lowered program and read the measured register back as an integer.
+Run a program through the C++ tool and read the measured register back as integers.
 
-The module goes through MQT's compiler (QC in generic syntax in, OpenQASM 3 out) and is then run on Qiskit Aer by the
-repo's own checker, so the simulator is independent of MQT and the exporter is exercised too.
+`existing-ir-opt` (built from `cpp/`) is `mlir-opt` with MQT's dialects and passes, our `dist` dialect and the
+`lower-to-qc` pass. Its output is QC text, which goes through MQT's compiler (QC in, OpenQASM 3 out) and is then run on
+Qiskit Aer by the repo's own checker, so the simulator is independent of MQT and the exporter is exercised too.
 """
-from typing import Any, Dict
+import subprocess
+from pathlib import Path
+from typing import Dict, Sequence
 
 from mqt.core.mlir import QCProgram
-from xdsl.dialects.builtin import ModuleOp
 
 from checking import qiskit_tools
 from checking.circuits import to_signed
-from experiment_existing_ir.ir import show
+
+TOOL = Path(__file__).resolve().parents[2] / "cpp/build/existing-ir-opt"
 
 
-def mqt(module: ModuleOp) -> QCProgram:
-    return QCProgram.from_mlir_str(show(module, generic=True))
+def built() -> bool:
+    return TOOL.exists()
 
 
-def openqasm(module: ModuleOp) -> str:
+def optimise(program: str, *passes: str) -> str:
+    """The program after the given passes (`--canonicalize`, `--lower-to-qc`, ...), as text."""
+    return subprocess.run([TOOL, *passes], input=program, capture_output=True, text=True, check=True).stdout
+
+
+def openqasm(qc: str) -> str:
     """
-    The program as OpenQASM 3 text from MQT's exporter. It marks the result register `output`, which Qiskit's importer
+    The QC program as OpenQASM 3 text from MQT's exporter. It marks the result register `output`, which Qiskit's importer
     does not accept, so that keyword is dropped; nothing else needs changing.
     """
-    return mqt(module).to_openqasm3().source.replace("output bit", "bit")
+    return QCProgram.from_mlir_str(qc).to_openqasm3().source.replace("output bit", "bit")
 
 
-def execute(module: ModuleOp) -> Dict[str, Any]:
+def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
     """
-    The value of the result register (two's complement, least significant bit first; the simulator's key reads the
-    highest bit first) and the qubits left set outside it. Every qubit is in a basis state, so a few shots must agree.
+    How often each value of the result register came out (two's complement, least significant bit first; the
+    simulator's key reads the highest bit first). A definite program gives one value; a distribution gives several.
     """
-    width = next(op for op in module.ops if op.name == "func.func" and op.sym_name.data == "main"
-                 ).function_type.outputs.data[0].width.data
-    outcome = qiskit_tools.execute(qiskit_tools.read(openqasm(module)), width)
-    if not outcome["deterministic"]:
-        raise ValueError(f"the result is not a single value: {outcome['counts']}")
-    return {"value": to_signed(outcome["value"], width), "leaked": outcome["leaked"]}
+    qasm = openqasm(qc)
+    width = int(qasm.split("bit[")[1].split("]")[0])
+    counts = qiskit_tools.execute(qiskit_tools.read(qasm), width, shots=shots)["counts"]
+    return {to_signed(value, width): count for value, count in sorted(counts.items())}
 
 
-def run(module: ModuleOp) -> int:
-    return execute(module)["value"]
+def run(program: str, passes: Sequence[str] = ("--canonicalize", "--lower-to-qc"), shots: int = 2000) -> Dict[int, int]:
+    return execute(optimise(program, *passes), shots)

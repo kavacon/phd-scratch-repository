@@ -25,12 +25,14 @@ experiment_distributions/python/experiment_distributions/
                         Working with distributions: what superposition and entanglement mean for the language, what the compiler converts to
                         superposition, and uncomputation of what it entangles. experiment.py, passes/, programs.py, demos/ (scaffold only)
 experiment_existing_ir/python/experiment_existing_ir/
-                        Whether an MLIR-based stack can carry the language to circuits: translation to `func` and `arith`, an xDSL
-                        lowering to MQT's QC dialect, range analysis. experiment.py, translate.py, rewrites/, dialects/
+                        Whether an MLIR-based stack can carry the language to circuits. Python: translate.py (source to MLIR text),
+                        simulate.py (runs the C++ tool, then MQT and Aer), experiment.py. cpp/: existing-ir-opt, MLIR with MQT's
+                        dialects and passes, the `dist` dialect and the `lower-to-qc` pass
+helper/cpp/             the C++ toolchain setup (setup.sh, cleanup.sh) and MQT's MLIR libraries built from source, which every experiment's C++ links
 <folder>/tests/  each folder's tests (helper/tests/test_layering.py checks the layering of all of them)
 ```
 
-Every folder keeps its Python in `python/`, any C++ in `cpp/`, and non-code files in `resources/` (or beside the experiment,
+Every folder keeps its Python in `python/`, any C++ in `cpp/` (build with `helper/cpp/setup.sh`, then the experiment's `cpp/build.sh`), and non-code files in `resources/` (or beside the experiment,
 like `experiment_encodings/results/`), so none of them depend on a language.
 
 ## Layering
