@@ -14,7 +14,7 @@ from mqt.core.mlir import QCProgram
 from checking import qiskit_tools
 from checking.circuits import to_signed
 
-TOOL = Path(__file__).resolve().parents[2] / "cpp/build/existing-ir-opt"
+TOOL = Path(__file__).resolve().parents[3] / "build/experiment_existing_ir/existing-ir-opt"
 
 
 def built() -> bool:

@@ -28,7 +28,8 @@ experiment_existing_ir/python/experiment_existing_ir/
                         Whether an MLIR-based stack can carry the language to circuits. Python: translate.py (source to MLIR text),
                         simulate.py (runs the C++ tool, then MQT and Aer), experiment.py. cpp/: existing-ir-opt, MLIR with MQT's
                         dialects and passes, the `dist` dialect and the `lower-to-qc` pass
-helper/cpp/             the C++ toolchain setup (setup.sh, cleanup.sh) and MQT's MLIR libraries built from source, which every experiment's C++ links
+helper/cpp/             the C++ toolchain setup (setup.sh builds MQT's MLIR libraries from source, cleanup.sh undoes it)
+build/                  everything the C++ builds generate (MQT's sources and build, each experiment's build); git ignores it
 <folder>/tests/  each folder's tests (helper/tests/test_layering.py checks the layering of all of them)
 ```
 
