@@ -9,7 +9,9 @@ Section~\ref{sec:discussion} considers the implications.
 
 \begin{table}[htbp]
     \centering
-    \caption{Aggregated system assessments; `-' denotes unassessable.}
+    \caption{System tiers and aggregated condition outcomes across T1--T4.
+    Each condition reports the worst assessable outcome ordered F $<$ C $<$ P.
+    `-' denotes no assessable evidence, not failure.}
     \label{tab:system_assessments:system_summary}
     \footnotesize
     \setlength{\tabcolsep}{2pt}
@@ -19,11 +21,11 @@ Section~\ref{sec:discussion} considers the implications.
         \midrule
         A             & OpenQASM 3.0    & F           & F           & F           & F           & F           & F           & P           & F           & F           \\
         \midrule
-        \multirow{IR}
+        \multirow{2}{*}{IR}
         & QIR             & F           & F           & F           & F           & F           & -           & P           & F           & F           \\
         & Q-MLIR          & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
         \midrule
-        \multirow{FW}
+        \multirow{6}{*}{FW}
         & Qiskit          & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
         & PennyLane       & F           & F           & F           & F           & F           & F           & P           & F           & C           \\
         & Q\#             & F           & F           & F           & C           & F           & F           & P           & F           & C           \\
@@ -31,7 +33,7 @@ Section~\ref{sec:discussion} considers the implications.
         & Qutes           & F           & C           & F           & C           & C           & C           & P           & F           & P           \\
         & Qwerty          & C           & C           & C           & C           & F           & F           & P           & F           & P           \\
         \midrule
-        \multirow{HL}
+        \multirow{2}{*}{HL}
         & Silq            & F           & C           & C           & C           & C           & C           & P           & F           & P           \\
         & Qmod            & F           & C           & C           & F           & C           & C           & P           & F           & P           \\
         \bottomrule
@@ -99,6 +101,7 @@ C7 passes across all eleven profiles because the representative constructions do
 OpenQASM's examples omit timing and calibration features, while Q-MLIR uses an abstract gate namespace without removing explicit qubits and gates.
 
 \ifthesis
+
 \subsubsection{Systems $\times$ conditions heatmap}\label{subsubsec:system_assessments:condition_heatmap}
 Figure~\ref{fig:system_assessments:condition_heatmap} visualises the aggregated profiles in Table~\ref{tab:system_assessments:system_summary}.
 It highlights uniform C7 passes, persistent artefact and identity constraints, Qwerty's distinctive C1 outcome and QIR's unassessable observation condition.
