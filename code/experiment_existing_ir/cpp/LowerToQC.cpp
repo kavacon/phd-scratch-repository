@@ -135,24 +135,87 @@ struct Sum : OpRewritePattern<Op> {
 };
 
 // lhs < rhs is the sign of lhs - rhs, taken one bit wider than either operand so the difference cannot wrap.
+Value lessThan(OpBuilder &rw, Location loc, Value lhs, Value rhs) {
+  unsigned width = std::max(registerWidth(lhs), registerWidth(rhs)) + 1;
+  Value difference = sum(rw, loc, lhs, rhs, width, true);
+  Value result = allocate(rw, loc, 1);
+  controlledX(rw, loc, {load(rw, loc, difference).back()}, load(rw, loc, result)[0]);
+  return result;
+}
+
 struct LessThan : OpRewritePattern<arith::CmpIOp> {
-  LessThan(MLIRContext *c, const Widths &w) : OpRewritePattern(c), widths(w) {}
-  const Widths &widths;
+  using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(arith::CmpIOp op, PatternRewriter &rw) const override {
     if (op.getPredicate() != arith::CmpIPredicate::slt || !isRegister(op.getLhs()) || !isRegister(op.getRhs()))
       return failure();
+    rw.replaceOp(op, lessThan(rw, op.getLoc(), op.getLhs(), op.getRhs()));
+    return success();
+  }
+};
+
+// `target += amount` (or `-=`). When nothing reads the target after the update (checked before any lowering, since lowering
+// changes the uses), the adder works in the target's own register, which is as wide as every value of the chain of updates
+// it belongs to: the amount is copied into a temporary and added into the target, and the target's register is the result.
+// Otherwise the result is a fresh register, as for any sum.
+template <typename Op, bool Inverse>
+struct Update : OpRewritePattern<Op> {
+  Update(MLIRContext *c, const Widths &w, const DenseSet<Operation *> &inPlace)
+      : OpRewritePattern<Op>(c), widths(w), inPlace(inPlace) {}
+  const Widths &widths;
+  const DenseSet<Operation *> &inPlace;
+  LogicalResult matchAndRewrite(Op op, PatternRewriter &rw) const override {
+    auto it = widths.find(op.getResult());
+    if (it == widths.end() || !isRegister(op.getTarget()) || !isRegister(op.getAmount()))
+      return failure();
     Location loc = op.getLoc();
-    unsigned width = std::max(registerWidth(op.getLhs()), registerWidth(op.getRhs())) + 1;
-    Value difference = sum(rw, loc, op.getLhs(), op.getRhs(), width, true);
-    Value result = allocate(rw, loc, 1);
-    controlledX(rw, loc, {load(rw, loc, difference).back()}, load(rw, loc, result)[0]);
-    rw.replaceOp(op, result);
+    Value target = op.getTarget();
+    unsigned width = registerWidth(target);
+    if (!inPlace.contains(op) || it->second > width) {
+      rw.replaceOp(op, sum(rw, loc, target, op.getAmount(), it->second, Inverse));
+      return success();
+    }
+    Value operand = allocate(rw, loc, width), carry = allocate(rw, loc, 1);
+    SmallVector<Value> targetQubits = load(rw, loc, target), amount = load(rw, loc, op.getAmount()),
+                       temporary = load(rw, loc, operand), c = load(rw, loc, carry);
+    copy(rw, loc, amount, temporary);
+    SmallVector<Value> args(temporary);
+    args.append(targetQubits.begin(), targetQubits.end());
+    args.push_back(c[0]);
+    auto callee = FlatSymbolRefAttr::get(rw.getContext(), adderName(width));
+    if (!Inverse)
+      mlir::qc::CallOp::create(rw, loc, callee, args);
+    else
+      mlir::qc::InvOp::create(rw, loc, args, [&](ValueRange inner) { mlir::qc::CallOp::create(rw, loc, callee, inner); });
+    rw.replaceOp(op, target);
+    return success();
+  }
+};
+
+struct DistLessThan : OpRewritePattern<existing_ir::dist::SltOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(existing_ir::dist::SltOp op, PatternRewriter &rw) const override {
+    if (!isRegister(op.getLhs()) || !isRegister(op.getRhs()))
+      return failure();
+    rw.replaceOp(op, lessThan(rw, op.getLoc(), op.getLhs(), op.getRhs()));
     return success();
   }
 };
 
 // condition ? a : b, bit by bit: the result starts as b and takes (a xor b) in the bits where the condition is set.
 // Both operands have already been computed, so the selection costs one Toffoli per bit.
+Value select(OpBuilder &rw, Location loc, Value condition, Value trueValue, Value falseValue, unsigned width) {
+  Value result = allocate(rw, loc, width), delta = allocate(rw, loc, width);
+  SmallVector<Value> res = load(rw, loc, result), d = load(rw, loc, delta), a = load(rw, loc, trueValue),
+                     b = load(rw, loc, falseValue);
+  Value bit = load(rw, loc, condition)[0];
+  copy(rw, loc, b, res);
+  copy(rw, loc, a, d);
+  copy(rw, loc, b, d);
+  for (unsigned i = 0; i < res.size(); ++i)
+    controlledX(rw, loc, {bit, d[i]}, res[i]);
+  return result;
+}
+
 struct Select : OpRewritePattern<arith::SelectOp> {
   Select(MLIRContext *c, const Widths &w) : OpRewritePattern(c), widths(w) {}
   const Widths &widths;
@@ -161,17 +224,33 @@ struct Select : OpRewritePattern<arith::SelectOp> {
     if (it == widths.end() || !isRegister(op.getCondition()) || !isRegister(op.getTrueValue()) ||
         !isRegister(op.getFalseValue()))
       return failure();
-    Location loc = op.getLoc();
-    Value result = allocate(rw, loc, it->second), delta = allocate(rw, loc, it->second);
-    SmallVector<Value> res = load(rw, loc, result), d = load(rw, loc, delta), a = load(rw, loc, op.getTrueValue()),
-                       b = load(rw, loc, op.getFalseValue());
-    Value condition = load(rw, loc, op.getCondition())[0];
-    copy(rw, loc, b, res);
-    copy(rw, loc, a, d);
-    copy(rw, loc, b, d);
-    for (unsigned i = 0; i < res.size(); ++i)
-      controlledX(rw, loc, {condition, d[i]}, res[i]);
-    rw.replaceOp(op, result);
+    rw.replaceOp(op, select(rw, op.getLoc(), op.getCondition(), op.getTrueValue(), op.getFalseValue(), it->second));
+    return success();
+  }
+};
+
+struct DistSelect : OpRewritePattern<existing_ir::dist::SelectOp> {
+  DistSelect(MLIRContext *c, const Widths &w) : OpRewritePattern(c), widths(w) {}
+  const Widths &widths;
+  LogicalResult matchAndRewrite(existing_ir::dist::SelectOp op, PatternRewriter &rw) const override {
+    if (!isRegister(op.getCondition()) || !llvm::all_of(op.getTrueValues(), isRegister) ||
+        !llvm::all_of(op.getFalseValues(), isRegister))
+      return failure();
+    SmallVector<Value> results;
+    for (auto [t, f, r] : llvm::zip(op.getTrueValues(), op.getFalseValues(), op.getResults()))
+      results.push_back(select(rw, op.getLoc(), op.getCondition(), t, f, widths.lookup(r)));
+    rw.replaceOp(op, results);
+    return success();
+  }
+};
+
+// Reading a distribution measures it, and the return measures the register, so the register passes through.
+struct DistMeasure : OpRewritePattern<existing_ir::dist::MeasureOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(existing_ir::dist::MeasureOp op, PatternRewriter &rw) const override {
+    if (!isRegister(op.getInput()))
+      return failure();
+    rw.replaceOp(op, op.getInput());
     return success();
   }
 };
@@ -240,23 +319,63 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     solver.load<dataflow::IntegerRangeAnalysis>();
     if (failed(solver.initializeAndRun(module)))
       return signalPassFailure();
+    // 1. The width each value needs, from the range analysis. A distribution's width is its element's: the analysis
+    //    follows it through the interface on our operations.
     Widths widths;
-    std::set<unsigned> adders;
     module.walk([&](Operation *op) {
       for (Value result : op->getResults()) {
-        auto type = dyn_cast<IntegerType>(result.getType());
+        Type resultType = result.getType();
+        if (auto dist = dyn_cast<existing_ir::dist::DistType>(resultType))
+          resultType = dist.getElement();
+        auto type = dyn_cast<IntegerType>(resultType);
         auto *lattice = solver.lookupState<dataflow::IntegerValueRangeLattice>(result);
         if (!type || !lattice || lattice->getValue().isUninitialized())
           continue;
         const ConstantIntRanges &range = lattice->getValue().getValue();
         unsigned width = std::max(range.smin().getSignificantBits(), range.smax().getSignificantBits());
         widths[result] = std::min(width, type.getWidth());
-        if (isa<arith::AddIOp, arith::SubIOp>(op))
-          adders.insert(widths[result]);
       }
+    });
+
+    // 2. An update may work in its target's register when no other use of the target comes after it. The values of such
+    //    a chain of updates share one register, so it is made as wide as the widest of them and no update needs a wider
+    //    one than its target has.
+    DenseSet<Operation *> inPlace;
+    DenseMap<Value, Value> parent;  // union-find over the values that share a register
+    auto find = [&](Value value) {
+      while (parent.contains(value) && parent[value] != value)
+        value = parent[value];
+      return value;
+    };
+    module.walk([&](Operation *op) {
+      if (!isa<existing_ir::dist::AddAssignOp, existing_ir::dist::SubAssignOp>(op))
+        return;
+      bool laterUse = llvm::any_of(op->getOperand(0).getUsers(), [&](Operation *user) {
+        return user != op && (user->getBlock() != op->getBlock() || !user->isBeforeInBlock(op));
+      });
+      if (laterUse)
+        return;
+      inPlace.insert(op);
+      parent.try_emplace(op->getOperand(0), op->getOperand(0));
+      parent.try_emplace(op->getResult(0), op->getResult(0));
+      parent[find(op->getResult(0))] = find(op->getOperand(0));
+    });
+    DenseMap<Value, unsigned> registerWidths;
+    for (auto &member : parent)
+      registerWidths[find(member.first)] = std::max(registerWidths[find(member.first)], widths.lookup(member.first));
+    for (auto &member : parent)
+      widths[member.first] = registerWidths[find(member.first)];
+
+    // 3. The adders needed, at the widths the registers now have.
+    std::set<unsigned> adders;
+    module.walk([&](Operation *op) {
+      if (isa<arith::AddIOp, arith::SubIOp, existing_ir::dist::AddAssignOp, existing_ir::dist::SubAssignOp>(op))
+        adders.insert(widths.lookup(op->getResult(0)));
       // A comparison subtracts in one bit more than its wider operand.
       if (auto cmp = dyn_cast<arith::CmpIOp>(op))
         adders.insert(std::max(widths.lookup(cmp.getLhs()), widths.lookup(cmp.getRhs())) + 1);
+      if (auto slt = dyn_cast<existing_ir::dist::SltOp>(op))
+        adders.insert(std::max(widths.lookup(slt.getLhs()), widths.lookup(slt.getRhs())) + 1);
     });
     for (unsigned width : adders)
       defineAdder(module, width);
@@ -265,7 +384,10 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     patterns.add<Constant>(&getContext(), widths);
     patterns.add<Sum<arith::AddIOp, false>>(&getContext(), widths);
     patterns.add<Sum<arith::SubIOp, true>>(&getContext(), widths);
-    patterns.add<LessThan, Select, Uniform>(&getContext(), widths);
+    patterns.add<LessThan, DistLessThan, DistMeasure>(&getContext());
+    patterns.add<Select, DistSelect, Uniform>(&getContext(), widths);
+    patterns.add<Update<existing_ir::dist::AddAssignOp, false>, Update<existing_ir::dist::SubAssignOp, true>>(
+        &getContext(), widths, inPlace);
     patterns.add<Return>(&getContext());
     GreedyRewriteConfig config;
     config.setUseTopDownTraversal(true);

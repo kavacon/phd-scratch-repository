@@ -25,23 +25,50 @@ class Translate(unittest.TestCase):
   func.return %0 : i16
 }""")
 
-    def test_a_conditional_on_a_distribution_yields_the_variables_either_arm_changed(self):
+    def test_a_distribution_is_changed_by_an_in_place_update_and_reading_it_measures_it(self):
+        self.assertEqual(translated("a = 0..4; a += 3; return a;", "v2"), """func.func @main() -> i32 {
+  %0 = dist.uniform 0, 4 : !dist.dist<i32>
+  %1 = arith.constant 3 : i32
+  %2 = dist.add_assign %0, %1 : !dist.dist<i32>, i32 -> !dist.dist<i32>
+  %3 = dist.measure %2 : !dist.dist<i32> -> i32
+  func.return %3 : i32
+}""")
+
+    def test_a_distribution_can_be_read_by_several_conditions(self):
+        text = translated("a = 0..4; x = 0; y = 0; if a < 2 { x += 1; } if a < 3 { y += 2; } return x;", "v2")
+        self.assertEqual(text.count("dist.slt %0,"), 2)  # both read the one distribution
+
+    def test_a_conditional_on_a_distribution_computes_both_arms_and_selects_once(self):
         self.assertEqual(translated("a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;", "v2"),
                          """func.func @main() -> i32 {
-  %0 = "dist.uniform"() <{start = 0 : i32, stop = 4 : i32}> : () -> i32
+  %0 = dist.uniform 0, 4 : !dist.dist<i32>
   %1 = arith.constant 2 : i32
   %2 = arith.constant 2 : i32
-  %3 = arith.cmpi slt, %0, %2 : i32
-  %8 = scf.if %3 -> (i32) {
-    %4 = arith.constant 3 : i32
-    %5 = arith.addi %1, %4 : i32
-    scf.yield %5 : i32
+  %3 = dist.slt %0, %2 : !dist.dist<i32>, i32 -> !dist.dist<i1>
+  %4 = arith.constant 3 : i32
+  %5 = arith.addi %1, %4 : i32
+  %6 = arith.constant 1 : i32
+  %7 = arith.subi %1, %6 : i32
+  %8 = dist.select %3, (%5), (%7) : !dist.dist<i1>, (i32), (i32) -> (!dist.dist<i32>)
+  %9 = dist.measure %8 : !dist.dist<i32> -> i32
+  func.return %9 : i32
+}""")
+
+    def test_a_conditional_on_a_definite_value_yields_the_variables_either_arm_changed(self):
+        self.assertEqual(translated("x = 2; if x < 3 { x += 5; } else { x -= 1; } return x;"), """func.func @main() -> i32 {
+  %0 = arith.constant 2 : i32
+  %1 = arith.constant 3 : i32
+  %2 = arith.cmpi slt, %0, %1 : i32
+  %7 = scf.if %2 -> (i32) {
+    %3 = arith.constant 5 : i32
+    %4 = arith.addi %0, %3 : i32
+    scf.yield %4 : i32
   } else {
-    %6 = arith.constant 1 : i32
-    %7 = arith.subi %1, %6 : i32
-    scf.yield %7 : i32
+    %5 = arith.constant 1 : i32
+    %6 = arith.subi %0, %5 : i32
+    scf.yield %6 : i32
   }
-  func.return %8 : i32
+  func.return %7 : i32
 }""")
 
     def test_constructs_not_yet_supported_are_refused(self):
@@ -50,6 +77,13 @@ class Translate(unittest.TestCase):
         with self.assertRaisesRegex(TranslationError, "does not fit in i8"):
             translated("x = 300; return x;", width=8)
 
+    def test_only_a_range_and_an_in_place_update_create_or_change_a_distribution_for_now(self):
+        for source, message in (("a = 0..4; b = a; return b;", "would copy or derive"),
+                                ("a = 0..4; b = a + 1; return b;", "only supported as an in-place update"),
+                                ("a = 0..4; a = 5; return a;", "would drop"),
+                                ("a = 0..4; a += a; return a;", "to itself")):
+            with self.assertRaisesRegex(TranslationError, message):
+                translated(source, "v2")
 
 if __name__ == "__main__":
     unittest.main()

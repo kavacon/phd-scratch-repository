@@ -23,6 +23,7 @@ int main(int argc, char **argv) {
   mlir::registerQCToQIRBase();
   mlir::qc::registerQCPasses();
   existing_ir::registerLowerToQC();
+  existing_ir::registerDistStatus();
   mlir::DialectRegistry registry;
   mlir::registerAllDialects(registry);
   mlir::func::registerInlinerExtension(registry);

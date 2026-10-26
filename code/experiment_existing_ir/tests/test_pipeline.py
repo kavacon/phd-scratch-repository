@@ -1,3 +1,4 @@
+import subprocess
 import unittest
 
 from compiler.parser.parser import parse
@@ -38,11 +39,32 @@ class Pipeline(unittest.TestCase):
         self.assertEqual(set(counts), {1, 5})
         self.assertTrue(all(800 < count < 1200 for count in counts.values()), counts)
 
-    def test_a_conditional_is_refused_by_the_lowering_until_it_becomes_a_select(self):
-        # canonicalize folds the arms and turns the scf.if into arith.select; without it there is no branch on a qubit
-        with self.assertRaises(Exception):
-            simulate.optimise(program(CONDITIONAL, "v2"), "--lower-to-qc")
+    def test_an_in_place_update_shifts_every_outcome(self):
+        # a is 0, 1, 2 or 3, each a quarter of the time; the first result fits a's register, the second needs a wider one
+        for source, outcomes in (("a = 0..4; a -= 1; return a;", {-1, 0, 1, 2}), ("a = 0..4; a += 3; return a;", {3, 4, 5, 6})):
+            counts = simulate.run(program(source, "v2"))
+            self.assertEqual(set(counts), outcomes, source)
+            self.assertTrue(all(400 < count < 600 for count in counts.values()), (source, counts))
 
+    def test_updates_reuse_the_distribution_s_register_however_far_they_widen_it(self):
+        # three constants, the distribution, and for each update only a temporary and a carry: no fresh result register
+        source = program("a = 0..4; a += 3; a += 5; a -= 20; return a;", "v2")
+        lowered = simulate.optimise(source, "--canonicalize", "--lower-to-qc")
+        self.assertEqual(registers(lowered), 3 + 1 + 3 * 2)
+        self.assertEqual(set(simulate.run(source)), {-12, -11, -10, -9})  # 0..3 + 3 + 5 - 20
+
+    def test_adding_a_distribution_in_place_gives_the_distribution_of_the_sum(self):
+        # a is 0..3 and p is 0..1 independently, so a + p is 0 to 4 with weights 1, 2, 2, 2, 1 out of 8
+        counts = simulate.run(program("a = 0..4; p = 0..2; a += p; return a;", "v2"), shots=4000)
+        self.assertEqual(set(counts), {0, 1, 2, 3, 4})
+        for value, weight in zip(range(5), (1, 2, 2, 2, 1)):
+            self.assertAlmostEqual(counts[value] / 4000, weight / 8, delta=0.04, msg=value)
+
+    def test_a_conditional_on_a_definite_value_lowers_only_once_it_has_become_a_select(self):
+        source = "x = 2; if x < 3 { x += 5; } else { x -= 1; } return x;"
+        self.assertEqual(simulate.run(program(source)), {7: 2000})  # canonicalize folds the arms and the select
+        with self.assertRaises(subprocess.CalledProcessError):  # a condition held in qubits cannot be branched on
+            simulate.optimise(program(source), "--lower-to-qc")
 
 if __name__ == "__main__":
     unittest.main()
