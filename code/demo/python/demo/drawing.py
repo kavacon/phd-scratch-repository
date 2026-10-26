@@ -1,5 +1,5 @@
 """
-Data for drawing circuits, shared by the demos (static/circuit.js draws it): one label per wire, and the gates placed
+Data for drawing circuits, shared by the demos (resources/circuit.js draws it): one label per wire, and the gates placed
 in layers. Gates are plain dicts with a `kind` ("x" for an X with controls, "box" for a
 gate on one wire with any controls attached, "block" for a gate on several wires that is not a controlled gate, "meter" for
 a measurement).

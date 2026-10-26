@@ -8,5 +8,4 @@ for folder in helper demo experiment_*; do
   [ -d "$folder/tests" ] || continue
   .venv/bin/python -m unittest discover -s "$folder/tests" -t "$folder" "$@" || status=1
 done
-.venv/bin/python -m unittest discover -s tests -t . "$@" || status=1
 exit $status

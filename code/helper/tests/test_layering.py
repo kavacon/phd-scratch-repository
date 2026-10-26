@@ -11,7 +11,7 @@ import ast
 import unittest
 from pathlib import Path
 
-CODE = Path(__file__).resolve().parents[1]
+CODE = Path(__file__).resolve().parents[2]
 HELPER = ["compiler", "checking"]
 DEMO = ["demo"]
 EXPERIMENTS = {package.name: package for root in sorted(CODE.glob("experiment_*/python")) for package in root.iterdir()
