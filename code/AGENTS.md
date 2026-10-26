@@ -15,16 +15,19 @@ from this directory. `. ./env.sh` puts every folder's Python on the path (each `
 ```
 helper/python/compiler/        the compiler: parser, instruction set, printer, System, Compiler, and passes/
 helper/python/checking/        reference machines and checks that are not part of the compiler (simulate, circuits, qiskit_tools)
-demo/python/demo/              the demo-app framework: model.py (what a demo describes), app.py (server), static/ (the one page)
+demo/python/demo/              the demo-app framework: model.py (what a demo describes), app.py (server)
+demo/resources/                the one generic page that draws a demo (app.html, app.js, app.css, circuit.js)
+helper/resources/              the grammars (grammar_v1.lark, grammar_v2.lark), shared by whatever parses the language
 experiment_<name>/python/experiment_<name>/   one experiment: experiment.py, its passes/, its demos/, anything else specific to it
-<folder>/tests/                that folder's tests; tests/ at this level holds the repository-wide ones (test_layering.py)
+<folder>/tests/                that folder's tests; helper/tests/test_layering.py checks the layering of all of them
 ```
 
-Every folder keeps its Python in `python/` (and any C++ in `cpp/`), and the Python package of an experiment is named
+Every folder keeps its Python in `python/`, any C++ in `cpp/` and its non-code files (grammars, web assets, recorded
+results) in `resources/` or beside the experiment, so none of them depend on a language. The Python package of an experiment is named
 like its folder, so it cannot clash with a standard module (a package called `encodings` would shadow Python's own).
 
 Layers: `compiler < checking < demo < experiment_*`. A package imports only from layers to its left; one experiment never
-imports another; `compiler/` outside `compiler/passes/` never imports a pass. `tests/test_layering.py` enforces it.
+imports another; `compiler/` outside `compiler/passes/` never imports a pass. `helper/tests/test_layering.py` enforces it.
 **If a second experiment needs something, move it down a layer; do not import across experiments.** A test may use
 the experiment that hosts the pipeline it checks (the compiler's pass tests live with `experiment_allocation_poc`).
 
@@ -125,7 +128,7 @@ hovering one highlights the others with the same key.
   light background needs dark text. The page sets them as CSS variables, so every block (and the circuit
   drawing) follows.
 - **Never write HTML or JavaScript in a demo.** If a display is missing, add a block type in `demo/model.py` and a
-  renderer in `demo/static/app.js`, so every demo gets it.
+  renderer in `demo/resources/app.js`, so every demo gets it.
 - Keep compile logic out of the demo: it calls `compiler(...).run(...)`, then describes what came back. The explorer
   builds its stages from `result.stages`; mirror that.
 - Servers handle one request at a time on the main thread on purpose (Qiskit's native allocator crashes when threads

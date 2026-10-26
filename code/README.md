@@ -8,8 +8,10 @@ helper/python/
     passes/      passes any experiment can use: inline, unroll, flatten, balance, rename, ISA lowering, physical allocation,
                  circuit generation (a Qiskit circuit), Qiskit optimisation (the core above does not import them)
   checking/      shared: reference machines (AST and instruction level), gate-level checks, Qiskit/Aer helpers
-demo/python/demo/  shared: the demo app framework. model.py is the data a demo fills in, app.py serves it,
-                 static/ is the one generic page that draws it. Also HTTP server, diffing, circuit drawing
+helper/resources/  the grammars (grammar_v1.lark, grammar_v2.lark), read by the parser and by anything else that parses the language
+demo/python/demo/  shared: the demo app framework. model.py is the data a demo fills in, app.py serves it. Also HTTP server,
+                 diffing, circuit drawing
+demo/resources/  the one generic page that draws a demo (app.html, app.js, app.css, circuit.js)
 experiment_allocation_poc/python/experiment_allocation_poc/
       experiment.py     the pass order, a Compiler, compile_source / compile_circuit, and a CLI. No web code.
       passes/           liveness, release insertion
@@ -25,16 +27,17 @@ experiment_distributions/python/experiment_distributions/
 experiment_existing_ir/python/experiment_existing_ir/
                         Whether an MLIR-based stack can carry the language to circuits: translation to `func` and `arith`, an xDSL
                         lowering to MQT's QC dialect, range analysis. experiment.py, translate.py, rewrites/, dialects/
-<folder>/tests/  each folder's tests; tests/ here holds the repository-wide ones (layering)
+<folder>/tests/  each folder's tests (helper/tests/test_layering.py checks the layering of all of them)
 ```
 
-Every folder keeps its Python in `python/`, and any C++ goes in `cpp/` beside it.
+Every folder keeps its Python in `python/`, any C++ in `cpp/`, and non-code files in `resources/` (or beside the experiment,
+like `experiment_encodings/results/`), so none of them depend on a language.
 
 ## Layering
 
 `compiler` < `checking` < `demo` < `experiment_*`. A package may import from the ones to its left, never the ones
 to its right, and one experiment never imports another. Inside `compiler`, the core does not import `passes`.
-`tests/test_layering.py` enforces this.
+`helper/tests/test_layering.py` enforces this.
 
 An experiment is: `experiment.py` that runs it with plain imports and a `main()`; modules specific to it
 (`passes/`, programs, comparisons); and `demos/` with one file per web app. When a second experiment needs
@@ -46,7 +49,7 @@ A demo is a `demo.app.Demo`: inputs (`Text`, `Number`), cases, steps the viewer 
 function and optional actions. `run(inputs, enabled_steps)` returns a `Result`: stages, each a list of blocks. The page
 draws the blocks and nothing else, so demos never contain HTML or JavaScript. The blocks are `code`, `diff`,
 `metrics`, `stats`, `switcher`, `grid`, `timeline`, `note`, `action`, `diagram` and `columns` (see `demo/model.py`).
-A new kind of display is added once in `demo/model.py` and `demo/static/app.js`, for every demo to use.
+A new kind of display is added once in `demo/model.py` and `demo/resources/app.js`, for every demo to use.
 
 The page loads `/api/bootstrap` (title, inputs, cases, steps, action urls), posts the inputs to `/api/run`, and an
 `action` block posts to the url the bootstrap gave it and draws the blocks that come back.

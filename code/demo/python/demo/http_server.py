@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Type
 
 MAX_BODY_BYTES = 200_000
 _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
-SHARED_STATIC = Path(__file__).parent / "static"  # pages and scripts every experiment's app can use, like circuit.js
+SHARED_STATIC = Path(__file__).resolve().parents[2] / "resources"  # pages and scripts every experiment's app can use, like circuit.js
 
 
 class BadRequest(Exception):

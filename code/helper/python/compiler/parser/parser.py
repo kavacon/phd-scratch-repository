@@ -1,6 +1,6 @@
 """Parsing source text into the typed AST. Passes over the AST are composed in `compiler.pipeline`."""
 import re
-from importlib.resources import files
+from pathlib import Path
 from typing import Dict, List
 
 from lark import Lark, Transformer, v_args
@@ -28,12 +28,15 @@ from compiler.parser.grammar import (
 GRAMMARS = ("v1", "v2")  # resources/grammar_<name>.lark: each is a complete syntax, kept apart so an experiment picks its own
 _parsers: Dict[str, Lark] = {}
 
+# The grammars sit in helper/resources, beside python/ and cpp/, so both can read the one definition of the language.
+RESOURCES = Path(__file__).resolve().parents[3] / "resources"
+
 
 def _parser(grammar: str) -> Lark:
     if grammar not in GRAMMARS:
         raise ValueError(f"no grammar named {grammar!r}: choose from {', '.join(GRAMMARS)}")
     if grammar not in _parsers:
-        text = files("compiler.parser").joinpath(f"resources/grammar_{grammar}.lark").read_text(encoding="utf-8")
+        text = (RESOURCES / f"grammar_{grammar}.lark").read_text(encoding="utf-8")
         _parsers[grammar] = Lark(text, parser="lalr", start="start")
     return _parsers[grammar]
 

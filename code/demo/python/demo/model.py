@@ -1,7 +1,7 @@
 """
 The data model every demo page is built from.
 
-A demo's `run` returns a `Result`: stages, each holding a list of blocks. The page (`static/app.js`) knows how to
+A demo's `run` returns a `Result`: stages, each holding a list of blocks. The page (`resources/app.js`) knows how to
 draw each block type and nothing else, so a demo never ships HTML or JavaScript: it describes what to show in these
 terms, and a new kind of display is added here and in app.js for every demo to use.
 
