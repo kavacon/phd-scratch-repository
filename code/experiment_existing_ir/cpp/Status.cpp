@@ -1,10 +1,10 @@
 // Which distribution values are correlated with which, as groups.
 //
 // A forward dataflow analysis on MLIR's sparse framework. The fact held for each value is the set of `dist.uniform`
-// operations it was computed from (its origins): a uniform has itself, any other operation's results have the union of
-// its operands' origins, and a plain integer has none, so it is definite and joins nothing. The framework merges the
-// sets wherever control flow joins and iterates to a fixed point, so the same analysis keeps working when conditionals
-// and loops carry distributions.
+// operations it was computed from (its origins): a uniform has itself, an instance (independent of its input) has
+// itself, any other operation's results have the union of its operands' origins, and a plain integer has none, so it is
+// definite and joins nothing. The framework merges the sets wherever control flow joins and iterates to a fixed point,
+// so the same analysis keeps working when conditionals and loops carry distributions.
 //
 // Two origins are in the same group when some value depends on both, taken transitively. The pass writes the answer on
 // the operations it concerns, so tests and later passes can read it:
@@ -45,10 +45,11 @@ public:
   LogicalResult visitOperation(Operation *op, ArrayRef<const OriginsLattice *> operands,
                                ArrayRef<OriginsLattice *> results) override {
     Origins origins;
-    if (isa<UniformOp>(op))
+    if (isa<UniformOp, InstanceOp>(op))  // an instance is independent of its input, so it starts a group of its own
       origins.uniforms.insert(op);
-    for (const OriginsLattice *operand : operands)
-      origins = Origins::join(origins, operand->getValue());
+    else
+      for (const OriginsLattice *operand : operands)
+        origins = Origins::join(origins, operand->getValue());
     for (OriginsLattice *result : results)
       // A measured or otherwise plain result is definite again.
       propagateIfChanged(result, result->join(isa<DistType>(result->getAnchor().getType()) ? origins : Origins()));
@@ -84,7 +85,10 @@ struct DistStatus : PassWrapper<DistStatus, OperationPass<func::FuncOp>> {
       auto *lattice = solver.lookupState<OriginsLattice>(value);
       return lattice ? lattice->getValue().uniforms : none;
     };
-    function.walk([&](UniformOp uniform) { parent[uniform] = uniform; });
+    function.walk([&](Operation *op) {
+      if (isa<UniformOp, InstanceOp>(op))
+        parent[op] = op;
+    });
     function.walk([&](Operation *op) {
       for (Value result : op->getResults())
         if (isa<DistType>(result.getType()))

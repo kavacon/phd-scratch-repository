@@ -13,10 +13,11 @@ from compiler.parser.parser import parse
 from experiment_existing_ir import simulate
 from experiment_existing_ir.translate import translate
 
-PASSES = ("--canonicalize", "--dist-status", "--lower-to-qc")
+PASSES = ("--resolve-instances", "--canonicalize", "--in-place-updates", "--dist-status", "--lower-to-qc")
 PROGRAMS = {
     "arithmetic": ("x = 5; y = x + 3; y = y - 1; return y;", "v1"),
     "conditional on a distribution": ("a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;", "v2"),
+    "a computed assignment is an independent instance": ("a = 0..4; c = a + 1; return c - a;", "v2"),
 }
 
 

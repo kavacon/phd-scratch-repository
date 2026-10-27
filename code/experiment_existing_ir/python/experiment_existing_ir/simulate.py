@@ -45,5 +45,6 @@ def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
     return {to_signed(value, width): count for value, count in sorted(counts.items())}
 
 
-def run(program: str, passes: Sequence[str] = ("--canonicalize", "--lower-to-qc"), shots: int = 2000) -> Dict[int, int]:
+def run(program: str, passes: Sequence[str] = ("--resolve-instances", "--canonicalize", "--in-place-updates",
+                                                "--lower-to-qc"), shots: int = 2000) -> Dict[int, int]:
     return execute(optimise(program, *passes), shots)

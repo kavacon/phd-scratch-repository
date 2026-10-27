@@ -369,7 +369,8 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     // 3. The adders needed, at the widths the registers now have.
     std::set<unsigned> adders;
     module.walk([&](Operation *op) {
-      if (isa<arith::AddIOp, arith::SubIOp, existing_ir::dist::AddAssignOp, existing_ir::dist::SubAssignOp>(op))
+      if (isa<arith::AddIOp, arith::SubIOp, existing_ir::dist::AddIOp, existing_ir::dist::SubIOp,
+              existing_ir::dist::AddAssignOp, existing_ir::dist::SubAssignOp>(op))
         adders.insert(widths.lookup(op->getResult(0)));
       // A comparison subtracts in one bit more than its wider operand.
       if (auto cmp = dyn_cast<arith::CmpIOp>(op))
@@ -384,6 +385,7 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     patterns.add<Constant>(&getContext(), widths);
     patterns.add<Sum<arith::AddIOp, false>>(&getContext(), widths);
     patterns.add<Sum<arith::SubIOp, true>>(&getContext(), widths);
+    patterns.add<Sum<existing_ir::dist::AddIOp, false>, Sum<existing_ir::dist::SubIOp, true>>(&getContext(), widths);
     patterns.add<LessThan, DistLessThan, DistMeasure>(&getContext());
     patterns.add<Select, DistSelect, Uniform>(&getContext(), widths);
     patterns.add<Update<existing_ir::dist::AddAssignOp, false>, Update<existing_ir::dist::SubAssignOp, true>>(

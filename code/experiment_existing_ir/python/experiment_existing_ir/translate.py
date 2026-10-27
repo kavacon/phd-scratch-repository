@@ -1,19 +1,25 @@
 """
-Translate a source program (the typed AST from `compiler.parser`) into MLIR text: the standard `func`, `arith` and `scf`
-dialects for definite values, and the `dist` dialect for distributions, which the C++ tool in `cpp/` reads.
+Translate a source program (the typed AST from `compiler.parser`) into MLIR text: the standard `func`, `arith` and
+`scf` dialects for definite values, and the `dist` dialect for distributions, which the C++ tool in `cpp/` reads.
 
 Every integer is given one fixed width, chosen by the front-end, the way a classical front-end gives every `int` its
 declared width. That width is an upper bound: range analysis narrows it later. Results that do not fit wrap, as they do
 in C. Change `WIDTH` (or pass `width`) to try another bound.
 
-A variable is a distribution if it was made by a range (`x = 0..4;`) or changed by an in-place update with one. For now
-that is all that can be done to a distribution: it is created by a range, changed by `+=` or `-=` (the target is
-consumed, the amount is only read), compared in a condition, and read at the return, which measures it. Any other
-assignment involving a distribution is refused (`y = x;`, `y = x + 1;`, overwriting one), because what assignment means for
-a distribution, a copy or the same value, is not settled. Reading a distribution again is fine: readers leave it as it was.
+A variable is a distribution if it was made by a range (`x = 0..4;`) or computed from one. What assignment means for
+one (see the decision "A distribution denotes a law"):
+- a plain name on the right (`b = a;`) is an alias: both names are the same object, so an in-place update through either
+  is seen through both. Definite values are copied, as integers are;
+- a computed value (an expression involving a distribution) assigned to a new variable is marked with `dist.instance`,
+  an independent distribution with the law of the expression. The translation only marks it: a pass, `resolve-instances`,
+  decides how the instance is made;
+- within one expression a distribution is one roll, so `a - a` is zero;
+- `+=` and `-=` update the variable in place, including with another distribution;
+- overwriting a distribution by a plain assignment would drop it and is refused.
 A conditional on a distribution is a `dist.select`, which computes both arms; one on a definite value is an `scf.if`
 that yields the variables either arm changed. Anything else is refused by name, so a later milestone adds it deliberately.
 """
+import itertools
 from typing import Dict, Iterator, List, NamedTuple, Sequence
 
 from compiler.parser.grammar import Assign, BinOp, Distribution, If, Node, Number, Return, Variable
@@ -49,12 +55,21 @@ class _Value(NamedTuple):
 
 
 class _Translator:
-    def __init__(self, width: int, names: _Names, env: Dict[str, _Value]) -> None:
+    """
+    Variables are names bound to cells, and a cell holds the current value. A definite value gets a cell of its own, so
+    copying it copies the value. An alias binds a second name to a distribution's cell, so an update of the cell is seen
+    through both names.
+    """
+
+    def __init__(self, width: int, names: _Names, cell_ids: Iterator[int], cells: Dict[int, _Value],
+                 bindings: Dict[str, int]) -> None:
         self.width = width
         self.type = f"i{width}"
         self.names = names
+        self.cell_ids = cell_ids
         self.lines: List[str] = []
-        self.env = env  # variable name -> the value that holds it now
+        self.cells = cells
+        self.bindings = bindings
 
     def emit(self, text: str, type: str) -> _Value:
         """Add an operation that produces one value."""
@@ -72,18 +87,18 @@ class _Translator:
         return self.emit(f"arith.constant {value} : {self.type}", self.type)
 
     def read(self, name: str) -> _Value:
-        if name not in self.env:
+        if name not in self.bindings:
             raise TranslationError(f"{name} is used before it is assigned")
-        return self.env[name]
+        return self.cells[self.bindings[name]]
 
-    def binary(self, node: BinOp, in_condition: bool) -> _Value:
+    def binary(self, node: BinOp) -> _Value:
         left, right = self.expression(node.left), self.expression(node.right)
         if left.dist or right.dist:
-            if node.op != "<" or not in_condition:
-                raise TranslationError(f"'{node.op}' on a distribution is only supported as an in-place update (+= or "
-                                       "-=) or, for '<', in a condition")
-            result = self.distribution("i1")
-            return self.emit(f"dist.slt {left.ssa}, {right.ssa} : {left.type}, {right.type} -> {result}", result)
+            name = {"+": "dist.addi", "-": "dist.subi", "<": "dist.slt"}.get(node.op)
+            if name is None:
+                raise TranslationError(f"operator {node.op!r} is not supported on a distribution yet")
+            result = self.distribution("i1" if node.op == "<" else self.type)
+            return self.emit(f"{name} {left.ssa}, {right.ssa} : {left.type}, {right.type} -> {result}", result)
         if node.op == "<":
             return self.emit(f"arith.cmpi slt, {left.ssa}, {right.ssa} : {self.type}", "i1")
         name = {"+": "arith.addi", "-": "arith.subi"}.get(node.op)
@@ -91,7 +106,7 @@ class _Translator:
             raise TranslationError(f"operator {node.op!r} is not supported yet")
         return self.emit(f"{name} {left.ssa}, {right.ssa} : {self.type}", self.type)
 
-    def expression(self, node: Node, in_condition: bool = False) -> _Value:
+    def expression(self, node: Node) -> _Value:
         if isinstance(node, Number):
             if not isinstance(node.value, int):
                 raise TranslationError("only integer constants are supported yet")
@@ -99,7 +114,7 @@ class _Translator:
         if isinstance(node, Variable):
             return self.read(node.name)
         if isinstance(node, BinOp):
-            return self.binary(node, in_condition)
+            return self.binary(node)
         if isinstance(node, Distribution):
             start, stop = node.start.value, node.stop.value
             if stop <= start:
@@ -111,26 +126,26 @@ class _Translator:
 
     def branch(self, statements: Sequence[Node]) -> "_Translator":
         """The statements of one arm, translated on a copy of the variables."""
-        inner = _Translator(self.width, self.names, dict(self.env))
+        inner = _Translator(self.width, self.names, self.cell_ids, dict(self.cells), dict(self.bindings))
         for statement in statements:
             inner.statement(statement)
         return inner
 
     def conditional(self, node: If) -> None:
-        condition = self.expression(node.condition, in_condition=True)
+        condition = self.expression(node.condition)
         then, otherwise = self.branch(node.body), self.branch(node.orelse)
-        changed = [name for name in self.env if then.env[name] != self.env[name] or otherwise.env[name] != self.env[name]]
+        changed = [cell for cell in self.cells if then.cells[cell] != self.cells[cell] or otherwise.cells[cell] != self.cells[cell]]
         if condition.dist:
             self.select(condition, changed, then, otherwise)
         else:
             self.branch_on_definite(condition, changed, then, otherwise)
 
-    def select(self, condition: _Value, changed: List[str], then: "_Translator", otherwise: "_Translator") -> None:
-        """Both arms are computed, and one `dist.select` picks each changed variable's value, reading the condition once."""
+    def select(self, condition: _Value, changed: List[int], then: "_Translator", otherwise: "_Translator") -> None:
+        """Both arms are computed, and one `dist.select` picks each changed cell's value, using the condition once."""
         self.lines += then.lines + otherwise.lines
         if not changed:
             return
-        trues, falses = [then.env[name] for name in changed], [otherwise.env[name] for name in changed]
+        trues, falses = [then.cells[cell] for cell in changed], [otherwise.cells[cell] for cell in changed]
         result_type = self.distribution(self.type)
         results = next(self.names)
         count = f":{len(changed)}" if len(changed) > 1 else ""
@@ -139,19 +154,19 @@ class _Translator:
             f"{results}{count} = dist.select {condition.ssa}, ({join(trues, lambda v: v.ssa)}), "
             f"({join(falses, lambda v: v.ssa)}) : {condition.type}, ({join(trues, lambda v: v.type)}), "
             f"({join(falses, lambda v: v.type)}) -> ({', '.join([result_type] * len(changed))})")
-        for index, name in enumerate(changed):
-            self.env[name] = _Value(f"{results}#{index}" if len(changed) > 1 else results, result_type)
+        for index, cell in enumerate(changed):
+            self.cells[cell] = _Value(f"{results}#{index}" if len(changed) > 1 else results, result_type)
 
-    def branch_on_definite(self, condition: _Value, changed: List[str], then: "_Translator",
+    def branch_on_definite(self, condition: _Value, changed: List[int], then: "_Translator",
                            otherwise: "_Translator") -> None:
-        if any(arm.env[name].dist or self.env[name].dist for arm in (then, otherwise) for name in changed):
+        if any(arm.cells[cell].dist or self.cells[cell].dist for arm in (then, otherwise) for cell in changed):
             raise TranslationError("a conditional on a definite value that changes a distribution is not supported yet")
         types = ", ".join([self.type] * len(changed))
 
         def arm(translated: "_Translator") -> List[str]:
             lines = translated.lines
             if changed:
-                lines = lines + [f"scf.yield {', '.join(translated.env[name].ssa for name in changed)} : {types}"]
+                lines = lines + [f"scf.yield {', '.join(translated.cells[cell].ssa for cell in changed)} : {types}"]
             return ["  " + line for line in lines]
 
         if not changed:
@@ -161,36 +176,50 @@ class _Translator:
         count = f":{len(changed)}" if len(changed) > 1 else ""
         self.lines += [f"{results}{count} = scf.if {condition.ssa} -> ({types}) {{", *arm(then), "} else {",
                        *arm(otherwise), "}"]
-        for index, name in enumerate(changed):
-            self.env[name] = _Value(f"{results}#{index}" if len(changed) > 1 else results, self.type)
+        for index, cell in enumerate(changed):
+            self.cells[cell] = _Value(f"{results}#{index}" if len(changed) > 1 else results, self.type)
 
     def update(self, node: Assign) -> None:
         """`name += amount;` or `name -= amount;`, which the parser gives as `name = name + amount` marked in place."""
-        target, amount = self.read(node.name), self.expression(node.value.right)
+        cell = self.bindings.get(node.name)
+        if cell is None:
+            raise TranslationError(f"{node.name} is used before it is assigned")
+        target, amount = self.cells[cell], self.expression(node.value.right)
         name = {"+": "add_assign", "-": "sub_assign"}[node.value.op]
         if not (target.dist or amount.dist):
-            self.env[node.name] = self.emit(f"arith.{'addi' if name == 'add_assign' else 'subi'} {target.ssa}, "
-                                            f"{amount.ssa} : {self.type}", self.type)
+            self.cells[cell] = self.emit(f"arith.{'addi' if name == 'add_assign' else 'subi'} {target.ssa}, "
+                                         f"{amount.ssa} : {self.type}", self.type)
             return
         if target.ssa == amount.ssa:
-            raise TranslationError(f"{node.name} {node.value.op}= {node.name} adds a distribution to itself, which is not "
+            raise TranslationError(f"{node.name} {node.value.op}= ... adds a distribution to itself, which is not "
                                    "supported yet")
         result = self.distribution(self.type)
-        self.env[node.name] = self.emit(
+        self.cells[cell] = self.emit(
             f"dist.{name} {target.ssa}, {amount.ssa} : {target.type}, {amount.type} -> {result}", result)
+
+    def assign(self, node: Assign) -> None:
+        held = self.cells.get(self.bindings.get(node.name, -1))
+        if held is not None and held.dist:
+            raise TranslationError(f"assigning to {node.name} would drop the distribution it holds; only an in-place "
+                                   "update changes one")
+        if isinstance(node.value, Variable) and self.read(node.value.name).dist:  # an alias of a distribution
+            self.bindings[node.name] = self.bindings[node.value.name]
+            return
+        value = self.expression(node.value)
+        if value.dist and not isinstance(node.value, Distribution):  # a computed value: an independent instance
+            result = value.type
+            value = self.emit(f"dist.instance {value.ssa} : {result} -> {result}", result)
+        if node.name in self.bindings:  # a definite name owns its cell, so this overwrites its value
+            self.cells[self.bindings[node.name]] = value
+        else:
+            self.bindings[node.name] = next(self.cell_ids)
+            self.cells[self.bindings[node.name]] = value
 
     def statement(self, node: Node) -> None:
         if isinstance(node, Assign) and node.inplace:
             self.update(node)
         elif isinstance(node, Assign):
-            if self.env.get(node.name, _Value("", "")).dist:
-                raise TranslationError(f"assigning to {node.name} would drop the distribution it holds; only an in-place "
-                                       "update changes one yet")
-            value = self.expression(node.value)
-            if value.dist and not isinstance(node.value, Distribution):
-                raise TranslationError(f"{node.name} = ... would copy or derive a distribution; only a range or an "
-                                       "in-place update (+=, -=) creates or changes one yet")
-            self.env[node.name] = value
+            self.assign(node)
         elif isinstance(node, If):
             self.conditional(node)
         else:
@@ -205,11 +234,11 @@ class _Translator:
                 self.statement(statement)
         if returned is None:
             raise TranslationError("a program must end with a return")
-        if returned.dist:  # reading a distribution measures it
+        if returned.dist:  # using a distribution as the result measures it
             returned = self.emit(f"dist.measure {returned.ssa} : {returned.type} -> {self.type}", self.type)
         body = ["  " + line for line in [*self.lines, f"func.return {returned.ssa} : {self.type}"]]
         return "\n".join([f"func.func @main() -> {self.type} {{", *body, "}"])
 
 
 def translate(program: Sequence[Node], width: int = WIDTH) -> str:
-    return _Translator(width, _Names(), {}).program(program)
+    return _Translator(width, _Names(), itertools.count(), {}, {}).program(program)

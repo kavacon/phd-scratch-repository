@@ -48,7 +48,15 @@ template <typename Op> static LogicalResult verifyBinary(Op op, bool comparison)
     return op.emitOpError("has the wrong result element type: expected ") << expected;
   return success();
 }
+LogicalResult AddIOp::verify() { return verifyBinary(*this, false); }
+LogicalResult SubIOp::verify() { return verifyBinary(*this, false); }
 LogicalResult SltOp::verify() { return verifyBinary(*this, true); }
+
+LogicalResult InstanceOp::verify() {
+  if (getInput().getType() != getResult().getType())
+    return emitOpError("needs a result of the type of its input");
+  return success();
+}
 
 // An update consumes its target: it is changed in place, so every other use of it must come before the update, in the
 // same block, and the amount must be a different value.
@@ -95,6 +103,15 @@ static unsigned widthOf(Type type) { return elementOf(type).getIntOrFloatBitWidt
 void UniformOp::inferResultRanges(ArrayRef<ConstantIntRanges>, SetIntRangeFn setResultRange) {
   unsigned width = widthOf(getResult().getType());
   setResultRange(getResult(), ConstantIntRanges::fromSigned(APInt(width, getStart(), true), APInt(width, getStop() - 1, true)));
+}
+void AddIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), intrange::inferAdd(ranges));
+}
+void SubIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), intrange::inferSub(ranges));
+}
+void InstanceOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), ranges[0]);
 }
 void AddAssignOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   setResultRange(getResult(), intrange::inferAdd(ranges));
