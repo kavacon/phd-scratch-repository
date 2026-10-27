@@ -22,4 +22,6 @@ namespace existing_ir {
 // Registers the passes of this project.
 void registerLowerToQC();
 void registerDistStatus();
+void registerInstances();
+void registerInPlaceUpdates();
 } // namespace existing_ir

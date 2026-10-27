@@ -77,11 +77,30 @@ class Translate(unittest.TestCase):
         with self.assertRaisesRegex(TranslationError, "does not fit in i8"):
             translated("x = 300; return x;", width=8)
 
-    def test_only_a_range_and_an_in_place_update_create_or_change_a_distribution_for_now(self):
-        for source, message in (("a = 0..4; b = a; return b;", "would copy or derive"),
-                                ("a = 0..4; b = a + 1; return b;", "only supported as an in-place update"),
-                                ("a = 0..4; a = 5; return a;", "would drop"),
-                                ("a = 0..4; a += a; return a;", "to itself")):
+    def test_a_plain_name_is_an_alias_so_an_update_through_one_name_is_seen_through_the_other(self):
+        self.assertEqual(translated("a = 0..4; b = a; b += 1; return a;", "v2"), """func.func @main() -> i32 {
+  %0 = dist.uniform 0, 4 : !dist.dist<i32>
+  %1 = arith.constant 1 : i32
+  %2 = dist.add_assign %0, %1 : !dist.dist<i32>, i32 -> !dist.dist<i32>
+  %3 = dist.measure %2 : !dist.dist<i32> -> i32
+  func.return %3 : i32
+}""")
+
+    def test_a_computed_value_assigned_to_a_new_variable_is_marked_as_an_instance(self):
+        self.assertEqual(translated("a = 0..4; c = a + 1; return c - a;", "v2"), """func.func @main() -> i32 {
+  %0 = dist.uniform 0, 4 : !dist.dist<i32>
+  %1 = arith.constant 1 : i32
+  %2 = dist.addi %0, %1 : !dist.dist<i32>, i32 -> !dist.dist<i32>
+  %3 = dist.instance %2 : !dist.dist<i32> -> !dist.dist<i32>
+  %4 = dist.subi %3, %0 : !dist.dist<i32>, !dist.dist<i32> -> !dist.dist<i32>
+  %5 = dist.measure %4 : !dist.dist<i32> -> i32
+  func.return %5 : i32
+}""")
+
+    def test_dropping_a_distribution_or_adding_it_to_itself_is_refused(self):
+        for source, message in (("a = 0..4; a = 5; return a;", "would drop"),
+                                ("a = 0..4; a += a; return a;", "to itself"),
+                                ("a = 0..4; b = a; b += a; return b;", "to itself")):
             with self.assertRaisesRegex(TranslationError, message):
                 translated(source, "v2")
 
