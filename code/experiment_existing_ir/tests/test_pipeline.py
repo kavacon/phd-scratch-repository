@@ -125,6 +125,16 @@ class Pipeline(unittest.TestCase):
         self.assertIn("dist.groups = 2 : i64", simulate.optimise(source, "--dist-status"))
         self.assertIn("dist.groups = 1 : i64", simulate.optimise(source, "--tie-instances", "--dist-status"))
 
+    def test_a_loop_is_unrolled_into_straight_line_code_that_gives_the_sum_of_its_iterations(self):
+        # 0 + 1 + 2 + 3, then a nest (i + j over 3 x 3 is 18) and a loop that runs no times; each is folded or lowered whole
+        for source, value in (("s = 0; for i in 0..4 { s += i; } return s;", 6),
+                              ("s = 0; for i in 0..3 { for j in 0..3 { t = i + j; s += t; } } return s;", 18),
+                              ("s = 5; for i in 2..2 { s += 1; } return s;", 5),
+                              ("a = 1; b = 10; for i in 0..3 { a += i; b -= a; } return b;", 10 - 1 - 2 - 4)):
+            self.assertEqual(simulate.run(program(source), shots=100), {value: 100}, source)
+        unrolled = simulate.optimise(program("s = 0; for i in 0..4 { s += i; } return s;"), simulate.UNROLL)
+        self.assertNotIn("affine.for", unrolled)
+
     def test_a_conditional_on_a_definite_value_lowers_only_once_it_has_become_a_select(self):
         source = "x = 2; if x < 3 { x += 5; } else { x -= 1; } return x;"
         self.assertEqual(simulate.run(program(source)), {7: 2000})  # canonicalize folds the arms and the select
