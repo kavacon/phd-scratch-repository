@@ -75,6 +75,14 @@ class Translate(unittest.TestCase):
             with self.assertRaisesRegex(TranslationError, message):
                 translated(source, "v2")
 
+    def test_an_integer_from_outside_a_branch_or_loop_may_not_become_a_distribution_inside_it_yet(self):
+        for source in ("a = 0..4; x = 2; if x < 3 { x += a; } return x;",
+                       "a = 0..4; x = 2; for i in 0..3 { x += a; } return x;",
+                       "a = 0..4; b = 0..2; x = 2; if b < 1 { x += a; } return x;"):
+            with self.assertRaisesRegex(TranslationError, "integer to a distribution"):
+                translated(source, "v2")
+        translated("a = 0..4; s = 0; if s < 1 { y = 1; y += a; } return s;", "v2")  # a variable of the branch's own may
+
     def test_dropping_a_distribution_or_adding_it_to_itself_is_refused(self):
         for source, message in (("a = 0..4; a = 5; return a;", "would drop"),
                                 ("a = 0..4; a += a; return a;", "to itself"),
