@@ -18,6 +18,7 @@ PROGRAMS = {
     "arithmetic": ("x = 5; y = x + 3; y = y - 1; return y;", "v1"),
     "conditional on a distribution": ("a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;", "v2"),
     "a loop with a classical bound": ("s = 0; for i in 0..4 { s += i; } return s;", "v1"),
+    "a call shares a distribution argument": ("function bump(p) { p += 1; return p; }\na = 0..4; b = bump(a); return a;", "v2"),
     "a computed assignment is an independent instance": ("a = 0..4; c = a + 1; return c - a;", "v2"),
 }
 
