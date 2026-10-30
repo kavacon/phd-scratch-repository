@@ -140,6 +140,21 @@ class Pipeline(unittest.TestCase):
         unrolled = optimise(program("s = 0; for i in 0..4 { s += i; } return s;"), simulate.UNROLL)
         self.assertNotIn("affine.for", unrolled)
 
+    def test_a_call_copies_a_definite_argument_and_shares_a_distribution_argument(self):
+        # a definite argument is a copy, so the caller's x stays 2 and the result is 2 + 5
+        self.assertEqual(simulate.run(program("function f(p) { p += 3; return p; }\nx = 2; y = f(x); return x + y;", "v2"),
+                                      shots=100), {7: 100})
+        # a distribution is passed as itself, so the callee's update is the caller's, and a result that is the parameter
+        # is the same object: a is 0..3, bump makes it 1..4, and b += 10 makes it 11..14
+        bump = "function bump(p) { p += 1; return p; }\n"
+        self.assertEqual(set(simulate.run(program(bump + "a = 0..4; b = bump(a); return a;", "v2"))), {1, 2, 3, 4})
+        self.assertEqual(set(simulate.run(program(bump + "a = 0..4; b = bump(a); b += 10; return a;", "v2"))),
+                         {11, 12, 13, 14})
+        # a result that is computed (p + 1) is a new instance, independent of its argument, so c - a spreads from -2 to 4
+        plus = "function plus(p) { return p + 1; }\n"
+        self.assertEqual(set(simulate.run(program(plus + "a = 0..4; c = plus(a); return c - a;", "v2"), shots=4000)),
+                         set(range(-2, 5)))
+
     def test_a_conditional_on_a_definite_value_lowers_only_once_it_has_become_a_select(self):
         source = "x = 2; if x < 3 { x += 5; } else { x -= 1; } return x;"
         self.assertEqual(simulate.run(program(source)), {7: 2000})  # canonicalize folds the arms and the select

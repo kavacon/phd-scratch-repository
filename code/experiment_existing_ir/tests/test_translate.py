@@ -10,8 +10,8 @@ def translated(source: str, grammar: str = "v1", **options) -> str:
 
 
 def promoted(source: str, grammar: str = "v1") -> str:
-    """The translation with its loops unrolled and its slots promoted to values, which is where the passes start."""
-    return simulate.optimise(translated(source, grammar), *simulate.PREPARE).rstrip("\n")
+    """The translation with its loops unrolled and its slots promoted to values, without inlining (which also tidies)."""
+    return simulate.optimise(translated(source, grammar), simulate.UNROLL, simulate.PROMOTE).rstrip("\n")
 
 
 class Translate(unittest.TestCase):
@@ -67,6 +67,13 @@ class Translate(unittest.TestCase):
             translated("a = 0..4; for i in 0..3 { a += 1; } return a;", "v2")
         with self.assertRaisesRegex(TranslationError, "cannot be unrolled"):
             translated("s = 0; for i in 0..200 { for j in 0..100 { s += 1; } } return s;")
+
+    def test_a_call_must_name_a_function_with_that_many_parameters_and_not_recurse(self):
+        for source, message in (("return g(1);", "is not a function"),
+                                ("function f(p) { return p; }\nreturn f(1, 2);", "takes 1 argument"),
+                                ("function f(p) { return f(p); }\nreturn f(1);", "calls itself")):
+            with self.assertRaisesRegex(TranslationError, message):
+                translated(source, "v2")
 
     def test_dropping_a_distribution_or_adding_it_to_itself_is_refused(self):
         for source, message in (("a = 0..4; a = 5; return a;", "would drop"),
