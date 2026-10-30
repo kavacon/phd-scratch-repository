@@ -49,6 +49,17 @@ def Dist_UniformOp : Dist_Op<"uniform"> {
   let hasVerifier = 1;
 }
 
+// An integer taken as a one-point distribution. Physically nothing changes: a definite value and a distribution are both a
+// register, and this only says that the value may now be updated in place together with distributions. It creates a new
+// object, so two lifts of the same integer stay two (as for a range), and `recover-definite` turns what was lifted
+// without ever being made superposed back into integers.
+def Dist_LiftOp : Dist_Op<"lift"> {
+  let arguments = (ins AnySignlessInteger:$input);
+  let results = (outs Res<Dist_Dist, "a new independent distribution", [MemAlloc]>:$result);
+  let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
+  let hasVerifier = 1;
+}
+
 class Dist_BinaryOp<string mnemonic> : Dist_PureOp<mnemonic> {
   let arguments = (ins Dist_DistOrInt:$lhs, Dist_DistOrInt:$rhs);
   let results = (outs Dist_Dist:$result);

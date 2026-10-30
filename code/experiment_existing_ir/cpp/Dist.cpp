@@ -1,4 +1,5 @@
 #include "Dialects.h"
+#include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/InliningUtils.h"
 #include "mlir/Interfaces/Utils/InferIntRangeCommon.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -64,6 +65,12 @@ LogicalResult AddIOp::verify() { return verifyBinary(*this, false); }
 LogicalResult SubIOp::verify() { return verifyBinary(*this, false); }
 LogicalResult SltOp::verify() { return verifyBinary(*this, true); }
 
+LogicalResult LiftOp::verify() {
+  if (elementOf(getResult().getType()) != getInput().getType())
+    return emitOpError("needs a distribution whose element type is the integer's type");
+  return success();
+}
+
 LogicalResult InstanceOp::verify() {
   if (getInput().getType() != getResult().getType())
     return emitOpError("needs a result of the type of its input");
@@ -80,12 +87,14 @@ template <typename Op> static LogicalResult verifyUpdate(Op op) {
     return op.emitOpError("needs operands and a result with the same element type");
   if (op.getTarget() == op.getAmount())
     return op.emitOpError("cannot add a value to itself in place");
-  // Only a distribution is consumed; a plain target is a value other variables may share, and the lowering then
-  // updates a copy.
-  if (isa<DistType>(op.getTarget().getType()))
+  // Only a distribution is consumed. A use that the update dominates would see the updated register, so it is refused; a
+  // use before it, or in the other arm of a branch, does not.
+  if (isa<DistType>(op.getTarget().getType())) {
+    DominanceInfo dominance(op->getParentOp());
     for (OpOperand &use : op.getTarget().getUses())
-      if (use.getOwner() != op && (use.getOwner()->getBlock() != op->getBlock() || !use.getOwner()->isBeforeInBlock(op)))
+      if (use.getOwner() != op && dominance.properlyDominates(op.getOperation(), use.getOwner()))
         return use.getOwner()->emitOpError("uses a distribution after it was updated in place");
+  }
   return success();
 }
 LogicalResult AddAssignOp::verify() { return verifyUpdate(*this); }
@@ -121,6 +130,9 @@ void AddIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn
 }
 void SubIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   setResultRange(getResult(), intrange::inferSub(ranges));
+}
+void LiftOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), ranges[0]);
 }
 void InstanceOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   setResultRange(getResult(), ranges[0]);
