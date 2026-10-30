@@ -321,6 +321,21 @@ class _Translator:
         value = self.expression(node)
         return value, None, "fresh" if isinstance(node, Distribution) else "value"
 
+    def retypable(self, name: str) -> bool:
+        """
+        Whether a variable may change from an integer to a distribution here. That is a new slot and a new binding, which
+        the code after this region only sees if the variable belongs to the region. A variable from outside a branch or a
+        loop would be an integer on one path and a distribution on the other.
+        """
+        bound = self.bindings[name]
+        if self.shadow is not None:
+            return bound not in self.outer
+        return not self.nested or bound >= self.region_start
+
+    def retype_refusal(self, name: str) -> TranslationError:
+        return TranslationError(f"{name} changes from an integer to a distribution inside a branch or a loop it was "
+                                "made outside of, which is not supported yet")
+
     def check_writable(self, name: str) -> None:
         if self.bindings[name] in self.readonly:
             raise TranslationError(f"the loop variable {name} cannot be assigned to inside its loop")
@@ -424,8 +439,14 @@ class _Translator:
             result = self.emit(f"arith.{'addi' if name == 'add_assign' else 'subi'} {target.ssa}, "
                                f"{amount.ssa} : {self.type}", self.type)
         else:
-            if not target.dist:
-                raise TranslationError(f"{node.name} holds an integer, which cannot be updated by a distribution yet")
+            if not target.dist:  # an integer updated by a distribution becomes a distribution, in a slot of that type
+                if not self.retypable(node.name):
+                    raise self.retype_refusal(node.name)
+                result_type = self.distribution(self.type)
+                result = self.emit(
+                    f"dist.{name} {target.ssa}, {amount.ssa} : {target.type}, {amount.type} -> {result_type}", result_type)
+                self.store(self.new_slot(node.name, result_type), result)
+                return
             right = node.value.right
             if isinstance(right, Variable) and self.bindings.get(right.name) == self.bindings[node.name]:
                 raise TranslationError(f"{node.name} {node.value.op}= ... adds a distribution to itself, which is not "
@@ -463,6 +484,11 @@ class _Translator:
             return
         self.check_writable(node.name)
         if held.type != value.type:
+            if value.dist:  # an integer variable that now holds a distribution
+                if not self.retypable(node.name):
+                    raise self.retype_refusal(node.name)
+                self.store(self.new_slot(node.name, value.type), value)
+                return
             raise TranslationError(f"{node.name} holds {held.type}, which cannot take a value of type {value.type}")
         self.store(self.slot_id(node.name), value)
 

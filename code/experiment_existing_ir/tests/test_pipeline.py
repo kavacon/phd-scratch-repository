@@ -140,6 +140,13 @@ class Pipeline(unittest.TestCase):
         unrolled = optimise(program("s = 0; for i in 0..4 { s += i; } return s;"), simulate.UNROLL)
         self.assertNotIn("affine.for", unrolled)
 
+    def test_an_integer_becomes_a_distribution_when_a_distribution_is_added_to_or_assigned_to_it(self):
+        # += keeps x tied to a, so the difference is always 2; assigning a computed value is an independent instance
+        self.assertEqual(simulate.run(program("a = 0..4; x = 2; x += a; return x - a;", "v2"), shots=200), {2: 200})
+        self.assertEqual(simulate.run(program("a = 0..4; x = 2; x -= a; return x + a;", "v2"), shots=200), {2: 200})
+        counts = simulate.run(program("a = 0..4; x = 2; x = a + 1; return x - a;", "v2"), shots=4000)
+        self.assertEqual(set(counts), set(range(-2, 5)))
+
     def test_conditionals_and_loops_on_definite_values_nest_in_either_order(self):
         # i < 2 adds 10 twice and the rest add 1 twice; a nest counts the pairs i < j; a local reset each pass; a loop in an arm
         for source, value in (("s = 0; for i in 0..4 { if i < 2 { s += 10; } else { s += 1; } } return s;", 22),
