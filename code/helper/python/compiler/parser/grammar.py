@@ -104,7 +104,7 @@ class If(Node):
 @dataclass(frozen=True)
 class Param(Node):
     name: str
-    type: str
+    type: Optional[str] = None  # grammar v2 has none
 
 
 @dataclass(frozen=True)

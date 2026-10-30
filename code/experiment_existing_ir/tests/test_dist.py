@@ -23,7 +23,7 @@ READ_AFTER_UPDATE = "func.func @main() -> i32 {\n" + HEADER + """  %3 = dist.add
 
 
 def status(source: str) -> str:
-    return simulate.optimise(translate(parse(source, "v2")), "--dist-status")
+    return simulate.optimise(translate(parse(source, "v2")), *simulate.PREPARE, "--dist-status")
 
 
 @unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")

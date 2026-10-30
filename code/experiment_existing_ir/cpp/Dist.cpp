@@ -1,4 +1,5 @@
 #include "Dialects.h"
+#include "mlir/Transforms/InliningUtils.h"
 #include "mlir/Interfaces/Utils/InferIntRangeCommon.h"
 #include "llvm/ADT/TypeSwitch.h"
 
@@ -11,6 +12,16 @@ using namespace existing_ir::dist;
 #define GET_OP_CLASSES
 #include "DistOps.cpp.inc"
 
+namespace {
+// Every operation may be inlined: none of them depends on where it sits, so a call that holds them can be replaced by the
+// callee's body.
+struct DistInliner : DialectInlinerInterface {
+  using DialectInlinerInterface::DialectInlinerInterface;
+  bool isLegalToInline(Operation *, Region *, bool, IRMapping &) const final { return true; }
+  bool isLegalToInline(Region *, Region *, bool, IRMapping &) const final { return true; }
+};
+} // namespace
+
 void DistDialect::initialize() {
   addTypes<
 #define GET_TYPEDEF_LIST
@@ -20,6 +31,7 @@ void DistDialect::initialize() {
 #define GET_OP_LIST
 #include "DistOps.cpp.inc"
       >();
+  addInterfaces<DistInliner>();
 }
 
 // The integer a type stands for: the element of a distribution, or the integer itself.

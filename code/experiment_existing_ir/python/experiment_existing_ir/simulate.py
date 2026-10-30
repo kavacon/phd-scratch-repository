@@ -24,6 +24,13 @@ TOOL = Path(__file__).resolve().parents[3] / "build/experiment_existing_ir/exist
 UNROLL = "func.func(affine-loop-unroll{unroll-factor=-1 unroll-num-reps=%d})" % MAX_DEPTH
 
 
+# Turns the slots of the translation into SSA values, so every pass after it sees values. A loop has to be unrolled first,
+# since the pass does not promote across an `affine.for`.
+PROMOTE = "func.func(mem2reg)"
+# What the translation needs before anything else: loops unrolled, then slots promoted.
+PREPARE = (UNROLL, PROMOTE)
+
+
 def built() -> bool:
     return TOOL.exists()
 
@@ -68,6 +75,6 @@ def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
     return {to_signed(value, width): count for value, count in sorted(counts.items())}
 
 
-def run(program: str, passes: Sequence[str] = (UNROLL, "--resolve-instances", "--canonicalize", "--in-place-updates",
+def run(program: str, passes: Sequence[str] = (*PREPARE, "--resolve-instances", "--canonicalize", "--in-place-updates",
                                                 "--lower-to-qc"), shots: int = 2000) -> Dict[int, int]:
     return execute(optimise(program, *passes), shots)
