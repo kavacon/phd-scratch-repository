@@ -140,6 +140,14 @@ class Pipeline(unittest.TestCase):
         unrolled = optimise(program("s = 0; for i in 0..4 { s += i; } return s;"), simulate.UNROLL)
         self.assertNotIn("affine.for", unrolled)
 
+    def test_conditionals_and_loops_on_definite_values_nest_in_either_order(self):
+        # i < 2 adds 10 twice and the rest add 1 twice; a nest counts the pairs i < j; a local reset each pass; a loop in an arm
+        for source, value in (("s = 0; for i in 0..4 { if i < 2 { s += 10; } else { s += 1; } } return s;", 22),
+                              ("s = 0; for i in 0..3 { for j in 0..3 { if i < j { s += 1; } } } return s;", 3),
+                              ("s = 0; for i in 0..4 { t = 1; if i < 2 { t = 5; } s += t; } return s;", 12),
+                              ("s = 0; x = 1; if x < 3 { for i in 0..4 { s += i; } } else { s += 100; } return s;", 6)):
+            self.assertEqual(simulate.run(program(source), shots=100), {value: 100}, source)
+
     def test_a_call_copies_a_definite_argument_and_shares_a_distribution_argument(self):
         # a definite argument is a copy, so the caller's x stays 2 and the result is 2 + 5
         self.assertEqual(simulate.run(program("function f(p) { p += 3; return p; }\nx = 2; y = f(x); return x + y;", "v2"),
