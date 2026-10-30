@@ -79,7 +79,7 @@ class _ToGrammar(Transformer):
     def type(self, name):
         return str(name)
 
-    def param(self, name, type_):
+    def param(self, name, type_=None):  # grammar v1 declares a type, v2 does not
         return Param(str(name), type_)
 
     def assignment(self, name, value):

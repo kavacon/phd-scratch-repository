@@ -71,7 +71,7 @@ def _stmt(node: Node, depth: int) -> List[str]:
         return [f"{pad}for {node.var} in {_expr(node.start)} .. {_expr(node.stop)} {{"] \
             + _block(node.body, depth + 1) + [f"{pad}}}"]
     if isinstance(node, FunctionDef):
-        params = ", ".join(f"{p.name}: {p.type}" for p in node.params)
+        params = ", ".join(f"{p.name}: {p.type}" if p.type else p.name for p in node.params)
         returns = f": {node.return_type}" if node.return_type else ""
         return [f"{pad}function {node.name}({params}){returns} {{"] + _block(node.body, depth + 1) + [f"{pad}}}"]
     raise TypeError(f"Cannot print {type(node).__name__}")

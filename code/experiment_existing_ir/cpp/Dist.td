@@ -12,6 +12,7 @@
 // integers stays in `arith`. The result is always a distribution, correlated with every distribution operand.
 include "mlir/IR/OpBase.td"
 include "mlir/IR/AttrTypeBase.td"
+include "mlir/IR/BuiltinTypeInterfaces.td"
 include "mlir/Interfaces/InferIntRangeInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
@@ -21,7 +22,7 @@ def Dist_Dialect : Dialect {
   let useDefaultTypePrinterParser = 1;
 }
 
-def Dist_DistType : TypeDef<Dist_Dialect, "Dist"> {
+def Dist_DistType : TypeDef<Dist_Dialect, "Dist", [MemRefElementTypeInterface]> {
   let summary = "a superposition of integers of the element type";
   let mnemonic = "dist";
   let parameters = (ins "::mlir::Type":$element);

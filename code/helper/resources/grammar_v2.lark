@@ -13,13 +13,13 @@ assignment: NAME "=" expr ";"
 update_stmt: NAME "+=" expr ";"   -> add_update
            | NAME "-=" expr ";"   -> sub_update
 
-function_def: "function" NAME "(" params? ")" return_type? function_body
+// v2 declares no types on a function: every value in the language is inferred, and a function is inlined, so a signature
+// would say nothing the body does not. A parameter is a name.
+function_def: "function" NAME "(" params? ")" function_body
 function_body: "{" statement* return_stmt "}"
 
 params: param ("," param)*
-param: NAME ":" type
-
-return_type: ":" type
+param: NAME
 
 // Loop bounds are integer literals, so every loop can be unrolled into the circuit. Half-open.
 // TODO: this assumes there is no classical controller to run a loop. Review the restriction when moving to
@@ -74,8 +74,6 @@ block: "{" statement* "}"
 function_call: NAME "(" args? ")"
 
 args: expr ("," expr)*
-
-type: NAME
 
 COMMENT: "//" /[^\n]*/
 
