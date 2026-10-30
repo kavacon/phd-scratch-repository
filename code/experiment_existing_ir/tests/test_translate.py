@@ -71,6 +71,28 @@ class Translate(unittest.TestCase):
   func.return %7 : i32
 }""")
 
+    def test_a_loop_passes_round_the_variables_its_body_changes_and_keeps_its_locals_inside(self):
+        self.assertEqual(translated("s = 0; for i in 0..4 { t = i + 1; s += t; } return s;"), """func.func @main() -> i32 {
+  %0 = arith.constant 0 : i32
+  %1 = affine.for %3 = 0 to 4 iter_args(%2 = %0) -> (i32) {
+    %4 = arith.index_cast %3 : index to i32
+    %5 = arith.constant 1 : i32
+    %6 = arith.addi %4, %5 : i32
+    %7 = arith.addi %2, %6 : i32
+    affine.yield %7 : i32
+  }
+  func.return %1 : i32
+}""")
+        self.assertNotIn("affine.for", translated("s = 5; for i in 2..2 { s += 1; } return s;"))  # runs no times
+
+    def test_a_loop_may_not_assign_its_variable_or_involve_a_distribution_yet(self):
+        with self.assertRaisesRegex(TranslationError, "loop variable i"):
+            translated("for i in 0..3 { i += 1; } return 0;")
+        with self.assertRaisesRegex(TranslationError, "distribution"):
+            translated("a = 0..4; for i in 0..3 { a += 1; } return a;", "v2")
+        with self.assertRaisesRegex(TranslationError, "cannot be unrolled"):
+            translated("s = 0; for i in 0..200 { for j in 0..100 { s += 1; } } return s;")
+
     def test_constructs_not_yet_supported_are_refused(self):
         with self.assertRaisesRegex(TranslationError, "'\\*'"):
             translated("x = 2 * 3; return x;")

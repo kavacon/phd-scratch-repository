@@ -13,17 +13,40 @@ from mqt.core.mlir import QCProgram
 
 from checking import qiskit_tools
 from checking.circuits import to_signed
+from experiment_existing_ir.translate import MAX_DEPTH
 
 TOOL = Path(__file__).resolve().parents[3] / "build/experiment_existing_ir/existing-ir-opt"
+
+
+# Upstream's pass for `affine.for`, nested in a function because it works on one. A factor of -1 unrolls a loop fully, and
+# each repetition reaches one level further out, since it only takes the innermost loops (the translation refuses a nest
+# deeper than `translate.MAX_DEPTH`). The `unroll-full-threshold` option, tried first, skips loops of fewer than four trips.
+UNROLL = "func.func(affine-loop-unroll{unroll-factor=-1 unroll-num-reps=%d})" % MAX_DEPTH
 
 
 def built() -> bool:
     return TOOL.exists()
 
 
+# The tool's own passes that are anchored on a function. Flags nest them by themselves; in a pipeline they are nested here.
+FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status"}
+
+
+def command(*passes: str) -> list:
+    """
+    The tool's command line for the given passes (`--canonicalize`, `--lower-to-qc`, `UNROLL`, ...) run in that order. The
+    tool takes either flags or one pipeline, and a pass nested in a function needs the pipeline, so the passes become one.
+    Flags that are not passes (`--mlir-print-ir-after-all`) are kept as they are.
+    """
+    options = [p for p in passes if p.startswith("--mlir")]
+    names = [p.removeprefix("--") for p in passes if not p.startswith("--mlir")]
+    names = [f"func.func({name})" if name in FUNCTION_PASSES else name for name in names]
+    return [TOOL, *options, *([f"--pass-pipeline=builtin.module({','.join(names)})"] if names else [])]
+
+
 def optimise(program: str, *passes: str) -> str:
-    """The program after the given passes (`--canonicalize`, `--lower-to-qc`, ...), as text."""
-    return subprocess.run([TOOL, *passes], input=program, capture_output=True, text=True, check=True).stdout
+    """The program after the given passes, as text."""
+    return subprocess.run(command(*passes), input=program, capture_output=True, text=True, check=True).stdout
 
 
 def openqasm(qc: str) -> str:
@@ -45,6 +68,6 @@ def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
     return {to_signed(value, width): count for value, count in sorted(counts.items())}
 
 
-def run(program: str, passes: Sequence[str] = ("--resolve-instances", "--canonicalize", "--in-place-updates",
+def run(program: str, passes: Sequence[str] = (UNROLL, "--resolve-instances", "--canonicalize", "--in-place-updates",
                                                 "--lower-to-qc"), shots: int = 2000) -> Dict[int, int]:
     return execute(optimise(program, *passes), shots)

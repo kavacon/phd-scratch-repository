@@ -13,10 +13,11 @@ from compiler.parser.parser import parse
 from experiment_existing_ir import simulate
 from experiment_existing_ir.translate import translate
 
-PASSES = ("--resolve-instances", "--canonicalize", "--in-place-updates", "--dist-status", "--lower-to-qc")
+PASSES = (simulate.UNROLL, "--resolve-instances", "--canonicalize", "--in-place-updates", "--dist-status", "--lower-to-qc")
 PROGRAMS = {
     "arithmetic": ("x = 5; y = x + 3; y = y - 1; return y;", "v1"),
     "conditional on a distribution": ("a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;", "v2"),
+    "a loop with a classical bound": ("s = 0; for i in 0..4 { s += i; } return s;", "v1"),
     "a computed assignment is an independent instance": ("a = 0..4; c = a + 1; return c - a;", "v2"),
 }
 
@@ -25,7 +26,7 @@ def main() -> None:
     for title, (source, grammar) in PROGRAMS.items():
         program = translate(parse(source, grammar))
         print(f"\n==== {title}\n{source}\n\ntranslated:\n{program}")
-        stages = subprocess.run([simulate.TOOL, *PASSES, "--mlir-print-ir-after-all"], input=program, capture_output=True,
+        stages = subprocess.run(simulate.command(*PASSES, "--mlir-print-ir-after-all"), input=program, capture_output=True,
                                 text=True, check=True).stderr
         print(f"\nafter each pass:\n{stages}")
         print(f"run on Qiskit Aer via OpenQASM 3: {simulate.run(program, PASSES)}")

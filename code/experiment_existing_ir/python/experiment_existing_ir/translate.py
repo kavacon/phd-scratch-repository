@@ -17,14 +17,18 @@ one (see the decision "A distribution denotes a law"):
 - `+=` and `-=` update the variable in place, including with another distribution;
 - overwriting a distribution by a plain assignment would drop it and is refused.
 A conditional on a distribution is a `dist.select`, which computes both arms; one on a definite value is an `scf.if`
-that yields the variables either arm changed. Anything else is refused by name, so a later milestone adds it deliberately.
+that yields the variables either arm changed. A loop has literal bounds, so it is an `affine.for` that passes round the
+variables its body changes, and a pass unrolls it before the lowering. Anything else is refused by name, so a later
+milestone adds it deliberately.
 """
 import itertools
-from typing import Dict, Iterator, List, NamedTuple, Sequence
+from typing import Dict, Iterator, List, NamedTuple, Sequence, Tuple
 
-from compiler.parser.grammar import Assign, BinOp, Distribution, If, Node, Number, Return, Variable
+from compiler.parser.grammar import Assign, BinOp, Distribution, ForLoop, If, Node, Number, Return, Variable
 
 WIDTH = 32
+MAX_DEPTH = 8  # loops nested in one another
+MAX_ITERATIONS = 10_000  # times the innermost body runs, which is how many copies unrolling makes
 
 
 class TranslationError(ValueError):
@@ -70,6 +74,8 @@ class _Translator:
         self.lines: List[str] = []
         self.cells = cells
         self.bindings = bindings
+        self.depth = 0  # loops this translator is inside
+        self.iterations = 1  # how often its statements run, from the loops it is inside
 
     def emit(self, text: str, type: str) -> _Value:
         """Add an operation that produces one value."""
@@ -127,6 +133,7 @@ class _Translator:
     def branch(self, statements: Sequence[Node]) -> "_Translator":
         """The statements of one arm, translated on a copy of the variables."""
         inner = _Translator(self.width, self.names, self.cell_ids, dict(self.cells), dict(self.bindings))
+        inner.depth, inner.iterations = self.depth, self.iterations
         for statement in statements:
             inner.statement(statement)
         return inner
@@ -179,6 +186,58 @@ class _Translator:
         for index, cell in enumerate(changed):
             self.cells[cell] = _Value(f"{results}#{index}" if len(changed) > 1 else results, self.type)
 
+    def loop_body(self, node: ForLoop, names: _Names, cell_ids: Iterator[int],
+                  carried: Dict[int, _Value]) -> "Tuple[_Translator, str, _Value]":
+        """
+        The body translated once on a copy of the variables. The loop variable is a fresh cell holding the induction
+        variable cast to the program's integer type, and `carried` replaces the cells the loop passes round.
+        """
+        inner = _Translator(self.width, names, cell_ids, dict(self.cells), dict(self.bindings))
+        inner.cells.update(carried)
+        inner.depth, inner.iterations = self.depth + 1, self.iterations * max(node.stop.value - node.start.value, 1)
+        if inner.depth > MAX_DEPTH or inner.iterations > MAX_ITERATIONS:
+            raise TranslationError(f"loops nested {MAX_DEPTH} deep or running {MAX_ITERATIONS} iterations in all cannot "
+                                   "be unrolled")
+        index = next(names)
+        variable = inner.emit(f"arith.index_cast {index} : index to {self.type}", self.type)
+        inner.bindings[node.var] = next(cell_ids)
+        inner.cells[inner.bindings[node.var]] = variable
+        for statement in node.body:
+            inner.statement(statement)
+        if inner.cells[inner.bindings[node.var]] != variable:
+            raise TranslationError(f"the loop variable {node.var} cannot be assigned to inside its loop")
+        return inner, index, variable
+
+    def loop(self, node: ForLoop) -> None:
+        """
+        A loop with literal bounds is an `affine.for`, whose bounds must be static, so the trip count is classical. It
+        passes round the variables the body changes, and a pass unrolls it before the lowering. A first translation, with
+        throwaway names, finds those variables; a loop that runs no times is translated for its errors and then dropped.
+        """
+        start, stop = node.start.value, node.stop.value
+        probe, _, _ = self.loop_body(node, _Names(), itertools.count(1 << 20), {})
+        for cell, value in probe.cells.items():
+            if value.dist and (cell not in self.cells or value != self.cells[cell]):
+                raise TranslationError("a loop that changes or makes a distribution is not supported yet")
+        carried = [cell for cell in self.cells if probe.cells[cell] != self.cells[cell]]
+        if stop <= start:
+            return
+        results = next(self.names) if carried else ""
+        arguments = {cell: _Value(next(self.names), self.type) for cell in carried}
+        inner, index, _ = self.loop_body(node, self.names, self.cell_ids, arguments)
+        header = f"affine.for {index} = {start} to {stop}"
+        body = ["  " + line for line in inner.lines]
+        if not carried:
+            self.lines += [header + " {", *body, "}"]
+            return
+        types = ", ".join([self.type] * len(carried))
+        passed = ", ".join(f"{arguments[cell].ssa} = {self.cells[cell].ssa}" for cell in carried)
+        body.append(f"  affine.yield {', '.join(inner.cells[cell].ssa for cell in carried)} : {types}")
+        count = f":{len(carried)}" if len(carried) > 1 else ""
+        self.lines += [f"{results}{count} = {header} iter_args({passed}) -> ({types}) {{", *body, "}"]
+        for position, cell in enumerate(carried):
+            self.cells[cell] = _Value(f"{results}#{position}" if len(carried) > 1 else results, self.type)
+
     def update(self, node: Assign) -> None:
         """`name += amount;` or `name -= amount;`, which the parser gives as `name = name + amount` marked in place."""
         cell = self.bindings.get(node.name)
@@ -222,6 +281,8 @@ class _Translator:
             self.assign(node)
         elif isinstance(node, If):
             self.conditional(node)
+        elif isinstance(node, ForLoop):
+            self.loop(node)
         else:
             raise TranslationError(f"{type(node).__name__} is not supported yet")
 
