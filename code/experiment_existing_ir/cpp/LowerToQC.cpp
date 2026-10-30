@@ -191,6 +191,28 @@ struct Update : OpRewritePattern<Op> {
   }
 };
 
+// A lifted integer is the same register: a distribution and an integer are both qubits, and only the state differs. If
+// something else still uses the integer, the register is copied first, since the distribution may be updated in place.
+struct Lift : OpRewritePattern<existing_ir::dist::LiftOp> {
+  Lift(MLIRContext *c, const Widths &w, const DenseSet<Operation *> &reuse) : OpRewritePattern(c), widths(w), reuse(reuse) {}
+  const Widths &widths;
+  const DenseSet<Operation *> &reuse;  // the lifts whose integer has no other use, decided before any lowering
+  LogicalResult matchAndRewrite(existing_ir::dist::LiftOp op, PatternRewriter &rw) const override {
+    Value input = op.getInput();
+    auto it = widths.find(op.getResult());
+    if (it == widths.end() || !isRegister(input))
+      return failure();
+    if (reuse.contains(op)) {
+      rw.replaceOp(op, input);
+      return success();
+    }
+    Value result = allocate(rw, op.getLoc(), it->second);
+    copy(rw, op.getLoc(), load(rw, op.getLoc(), input), load(rw, op.getLoc(), result));
+    rw.replaceOp(op, result);
+    return success();
+  }
+};
+
 struct DistLessThan : OpRewritePattern<existing_ir::dist::SltOp> {
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(existing_ir::dist::SltOp op, PatternRewriter &rw) const override {
@@ -340,7 +362,7 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     // 2. An update may work in its target's register when no other use of the target comes after it. The values of such
     //    a chain of updates share one register, so it is made as wide as the widest of them and no update needs a wider
     //    one than its target has.
-    DenseSet<Operation *> inPlace;
+    DenseSet<Operation *> inPlace, reuse;
     DenseMap<Value, Value> parent;  // union-find over the values that share a register
     auto find = [&](Value value) {
       while (parent.contains(value) && parent[value] != value)
@@ -348,6 +370,13 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
       return value;
     };
     module.walk([&](Operation *op) {
+      // A lift that reuses its integer's register shares it with the distribution, so they are one register.
+      if (auto lift = dyn_cast<existing_ir::dist::LiftOp>(op); lift && lift.getInput().hasOneUse()) {
+        reuse.insert(op);
+        parent.try_emplace(lift.getInput(), lift.getInput());
+        parent.try_emplace(lift.getResult(), lift.getResult());
+        parent[find(lift.getResult())] = find(lift.getInput());
+      }
       if (!isa<existing_ir::dist::AddAssignOp, existing_ir::dist::SubAssignOp>(op))
         return;
       bool laterUse = llvm::any_of(op->getOperand(0).getUsers(), [&](Operation *user) {
@@ -388,6 +417,7 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     patterns.add<Sum<existing_ir::dist::AddIOp, false>, Sum<existing_ir::dist::SubIOp, true>>(&getContext(), widths);
     patterns.add<LessThan, DistLessThan, DistMeasure>(&getContext());
     patterns.add<Select, DistSelect, Uniform>(&getContext(), widths);
+    patterns.add<Lift>(&getContext(), widths, reuse);
     patterns.add<Update<existing_ir::dist::AddAssignOp, false>, Update<existing_ir::dist::SubAssignOp, true>>(
         &getContext(), widths, inPlace);
     patterns.add<Return>(&getContext());

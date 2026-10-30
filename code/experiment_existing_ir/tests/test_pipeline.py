@@ -147,6 +147,24 @@ class Pipeline(unittest.TestCase):
         counts = simulate.run(program("a = 0..4; x = 2; x = a + 1; return x - a;", "v2"), shots=4000)
         self.assertEqual(set(counts), set(range(-2, 5)))
 
+    def test_an_integer_that_becomes_a_distribution_on_some_path_through_a_branch_or_loop(self):
+        # (source, outcomes, hand-worked weights); a is 0..3, so 2 + a is 2..5 and a sum of three copies of a is x - 2
+        for source, expected in (
+                ("a = 0..4; x = 2; k = 5; if k < 3 { x += a; } y = x + 1; return y;", {3}),  # the branch is dead: x stays 2
+                ("a = 0..4; x = 2; k = 1; if k < 3 { x += a; } return x;", {2, 3, 4, 5}),
+                ("a = 0..4; x = 2; for i in 0..3 { x += a; } return x - a - a - a;", {2}),  # x is tied to a on every pass
+                ("a = 0..4; x = 0; for i in 0..6 { if i < 3 { x += a; } else { x -= 1; } } return x - a - a - a;", {-3}),
+                ("a = 0..4; c = 0; for i in 0..3 { for j in 0..3 { if i < j { c += a; } } } return c - a - a - a;", {0})):
+            self.assertEqual(set(simulate.run(program(source, "v2"), shots=500)), expected, source)
+        # three independent one-bit dice made inside a loop: 0 to 3 with weights 1, 3, 3, 1 out of 8
+        counts = simulate.run(program("s = 0; for i in 0..3 { d = 0..2; s += d; } return s;", "v2"), shots=4000)
+        for value, weight in zip(range(4), (1, 3, 3, 1)):
+            self.assertAlmostEqual(counts[value] / 4000, weight / 8, delta=0.04, msg=value)
+        # an arm of a conditional on a distribution may do it too: 2 at 5/8 and 3, 4, 5 at 1/8 each
+        counts = simulate.run(program("a = 0..4; b = 0..2; x = 2; if b < 1 { x += a; } return x;", "v2"), shots=4000)
+        for value, weight in zip(range(2, 6), (5, 1, 1, 1)):
+            self.assertAlmostEqual(counts[value] / 4000, weight / 8, delta=0.04, msg=value)
+
     def test_conditionals_and_loops_on_definite_values_nest_in_either_order(self):
         # i < 2 adds 10 twice and the rest add 1 twice; a nest counts the pairs i < j; a local reset each pass; a loop in an arm
         for source, value in (("s = 0; for i in 0..4 { if i < 2 { s += 10; } else { s += 1; } } return s;", 22),

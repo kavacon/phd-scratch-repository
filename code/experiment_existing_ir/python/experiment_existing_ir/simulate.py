@@ -37,7 +37,7 @@ def built() -> bool:
 
 
 # The tool's own passes that are anchored on a function. Flags nest them by themselves; in a pipeline they are nested here.
-FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status"}
+FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "recover-definite"}
 
 
 def command(*passes: str) -> list:
@@ -76,6 +76,11 @@ def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
     return {to_signed(value, width): count for value, count in sorted(counts.items())}
 
 
-def run(program: str, passes: Sequence[str] = (*PREPARE, "--resolve-instances", "--canonicalize", "--in-place-updates",
-                                                "--lower-to-qc"), shots: int = 2000) -> Dict[int, int]:
+# The default pipeline: lifted integers that no path superposes are turned back into integers once the conditionals
+# that decided the paths have folded.
+DEFAULT = (*PREPARE, "--canonicalize", "--recover-definite", "--canonicalize", "--resolve-instances", "--canonicalize",
+           "--in-place-updates", "--lower-to-qc")
+
+
+def run(program: str, passes: Sequence[str] = DEFAULT, shots: int = 2000) -> Dict[int, int]:
     return execute(optimise(program, *passes), shots)

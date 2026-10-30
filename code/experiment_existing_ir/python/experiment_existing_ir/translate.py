@@ -70,6 +70,7 @@ class _Value(NamedTuple):
 class _Slot(NamedTuple):
     ssa: str
     type: str  # what it holds, as a `_Value` type
+    lifted: bool = False  # a variable that may be an integer: it holds a distribution only because a path through a region makes one
 
     @property
     def dist(self) -> bool:
@@ -167,6 +168,7 @@ class _Translator:
         self.region_start = 0  # slots with a lower id were made outside this region
         self.shadow: Optional[Dict[int, int]] = None  # in the arm of a conditional on a distribution: slot -> its copy
         self.outer: Set[int] = set()  # the slots that existed when that arm began
+        self.probe: Optional[Set[str]] = None  # while probing a region: the outside integers it would turn into distributions
 
     def emit(self, text: str, type: str) -> _Value:
         """Add an operation that produces one value."""
@@ -187,7 +189,7 @@ class _Translator:
         """A translator for the arm of a branch or the body of a loop, on a copy of the bindings."""
         inner = _Translator(self.width, self.names, self.ids, self.slots, dict(self.bindings), self.module)
         inner.depth, inner.iterations, inner.readonly = self.depth, self.iterations, self.readonly
-        inner.nested, inner.region_start = True, len(self.slots)
+        inner.nested, inner.region_start, inner.probe = True, len(self.slots), self.probe
         return inner
 
     def new_slot(self, name: Optional[str], type: str) -> int:
@@ -281,6 +283,7 @@ class _Translator:
             if isinstance(argument, Variable) and argument.name in self.bindings \
                     and self.slots[self.bindings[argument.name]].dist:
                 slot_id = self.bindings[argument.name]
+                self.refuse_alias(argument.name)
             else:
                 value = self.expression(argument)
                 if value.dist:
@@ -312,6 +315,7 @@ class _Translator:
     def returned(self, node: Node) -> Tuple[_Value, Optional[_Slot], str]:
         """What a function hands back: a distribution it holds (as its slot), or a value."""
         if isinstance(node, Variable) and node.name in self.bindings and self.slots[self.bindings[node.name]].dist:
+            self.refuse_alias(node.name)
             return _Value("", ""), self.slots[self.bindings[node.name]], "ref"
         if isinstance(node, Call):
             result, instance = self.call(node)
@@ -325,16 +329,52 @@ class _Translator:
         """
         Whether a variable may change from an integer to a distribution here. That is a new slot and a new binding, which
         the code after this region only sees if the variable belongs to the region. A variable from outside a branch or a
-        loop would be an integer on one path and a distribution on the other.
+        loop would be an integer on one path and a distribution on the other, so a probe records it, and the region is
+        translated again after the variable has been lifted (see `lift_for`). In the arm of a conditional on a
+        distribution the select takes whichever slot an arm ends with, so any variable may change.
         """
         bound = self.bindings[name]
-        if self.shadow is not None:
-            return bound not in self.outer
-        return not self.nested or bound >= self.region_start
+        if self.shadow is not None or not self.nested or bound >= self.region_start:
+            return True
+        if self.probe is not None:
+            self.probe.add(name)
+            return True
+        return False
 
     def retype_refusal(self, name: str) -> TranslationError:
         return TranslationError(f"{name} changes from an integer to a distribution inside a branch or a loop it was "
                                 "made outside of, which is not supported yet")
+
+    def refuse_alias(self, name: str) -> None:
+        if self.slots[self.bindings[name]].lifted:
+            raise TranslationError(f"{name} may be an integer or a distribution at this point, so it cannot be aliased "
+                                   "or passed by reference yet")
+
+    def lift_for(self, node: Node) -> None:
+        """
+        Before a branch or a loop that turns an integer from outside it into a distribution on some path, lift that integer
+        here, so the variable is a distribution on every path through the region. A first translation of the region, in a
+        copy with throwaway names, finds the integers; `recover-definite` turns a lift that no path superposes back into an
+        integer, so the lift costs nothing where it is not needed.
+        """
+        if self.probe is not None:  # an enclosing probe already collects the names from every region inside it
+            return
+        probe = _Translator(self.width, _Names(), itertools.count(len(self.slots)), dict(self.slots), dict(self.bindings),
+                            self.module)
+        probe.depth, probe.iterations, probe.readonly = self.depth, self.iterations, set(self.readonly)
+        probe.nested, probe.region_start, probe.probe = self.nested, self.region_start, set()
+        probe.statement(node)
+        for name in sorted(probe.probe):
+            if name not in self.bindings or self.slots[self.bindings[name]].dist:
+                continue  # made inside the region itself, or already a distribution
+            if not self.retypable(name):
+                raise self.retype_refusal(name)
+            value = self.load(self.slot_id(name))
+            lifted = self.emit(f"dist.lift {value.ssa} : {value.type} -> {self.distribution(value.type)}",
+                               self.distribution(value.type))
+            slot_id = self.new_slot(name, lifted.type)
+            self.slots[slot_id] = self.slots[slot_id]._replace(lifted=True)
+            self.store(slot_id, lifted)
 
     def check_writable(self, name: str) -> None:
         if self.bindings[name] in self.readonly:
@@ -345,6 +385,7 @@ class _Translator:
         if condition.dist:
             self.select(condition, node)
         else:
+            self.lift_for(node)
             self.branch_on_definite(condition, node)
 
     def branch_on_definite(self, condition: _Value, node: If) -> None:
@@ -355,21 +396,19 @@ class _Translator:
             for statement in statements:
                 arm.statement(statement)
             arms.append(arm)
-        self.absorb(arms, "a conditional on a definite value that changes a distribution is not supported yet")
+        self.absorb(arms)
         indented = [["  " + line for line in arm.lines] for arm in arms]
         self.lines += [f"scf.if {condition.ssa} {{", *indented[0], "} else {", *indented[1], "}"]
 
-    def absorb(self, regions: Sequence["_Translator"], refusal: str) -> None:
-        """Take over what the regions stored to outside themselves, refusing a distribution among it."""
-        changed = {slot_id for region in regions for slot_id in region.written if slot_id < regions[0].region_start}
-        if any(self.slots[slot_id].dist for slot_id in changed):
-            raise TranslationError(refusal)
-        self.written |= changed
+    def absorb(self, regions: Sequence["_Translator"]) -> None:
+        """Take over what the regions stored to outside themselves."""
+        self.written |= {slot_id for region in regions for slot_id in region.written if slot_id < regions[0].region_start}
 
     def select(self, condition: _Value, node: If) -> None:
         """
         Both arms are computed here, on copies of the definite variables they change, and one `dist.select` picks each
-        changed variable's value, using the condition once. A changed variable then holds a distribution.
+        changed variable's value, using the condition once. An arm may also turn an integer into a distribution; the
+        select takes either, so the variable ends as a distribution. A changed variable then holds a distribution.
         """
         if self.shadow is not None or self.nested:
             raise TranslationError("a conditional on a distribution inside another conditional or a loop is not "
@@ -383,22 +422,32 @@ class _Translator:
                 arm.statement(statement)
             arms.append(arm)
             self.lines += arm.lines
-        changed = sorted({slot_id for arm in arms for slot_id, copy in arm.shadow.items() if copy in arm.written})
-        if not changed:
+
+        def arm_slot(arm: "_Translator", name: str) -> int:
+            """The slot holding the variable at the end of the arm."""
+            slot_id = self.bindings[name]
+            if arm.bindings.get(name, slot_id) != slot_id:  # rebound in the arm: an integer that became a distribution
+                return arm.bindings[name]
+            if slot_id in arm.shadow and arm.shadow[slot_id] in arm.written:
+                return arm.shadow[slot_id]
+            return slot_id
+
+        names = [name for name, slot_id in self.bindings.items() if any(arm_slot(arm, name) != slot_id for arm in arms)]
+        if not names:
             return
-        result_types = [self.distribution(self.slots[slot_id].type) for slot_id in changed]
-        pick = [[self.load(arm.shadow.get(slot_id, slot_id)) for slot_id in changed] for arm in arms]
+        element = lambda type: type[len("!dist.dist<"):-1] if type.startswith("!dist.dist") else type
+        result_types = [self.distribution(element(self.slots[self.bindings[name]].type)) for name in names]
+        pick = [[self.load(arm_slot(arm, name)) for name in names] for arm in arms]
         results = next(self.names)
-        count = f":{len(changed)}" if len(changed) > 1 else ""
+        count = f":{len(names)}" if len(names) > 1 else ""
         join = lambda values, key: ", ".join(key(value) for value in values)
         self.lines.append(
             f"{results}{count} = dist.select {condition.ssa}, ({join(pick[0], lambda v: v.ssa)}), "
             f"({join(pick[1], lambda v: v.ssa)}) : {condition.type}, ({join(pick[0], lambda v: v.type)}), "
             f"({join(pick[1], lambda v: v.type)}) -> ({', '.join(result_types)})")
-        for index, slot_id in enumerate(changed):
-            value = _Value(f"{results}#{index}" if len(changed) > 1 else results, result_types[index])
-            for name in [n for n, bound in self.bindings.items() if bound == slot_id]:
-                self.store(self.new_slot(name, value.type), value)
+        for index, name in enumerate(names):
+            value = _Value(f"{results}#{index}" if len(names) > 1 else results, result_types[index])
+            self.store(self.new_slot(name, value.type), value)
 
     def loop(self, node: ForLoop) -> None:
         """
@@ -407,6 +456,7 @@ class _Translator:
         A loop that runs no times is translated for its errors and then dropped.
         """
         start, stop = node.start.value, node.stop.value
+        self.lift_for(node)
         body = self.child()
         body.depth, body.iterations = self.depth + 1, self.iterations * max(stop - start, 1)
         if body.depth > MAX_DEPTH or body.iterations > MAX_ITERATIONS:
@@ -419,10 +469,7 @@ class _Translator:
         body.readonly = self.readonly | {variable}
         for statement in node.body:
             body.statement(statement)
-        made = [body.slots[slot_id] for slot_id in range(body.region_start, len(body.slots))]
-        if any(slot.dist for slot in made):
-            raise TranslationError("a loop that changes or makes a distribution is not supported yet")
-        self.absorb([body], "a loop that changes or makes a distribution is not supported yet")
+        self.absorb([body])
         if stop > start:
             self.lines += [f"affine.for {index} = {start} to {stop} {{", *["  " + line for line in body.lines], "}"]
 
@@ -439,12 +486,14 @@ class _Translator:
             result = self.emit(f"arith.{'addi' if name == 'add_assign' else 'subi'} {target.ssa}, "
                                f"{amount.ssa} : {self.type}", self.type)
         else:
-            if not target.dist:  # an integer updated by a distribution becomes a distribution, in a slot of that type
+            if not target.dist:  # an integer updated by a distribution: lift it, update the lift, and keep the result
                 if not self.retypable(node.name):
                     raise self.retype_refusal(node.name)
+                lifted = self.emit(f"dist.lift {target.ssa} : {target.type} -> {self.distribution(target.type)}",
+                                   self.distribution(target.type))
                 result_type = self.distribution(self.type)
                 result = self.emit(
-                    f"dist.{name} {target.ssa}, {amount.ssa} : {target.type}, {amount.type} -> {result_type}", result_type)
+                    f"dist.{name} {lifted.ssa}, {amount.ssa} : {lifted.type}, {amount.type} -> {result_type}", result_type)
                 self.store(self.new_slot(node.name, result_type), result)
                 return
             right = node.value.right
@@ -457,12 +506,14 @@ class _Translator:
         self.store(slot_id, result)
 
     def assign(self, node: Assign) -> None:
-        held = self.slots.get(self.bindings.get(node.name, -1))
-        if held is not None and held.dist:
+        bound = self.bindings.get(node.name, -1)
+        held = self.slots.get(bound)
+        if held is not None and held.dist and not held.lifted:
             raise TranslationError(f"assigning to {node.name} would drop the distribution it holds; only an in-place "
                                    "update changes one")
         if isinstance(node.value, Variable) and node.value.name in self.bindings \
                 and self.slots[self.bindings[node.value.name]].dist:  # an alias of a distribution
+            self.refuse_alias(node.value.name)
             self.bindings[node.name] = self.bindings[node.value.name]
             return
         if isinstance(node.value, Call):
@@ -483,6 +534,15 @@ class _Translator:
             self.store(self.new_slot(node.name, value.type), value)
             return
         self.check_writable(node.name)
+        if held.lifted:  # a variable that may be a distribution takes either, as a distribution
+            if self.shadow is not None and bound in self.outer:
+                raise TranslationError(f"{node.name} may be a distribution, which a conditional on a distribution cannot "
+                                       "assign yet")
+            if not value.dist:
+                value = self.emit(f"dist.lift {value.ssa} : {value.type} -> {self.distribution(value.type)}",
+                                  self.distribution(value.type))
+            self.store(bound, value)
+            return
         if held.type != value.type:
             if value.dist:  # an integer variable that now holds a distribution
                 if not self.retypable(node.name):
