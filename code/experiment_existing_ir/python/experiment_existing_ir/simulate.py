@@ -27,9 +27,9 @@ UNROLL = "func.func(affine-loop-unroll{unroll-factor=-1 unroll-num-reps=%d})" % 
 # Turns the slots of the translation into SSA values, so every pass after it sees values. A loop has to be unrolled first,
 # since the pass does not promote across an `affine.for`.
 PROMOTE = "func.func(mem2reg)"
-# What the translation needs before anything else: calls inlined and their functions dropped, loops unrolled, then slots
-# promoted.
-PREPARE = ("inline", "symbol-dce", UNROLL, PROMOTE)
+# What the translation needs before anything else: loops unrolled, then calls inlined and their functions dropped, then
+# slots promoted. The inliner refuses a call inside an `affine.for`, so the loops go first.
+PREPARE = (UNROLL, "inline", "symbol-dce", PROMOTE)
 
 
 def built() -> bool:
