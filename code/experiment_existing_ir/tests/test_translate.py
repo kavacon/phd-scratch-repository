@@ -14,6 +14,12 @@ def promoted(source: str, grammar: str = "v1") -> str:
     return simulate.optimise(translated(source, grammar), simulate.UNROLL, simulate.PROMOTE).rstrip("\n")
 
 
+def resolved(source: str, grammar: str = "v2") -> str:
+    """The program once its references are resolved and its sums are done in place where they can be."""
+    return simulate.optimise(translated(source, grammar), *simulate.PREPARE, *simulate.RESOLVE, "--canonicalize",
+                             "--in-place-updates").rstrip("\n")
+
+
 class Translate(unittest.TestCase):
     def test_translation_keeps_the_sources_variables_as_slots_that_are_loaded_and_stored(self):
         self.assertEqual(translated("x = 5; y = x + 3; y = y - 1; return y;"), """func.func @main() -> i32 {
@@ -73,17 +79,14 @@ class Translate(unittest.TestCase):
             with self.assertRaisesRegex(TranslationError, message):
                 translated(source, "v2")
 
-    def test_a_variable_that_may_be_an_integer_cannot_be_aliased_yet(self):
-        # x is lifted before the loop because one path adds a distribution to it, so `y = x` would be a copy on one path and an alias on another
-        with self.assertRaisesRegex(TranslationError, "may be an integer or a distribution"):
-            translated("a = 0..4; x = 2; for i in 0..3 { x += a; } y = x; return y;", "v2")
-
-    def test_dropping_a_distribution_or_adding_it_to_itself_is_refused(self):
-        for source, message in (("a = 0..4; a = 5; return a;", "would drop"),
-                                ("a = 0..4; a += a; return a;", "to itself"),
-                                ("a = 0..4; b = a; b += a; return b;", "to itself")):
-            with self.assertRaisesRegex(TranslationError, message):
-                translated(source, "v2")
+    def test_a_variable_that_may_hold_a_distribution_holds_a_reference_and_a_copy_is_a_marker(self):
+        # x may become a distribution, so it holds a reference to an object; `y = x` is a copy or an alias, which only
+        # folding can tell, so the translation emits `dist.share` and decides nothing. A variable that never touches a
+        # distribution stays a plain integer.
+        text = translated("a = 0..4; x = 2; for i in 0..3 { x += a; } y = x; return y;", "v2")
+        self.assertIn("memref<!dist.ref<i32>>", text)
+        self.assertEqual(text.count("dist.share"), 1)
+        self.assertNotIn("dist.", translated("x = 2; y = x; y += 1; return y;", "v2"))
 
 
 @unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
@@ -103,10 +106,10 @@ class Promoted(unittest.TestCase):
 }""")
 
     def test_a_distribution_is_changed_by_an_in_place_update_and_reading_it_measures_it(self):
-        self.assertEqual(promoted("a = 0..4; a += 3; return a;", "v2"), """module {
+        self.assertEqual(resolved("a = 0..4; a += 3; return a;"), """module {
   func.func @main() -> i32 {
-    %0 = dist.uniform 0, 4 : !dist.dist<i32>
     %c3_i32 = arith.constant 3 : i32
+    %0 = dist.uniform 0, 4 : !dist.dist<i32>
     %1 = dist.add_assign %0, %c3_i32 : !dist.dist<i32>, i32 -> !dist.dist<i32>
     %2 = dist.measure %1 : !dist.dist<i32> -> i32
     return %2 : i32
@@ -114,21 +117,21 @@ class Promoted(unittest.TestCase):
 }""")
 
     def test_a_distribution_can_be_read_by_several_conditions(self):
-        text = promoted("a = 0..4; x = 0; y = 0; if a < 2 { x += 1; } if a < 3 { y += 2; } return x;", "v2")
+        text = resolved("a = 0..4; x = 0; y = 0; if a < 2 { x += 1; } if a < 3 { y += 2; } return x + y;")
         self.assertEqual(text.count("dist.slt %0,"), 2)  # both read the one distribution
 
     def test_a_conditional_on_a_distribution_computes_both_arms_and_selects_once(self):
-        self.assertEqual(promoted("a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;", "v2"), """module {
+        # x is 2 before the conditional, so its two arms are the integers 5 and 1, and one select ties x to a < 2
+        self.assertEqual(resolved("a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;"), """module {
   func.func @main() -> i32 {
-    %0 = dist.uniform 0, 4 : !dist.dist<i32>
-    %c2_i32 = arith.constant 2 : i32
-    %c2_i32_0 = arith.constant 2 : i32
-    %1 = dist.slt %0, %c2_i32_0 : !dist.dist<i32>, i32 -> !dist.dist<i1>
-    %c3_i32 = arith.constant 3 : i32
-    %2 = arith.addi %c2_i32, %c3_i32 : i32
     %c1_i32 = arith.constant 1 : i32
-    %3 = arith.subi %c2_i32, %c1_i32 : i32
-    %4 = dist.select %1, (%2), (%3) : !dist.dist<i1>, (i32), (i32) -> (!dist.dist<i32>)
+    %c5_i32 = arith.constant 5 : i32
+    %c2_i32 = arith.constant 2 : i32
+    %0 = dist.uniform 0, 4 : !dist.dist<i32>
+    %1 = dist.slt %0, %c2_i32 : !dist.dist<i32>, i32 -> !dist.dist<i1>
+    %2 = dist.lift %c5_i32 : i32 -> !dist.dist<i32>
+    %3 = dist.lift %c1_i32 : i32 -> !dist.dist<i32>
+    %4 = dist.select %1, (%2), (%3) : !dist.dist<i1>, (!dist.dist<i32>), (!dist.dist<i32>) -> (!dist.dist<i32>)
     %5 = dist.measure %4 : !dist.dist<i32> -> i32
     return %5 : i32
   }
@@ -154,10 +157,10 @@ class Promoted(unittest.TestCase):
 }""")
 
     def test_a_plain_name_is_an_alias_so_an_update_through_one_name_is_seen_through_the_other(self):
-        self.assertEqual(promoted("a = 0..4; b = a; b += 1; return a;", "v2"), """module {
+        self.assertEqual(resolved("a = 0..4; b = a; b += 1; return a;"), """module {
   func.func @main() -> i32 {
-    %0 = dist.uniform 0, 4 : !dist.dist<i32>
     %c1_i32 = arith.constant 1 : i32
+    %0 = dist.uniform 0, 4 : !dist.dist<i32>
     %1 = dist.add_assign %0, %c1_i32 : !dist.dist<i32>, i32 -> !dist.dist<i32>
     %2 = dist.measure %1 : !dist.dist<i32> -> i32
     return %2 : i32

@@ -1,18 +1,14 @@
-// Recovering the integers among the distributions.
+// Canonicalizing the operations on lifted integers.
 //
-// An integer that might become superposed on some path is lifted (`dist.lift`) where it is made, so the variable has one
-// type throughout. On the paths where nothing superposes it, it stays a lifted constant and the operations on it are
-// distribution operations that `arith` would have folded. This pass rewrites every operation whose distribution operands
-// are all lifted integers back into `arith` on the integers, lifting only the result. Run after `canonicalize` has folded
-// the conditionals that decided which paths exist, and run `canonicalize` again to fold what this exposes.
-//
-// A lift of a value that is later made superposed is not touched: one of its uses has an operand that is not a lift.
+// A variable that may hold a distribution holds a lifted integer (`dist.lift`) on the paths where nothing superposes it, and
+// the operations on it are distribution operations that `arith` would have folded. These patterns, part of `canonicalize`,
+// rewrite every operation whose distribution operands are all lifted integers back into `arith` on the integers, lifting
+// only the result, so a definite value is a lift of an integer (which `kindOf` in Refs.cpp relies on) and constant
+// arithmetic folds. A lift of a value that is later made superposed is not touched: one of its uses has an operand that is
+// not a lift.
 #include "Dialects.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Matchers.h"
-#include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 using namespace mlir;
 using namespace existing_ir::dist;
@@ -109,25 +105,29 @@ struct Select : OpRewritePattern<SelectOp> {
   }
 };
 
-struct RecoverDefinite : PassWrapper<RecoverDefinite, OperationPass<func::FuncOp>> {
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(RecoverDefinite)
-  StringRef getArgument() const final { return "recover-definite"; }
-  StringRef getDescription() const final {
-    return "Rewrite operations on lifted integers back into arith, so they fold";
-  }
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<DistDialect, arith::ArithDialect>();
-  }
-  void runOnOperation() override {
-    RewritePatternSet patterns(&getContext());
-    patterns.add<Arithmetic<AddIOp, arith::AddIOp>, Arithmetic<SubIOp, arith::SubIOp>,
-                 Arithmetic<AddAssignOp, arith::AddIOp>, Arithmetic<SubAssignOp, arith::SubIOp>, Compare, Instance,
-                 Measure, Select>(&getContext());
-    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
-      signalPassFailure();
-  }
-};
-
 } // namespace
 
-void existing_ir::registerRecoverDefinite() { PassRegistration<RecoverDefinite>(); }
+void AddIOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
+  results.add<Arithmetic<AddIOp, arith::AddIOp>>(context);
+}
+void SubIOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
+  results.add<Arithmetic<SubIOp, arith::SubIOp>>(context);
+}
+void AddAssignOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
+  results.add<Arithmetic<AddAssignOp, arith::AddIOp>>(context);
+}
+void SubAssignOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
+  results.add<Arithmetic<SubAssignOp, arith::SubIOp>>(context);
+}
+void SltOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
+  results.add<Compare>(context);
+}
+void InstanceOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
+  results.add<Instance>(context);
+}
+void MeasureOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
+  results.add<Measure>(context);
+}
+void SelectOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
+  results.add<Select>(context);
+}

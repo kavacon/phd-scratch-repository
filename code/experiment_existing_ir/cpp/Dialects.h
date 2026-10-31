@@ -7,6 +7,7 @@
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/Interfaces/InferIntRangeInterface.h"
+#include "mlir/Interfaces/MemorySlotInterfaces.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mqt/Dialect/CBit/IR/CBitOps.h"
 #include "mqt/Dialect/QC/IR/QCOps.h"
@@ -24,5 +25,6 @@ void registerLowerToQC();
 void registerDistStatus();
 void registerInstances();
 void registerInPlaceUpdates();
-void registerRecoverDefinite();
+void registerFlattenDistIf();
+void registerCheckResolved();
 } // namespace existing_ir

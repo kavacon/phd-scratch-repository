@@ -37,7 +37,8 @@ def built() -> bool:
 
 
 # The tool's own passes that are anchored on a function. Flags nest them by themselves; in a pipeline they are nested here.
-FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "recover-definite"}
+FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "resolve-refs", "flatten-dist-if",
+                   "check-resolved"}
 
 
 def command(*passes: str) -> list:
@@ -76,10 +77,12 @@ def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
     return {to_signed(value, width): count for value, count in sorted(counts.items())}
 
 
-# The default pipeline: lifted integers that no path superposes are turned back into integers once the conditionals
-# that decided the paths have folded.
-DEFAULT = (*PREPARE, "--canonicalize", "--recover-definite", "--canonicalize", "--resolve-instances", "--canonicalize",
-           "--in-place-updates", "--lower-to-qc")
+# The default pipeline. Resolving the references: `resolve-refs` repeats `canonicalize` (which folds the conditions that are definite, forwards the
+# value an object holds to the markers and the reads that depend on it, and turns arithmetic on lifted integers back into
+# integers), `mem2reg` (which promotes the objects nothing escapes any more) and `flatten-dist-if` (which takes the
+# conditionals that stay on a superposition) until nothing changes. `check-resolved` refuses what is still open.
+RESOLVE = ("--resolve-refs", "--check-resolved")
+DEFAULT = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--in-place-updates", "--lower-to-qc")
 
 
 def run(program: str, passes: Sequence[str] = DEFAULT, shots: int = 2000) -> Dict[int, int]:
