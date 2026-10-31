@@ -4,33 +4,30 @@ Translate a source program (the typed AST from `compiler.parser`) into MLIR text
 `cpp/` reads.
 
 The translation is mechanical and keeps the source's mutable variables: each variable is a slot (`memref.alloca`) that is
-loaded where it is read and stored where it is assigned. The pass `mem2reg` then turns the slots into SSA values, which is
-where every analysis and the lowering start. Reason: a name keeps meaning "the variable as it is now" however an update
-reaches it (a loop, a branch, a call), and the pass finds the values, so the translation tracks no versions.
+loaded where it is read and stored where it is assigned, and `mem2reg` turns the slots into SSA values. Every integer has
+one fixed width (`WIDTH`), an upper bound that range analysis narrows later.
 
-Every integer is given one fixed width, chosen by the front-end, the way a classical front-end gives every `int` its
-declared width. That width is an upper bound: range analysis narrows it later. Results that do not fit wrap, as they do
-in C. Change `WIDTH` (or pass `width`) to try another bound.
-
-A variable is a distribution if it was made by a range (`x = 0..4;`) or computed from one. What assignment means for
-one (see the decision "A distribution denotes a law"):
-- a plain name on the right (`b = a;`) is an alias: both names are the same slot, so an in-place update through either
-  is seen through both. Definite values are copied, as integers are;
-- a computed value (an expression involving a distribution) assigned to a new variable is marked with `dist.instance`,
-  an independent distribution with the law of the expression. The translation only marks it: a pass, `resolve-instances`,
-  decides how the instance is made;
-- within one expression a distribution is one roll, so `a - a` is zero;
-- `+=` and `-=` update the variable in place, including with another distribution;
-- overwriting a distribution by a plain assignment would drop it and is refused.
-A conditional on a distribution computes both arms on copies of the variables they change and picks each with one
-`dist.select`; one on a definite value is an `scf.if` whose arms store to the variables. A loop has literal bounds, so
-it is an `affine.for`, which a pass unrolls before the slots are promoted. A call is its body inlined with each parameter
-assigned from its argument (see `_Module`): a function is a `func.func` per combination of argument types, removed by the
-stock `inline` pass, and a function that returns a distribution it holds returns the slot, so the result is an alias.
-Anything else is refused by name, so a later milestone adds it deliberately.
+A variable is either plain or a reference. Which one is decided by name, from the syntax alone (`_may_hold_distribution`):
+a variable that is assigned or updated with something that involves a distribution, or inside a conditional whose condition
+does, may hold a distribution on some path. Its slot holds a `!dist.ref<i32>`, a reference to an object (`dist.new`) that
+holds a `!dist.dist<i32>`; reading it is `dist.get`, updating it `dist.set`. Every other variable is a plain integer.
+What `y = x` means (the semantics: a copy of an integer, the same object for a distribution) depends on what the object
+holds at that point, which only folding shows, so the translation emits a marker and decides nothing:
+- `dist.share` for a new name, `dist.assign` for one that exists, `dist.overwrite` for `y = e` with a computed value;
+- a conditional is an `scf.if` on the condition's `dist.cond` (an integer when the condition is definite). Both arms are
+  ordinary regions: a definite condition folds, and one on a superposition is turned by `flatten-dist-if` into both arms
+  and one `dist.select` for each object they change. The `dist.cond` names the objects in scope, so they stay in memory
+  (unpromoted) while it is open;
+- a computed distribution assigned to a new variable is marked with `dist.instance` (see `resolve-instances`);
+- an update is computed out of place and stored back into the same object; `in-place-updates` finds the ones that
+  can be done in the target's register.
+A loop with literal bounds is an `affine.for`, unrolled before the slots are promoted. A call is a `func.call` of a function
+translated once for each combination of argument types (an integer, or a reference), removed by the stock `inline` pass. A
+distribution argument is `share`d, so it is the caller's object when it holds a superposition and a copy when it does not;
+a function that returns a variable returns it the same way.
 """
 import itertools
-from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Set, Tuple, Union
+from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 from compiler.parser.grammar import (Assign, BinOp, Call, Distribution, ExprStmt, ForLoop, FunctionDef, If, Node, Number,
                                      Return, Variable)
@@ -44,61 +41,111 @@ class TranslationError(ValueError):
     pass
 
 
-class _Names:
-    """Hands out the SSA names `%0`, `%1`, ... that every block of the function shares."""
-
-    def __init__(self) -> None:
-        self.count = 0
-
-    def __iter__(self) -> Iterator[str]:
-        return self
-
-    def __next__(self) -> str:
-        self.count += 1
-        return f"%{self.count - 1}"
-
-
 class _Value(NamedTuple):
     ssa: str
-    type: str  # "i32", "i1", "!dist.dist<i32>" or "!dist.dist<i1>"
-    const: Optional[int] = None  # the value, when folding while translating and it is known
+    type: str  # "i32", "i1", "!dist.dist<i32>", "!dist.dist<i1>" or "!dist.ref<i32>"
 
     @property
     def dist(self) -> bool:
         return self.type.startswith("!dist.dist")
 
 
-class _Slot(NamedTuple):
-    ssa: str
-    type: str  # what it holds, as a `_Value` type
-    lifted: bool = False  # a variable that may be an integer: it holds a distribution only because a path through a region makes one
+class _Var(NamedTuple):
+    slot: str  # the `memref.alloca` that holds the variable
+    ref: bool  # whether it holds a reference to an object rather than an integer
 
-    @property
-    def dist(self) -> bool:
-        return self.type.startswith("!dist.dist")
 
-    @property
-    def memref(self) -> str:
-        return f"memref<{self.type}>"
+def _mentions(node: Node, names: Set[str], functions: Dict[str, FunctionDef]) -> bool:
+    """Whether an expression involves a distribution: a range, a name that may hold one, or a call that may make one."""
+    if isinstance(node, Distribution):
+        return node.stop.value - node.start.value > 1
+    if isinstance(node, Variable):
+        return node.name in names
+    if isinstance(node, BinOp):
+        return _mentions(node.left, names, functions) or _mentions(node.right, names, functions)
+    if isinstance(node, Call):
+        return any(_mentions(argument, names, functions) for argument in node.args) or _makes_range(node.name, functions, [])
+    return False
+
+
+def _makes_range(name: str, functions: Dict[str, FunctionDef], active: List[str]) -> bool:
+    """Whether a function (or one it calls) contains a range, so its result may be a distribution whatever it is given."""
+    if name not in functions or name in active:
+        return False
+    active.append(name)
+    found = any((isinstance(node, Distribution) and node.stop.value - node.start.value > 1)
+                or (isinstance(node, Call) and _makes_range(node.name, functions, active))
+                for node in _walk(functions[name].body))
+    active.pop()
+    return found
+
+
+def _walk(statements: Sequence[Node]) -> Iterator[Node]:
+    """Every expression and statement under these statements."""
+    for node in statements:
+        yield node
+        if isinstance(node, Assign):
+            yield from _expressions(node.value)
+        elif isinstance(node, If):
+            yield from _expressions(node.condition)
+            yield from _walk([*node.body, *node.orelse])
+        elif isinstance(node, ForLoop):
+            yield from _walk(node.body)
+        elif isinstance(node, (ExprStmt, Return)):
+            yield from _expressions(node.expr if isinstance(node, ExprStmt) else node.value)
+
+
+def _expressions(node: Node) -> Iterator[Node]:
+    yield node
+    if isinstance(node, BinOp):
+        yield from _expressions(node.left)
+        yield from _expressions(node.right)
+    elif isinstance(node, Call):
+        for argument in node.args:
+            yield from _expressions(argument)
+
+
+def _may_hold_distribution(body: Sequence[Node], seeds: Set[str], functions: Dict[str, FunctionDef]) -> Set[str]:
+    """
+    The names that may hold a distribution on some path, from the syntax alone: the parameters given a reference, and any
+    name assigned or updated with an expression that involves one, or anywhere inside a conditional whose condition does
+    (the conditional then ties the name to its condition). Grown until nothing is added. A name that is too many is only a
+    reference where an integer would do, which costs nothing once the object is resolved.
+    """
+    names = set(seeds)
+
+    def visit(statements: Sequence[Node], tied: bool) -> None:
+        for node in statements:
+            if isinstance(node, Assign) and (tied or _mentions(node.value, names, functions)):
+                names.add(node.name)
+            elif isinstance(node, If):
+                inner = tied or _mentions(node.condition, names, functions)
+                visit([*node.body, *node.orelse], inner)
+            elif isinstance(node, ForLoop):
+                visit(node.body, tied)
+
+    while True:
+        before = len(names)
+        visit(body, False)
+        if len(names) == before:
+            return names
 
 
 class _Instance(NamedTuple):
     """One translation of a function, for the kinds of argument it was called with."""
     symbol: str
     result: str  # the result type in the IR
-    kind: str  # "ref": returns a distribution it holds, as the slot; "fresh": a new range; "value": any other value
-    writes: Tuple[int, ...]  # positions of the distribution parameters the function stores to
+    kind: str  # "ref": returns a variable it holds, as a reference; "fresh": a new range; "value": any other value
 
 
 class _Module:
     """
     The functions of a program. A function has no declared types, so it is translated once for each combination of
-    argument types it is called with: a definite argument is passed as a value, which makes the parameter a copy, and a
-    distribution is passed as its slot, which makes the parameter the caller's own object.
+    argument types it is called with: an integer is passed as a value, which makes the parameter a copy, and a distribution
+    as a reference (which the caller `share`d, so it is the caller's own object or a copy of an integer).
     """
 
-    def __init__(self, program: Sequence[Node], width: int, fold: bool = False) -> None:
-        self.fold = fold
+    def __init__(self, program: Sequence[Node], width: int) -> None:
         self.width = width
         self.functions = {node.name: node for node in program if isinstance(node, FunctionDef)}
         self.instances: Dict[tuple, _Instance] = {}
@@ -114,143 +161,123 @@ class _Module:
         self.active.append(definition.name)
         earlier = sum(1 for other in self.instances if other[0] == definition.name)
         symbol = definition.name if earlier == 0 else f"{definition.name}_{earlier}"
-        body = _Translator(self.width, _Names(), itertools.count(), {}, {}, self)
-        arguments, parameter_slots = [], []
-        for parameter, kind in zip(definition.params, kinds):
-            argument = next(body.names)
-            arguments.append(f"{argument}: {kind}")
-            if kind.startswith("memref<"):  # a distribution: the caller's slot itself
-                slot_id = next(body.ids)
-                body.slots[slot_id] = _Slot(argument, kind[len("memref<"):-1])
-                body.bindings[parameter.name] = slot_id
-            else:  # a definite value: copied into a slot of the function's own
-                slot_id = body.new_slot(parameter.name, kind)
-                body.store(slot_id, _Value(argument, kind))
-            parameter_slots.append(slot_id)
         *statements, final = definition.body
         if not isinstance(final, Return):
             raise TranslationError(f"{definition.name} must end with a return")
+        references = {p.name for p, kind in zip(definition.params, kinds) if kind.startswith("!dist.ref")}
+        body = _Translator(self.width, self, _may_hold_distribution(definition.body, references, self.functions))
+        arguments = []
+        for parameter, kind in zip(definition.params, kinds):
+            argument = f"%a{len(arguments)}"
+            arguments.append(f"{argument}: {kind}")
+            if kind.startswith("!dist.ref"):  # the caller's object (or a copy of its integer), held as it is
+                body.declare(parameter.name, _Value(argument, kind))
+            else:
+                body.bind(parameter.name, _Value(argument, kind))
         for statement in statements:
             body.statement(statement)
-        value, slot, result_kind = body.returned(final.value)
-        returned = slot.ssa if slot else value.ssa
-        result = slot.memref if slot else value.type
-        writes = tuple(position for position, slot_id in enumerate(parameter_slots)
-                       if kinds[position].startswith("memref<") and slot_id in body.written)
-        lines = ["  " + line for line in [*body.lines, f"func.return {returned} : {result}"]]
-        self.texts.append("\n".join([f"func.func private @{symbol}({', '.join(arguments)}) -> {result} {{", *lines, "}"]))
+        value, result_kind = body.returned(final.value)
+        lines = ["  " + line for line in [*body.lines, f"func.return {value.ssa} : {value.type}"]]
+        self.texts.append("\n".join([f"func.func private @{symbol}({', '.join(arguments)}) -> {value.type} {{", *lines, "}"]))
         self.active.pop()
-        self.instances[key] = _Instance(symbol, result, result_kind, writes)
+        self.instances[key] = _Instance(symbol, value.type, result_kind)
         return self.instances[key]
 
 
 class _Translator:
     """
-    Names are bound to slots by id. A definite value gets a slot of its own, so copying it copies the value. An alias binds
-    a second name to a distribution's slot, so an update through either name changes the one object. The slots are shared by
-    every region's translator, and each region has its own copy of the bindings, so a name first assigned in a branch or a
-    loop body ends with it.
+    Translates the statements of one function body, or of the program. It keeps one thing besides the text: the names in
+    scope, each bound to its slot. A name first assigned in a branch or a loop body ends with it. Nothing here says what two
+    names mean for one object; that is in the values the slots hold.
     """
 
-    def __init__(self, width: int, names: _Names, ids: Iterator[int], slots: Dict[int, _Slot],
-                 bindings: Dict[str, int], module: _Module) -> None:
+    def __init__(self, width: int, module: _Module, distribution_names: Set[str]) -> None:
         self.module = module
         self.width = width
         self.type = f"i{width}"
-        self.names = names
-        self.ids = ids
+        self.dist = f"!dist.dist<{self.type}>"
+        self.ref = f"!dist.ref<{self.type}>"
+        self.names = itertools.count()
         self.lines: List[str] = []
-        self.slots = slots
-        self.bindings = bindings
-        self.written: Set[int] = set()  # slots stored to in this region, including ones from outside it
-        self.readonly: Set[int] = set()  # loop variables, shared with every region inside their loop
-        self.depth = 0  # loops this translator is inside
-        self.iterations = 1  # how often its statements run, from the loops it is inside
-        self.nested = False  # inside the arm of a branch or the body of a loop, whose variables are its own copies
-        self.region_start = 0  # slots with a lower id were made outside this region
-        self.shadow: Optional[Dict[int, int]] = None  # in the arm of a conditional on a distribution: slot -> its copy
-        self.outer: Set[int] = set()  # the slots that existed when that arm began
-        self.probe: Optional[Set[str]] = None  # while probing a region: the outside integers it would turn into distributions
-        self.known: Dict[int, int] = {}  # when folding: the value of each integer slot, if it is known
+        self.level = 0
+        self.scopes: List[Dict[str, _Var]] = [{}]
+        self.distribution_names = distribution_names
+        self.loops: List[str] = []  # the variables of the loops this is inside, which the body may only read
+        self.iterations = 1  # how often the statements run, from the loops they are inside
+
+    # -- text ------------------------------------------------------------------------------------------------------
+
+    def out(self, text: str) -> None:
+        self.lines.append("  " * self.level + text)
 
     def emit(self, text: str, type: str) -> _Value:
-        """Add an operation that produces one value."""
-        name = next(self.names)
-        self.lines.append(f"{name} = {text}")
+        name = f"%{next(self.names)}"
+        self.out(f"{name} = {text}")
         return _Value(name, type)
-
-    def distribution(self, element: str) -> str:
-        return f"!dist.dist<{element}>"
 
     def constant(self, value: int) -> _Value:
         low, high = -(1 << (self.width - 1)), (1 << (self.width - 1)) - 1
         if not low <= value <= high:
             raise TranslationError(f"{value} does not fit in {self.type}")
-        result = self.emit(f"arith.constant {value} : {self.type}", self.type)
-        return result._replace(const=value)
+        return self.emit(f"arith.constant {value} : {self.type}", self.type)
 
-    def wrap(self, value: int) -> int:
-        """The value in two's complement at the program's width, as an integer operation gives it."""
-        half = 1 << (self.width - 1)
-        return (value + half) % (1 << self.width) - half
+    def lift(self, value: _Value) -> _Value:
+        return value if value.dist else self.emit(f"dist.lift {value.ssa} : {value.type} -> {self.dist}", self.dist)
 
-    def fold_binary(self, op: str, left: int, right: int) -> Optional[_Value]:
-        """When folding while translating: the constant an integer operation on two known values gives."""
-        if op == "<":
-            result = self.emit(f"arith.constant {int(left < right)} : i1", "i1")
-            return result._replace(const=int(left < right))
-        if op in ("+", "-"):
-            return self.constant(self.wrap(left + right if op == "+" else left - right))
-        return None
+    # -- variables -------------------------------------------------------------------------------------------------
 
-    def child(self) -> "_Translator":
-        """A translator for the arm of a branch or the body of a loop, on a copy of the bindings."""
-        inner = _Translator(self.width, self.names, self.ids, self.slots, dict(self.bindings), self.module)
-        inner.depth, inner.iterations, inner.readonly = self.depth, self.iterations, self.readonly
-        inner.nested, inner.region_start, inner.probe = True, len(self.slots), self.probe
-        return inner
+    def lookup(self, name: str) -> _Var:
+        for scope in reversed(self.scopes):
+            if name in scope:
+                return scope[name]
+        raise TranslationError(f"{name} is used before it is assigned")
 
-    def new_slot(self, name: Optional[str], type: str) -> int:
-        slot_id = next(self.ids)
-        ssa = next(self.names)
-        self.lines.append(f"{ssa} = memref.alloca() : memref<{type}>")
-        self.slots[slot_id] = _Slot(ssa, type)
-        if name is not None:
-            self.bindings[name] = slot_id
-        return slot_id
+    def visible(self) -> Dict[str, _Var]:
+        """The variables in scope, an inner one hiding an outer one of the same name."""
+        return {name: var for scope in self.scopes for name, var in scope.items()}
 
-    def load(self, slot_id: int) -> _Value:
-        slot = self.slots[slot_id]
-        if self.module.fold and slot_id in self.known:
-            return self.constant(self.known[slot_id])
-        return self.emit(f"memref.load {slot.ssa}[] : {slot.memref}", slot.type)
+    def exists(self, name: str) -> bool:
+        return any(name in scope for scope in self.scopes)
 
-    def store(self, slot_id: int, value: _Value) -> None:
-        slot = self.slots[slot_id]
-        self.lines.append(f"memref.store {value.ssa}, {slot.ssa}[] : {slot.memref}")
-        self.written.add(slot_id)
-        if self.module.fold:
-            if value.const is not None and not slot.dist:
-                self.known[slot_id] = value.const
-            else:
-                self.known.pop(slot_id, None)
+    def slot(self, name: str, type: str) -> _Var:
+        ssa = f"%{next(self.names)}"
+        self.out(f"{ssa} = memref.alloca() : memref<{type}>")
+        self.scopes[-1][name] = _Var(ssa, type == self.ref)
+        return self.scopes[-1][name]
 
-    def slot_id(self, name: str) -> int:
-        """The slot a name reads and writes: in the arm of a conditional on a distribution, a copy of a definite variable."""
-        if name not in self.bindings:
-            raise TranslationError(f"{name} is used before it is assigned")
-        slot_id = self.bindings[name]
-        if self.shadow is None or slot_id not in self.outer or self.slots[slot_id].dist:
-            return slot_id
-        if slot_id not in self.shadow:
-            copy = self.new_slot(None, self.slots[slot_id].type)
-            self.store(copy, self.load(slot_id))
-            self.written.discard(copy)  # filling the copy is not a change
-            self.shadow[slot_id] = copy
-        return self.shadow[slot_id]
+    def store(self, var: _Var, value: _Value) -> None:
+        self.out(f"memref.store {value.ssa}, {var.slot}[] : memref<{value.type}>")
+
+    def reference(self, var: _Var) -> _Value:
+        return self.emit(f"memref.load {var.slot}[] : memref<{self.ref}>", self.ref)
+
+    def declare(self, name: str, reference: _Value) -> None:
+        """Bind a name to a reference."""
+        self.store(self.slot(name, self.ref), reference)
+
+    def bind(self, name: str, value: _Value) -> None:
+        """A new name for a value: an integer in a slot of its own, or a new object when the name may hold a distribution."""
+        if name in self.distribution_names:
+            self.declare(name, self.emit(f"dist.new {self.lift(value).ssa} : {self.dist} -> {self.ref}", self.ref))
+        elif value.dist:
+            raise TranslationError(f"{name} holds a distribution but is not known to")
+        else:
+            self.store(self.slot(name, value.type), value)
 
     def read(self, name: str) -> _Value:
-        return self.load(self.slot_id(name))
+        var = self.lookup(name)
+        if var.ref:
+            return self.get(self.reference(var))
+        return self.emit(f"memref.load {var.slot}[] : memref<{self.type}>", self.type)
+
+    def get(self, reference: _Value) -> _Value:
+        return self.emit(f"dist.get {reference.ssa} : {self.ref} -> {self.dist}", self.dist)
+
+    def check_writable(self, name: str) -> None:
+        if name in self.loops:
+            raise TranslationError(f"the loop variable {name} cannot be assigned to inside its loop")
+
+    # -- expressions -----------------------------------------------------------------------------------------------
 
     def binary(self, node: BinOp) -> _Value:
         left, right = self.expression(node.left), self.expression(node.right)
@@ -258,12 +285,8 @@ class _Translator:
             name = {"+": "dist.addi", "-": "dist.subi", "<": "dist.slt"}.get(node.op)
             if name is None:
                 raise TranslationError(f"operator {node.op!r} is not supported on a distribution yet")
-            result = self.distribution("i1" if node.op == "<" else self.type)
+            result = f"!dist.dist<{'i1' if node.op == '<' else self.type}>"
             return self.emit(f"{name} {left.ssa}, {right.ssa} : {left.type}, {right.type} -> {result}", result)
-        if self.module.fold and left.const is not None and right.const is not None:
-            folded = self.fold_binary(node.op, left.const, right.const)
-            if folded is not None:
-                return folded
         if node.op == "<":
             return self.emit(f"arith.cmpi slt, {left.ssa}, {right.ssa} : {self.type}", "i1")
         name = {"+": "arith.addi", "-": "arith.subi"}.get(node.op)
@@ -281,24 +304,34 @@ class _Translator:
         if isinstance(node, BinOp):
             return self.binary(node)
         if isinstance(node, Call):
-            result, _ = self.call(node)
-            if isinstance(result, _Slot):  # a distribution returned by reference is read where it is used
-                return self.emit(f"memref.load {result.ssa}[] : {result.memref}", result.type)
-            return result
+            value, _ = self.call(node)
+            return self.get(value) if value.type == self.ref else value
         if isinstance(node, Distribution):
             start, stop = node.start.value, node.stop.value
             if stop <= start:
                 raise TranslationError(f"the range {start}..{stop} is empty")
             if stop - start == 1:  # a range one value wide is an ordinary definite value
                 return self.constant(start)
-            return self.emit(f"dist.uniform {start}, {stop} : {self.distribution(self.type)}", self.distribution(self.type))
+            return self.emit(f"dist.uniform {start}, {stop} : {self.dist}", self.dist)
         raise TranslationError(f"{type(node).__name__} is not supported yet")
 
-    def call(self, node: Call) -> Tuple[Union[_Value, _Slot], _Instance]:
+    def object_of(self, node: Node) -> Optional[_Value]:
+        """The reference a plain name stands for, when the name may hold a distribution."""
+        if isinstance(node, Variable) and self.exists(node.name) and self.lookup(node.name).ref:
+            return self.reference(self.lookup(node.name))
+        return None
+
+    def instance_of(self, node: Node, value: _Value) -> _Value:
+        """A computed distribution is an independent instance; a range is already a new one."""
+        if value.dist and not isinstance(node, Distribution):
+            return self.emit(f"dist.instance {value.ssa} : {value.type} -> {value.type}", value.type)
+        return value
+
+    def call(self, node: Call) -> Tuple[_Value, _Instance]:
         """
-        A call is its body inlined with each parameter assigned from its argument. So a definite argument is copied, a
-        plain distribution name is passed as its slot (the callee's updates are the caller's), and a computed distribution
-        is made an independent instance first.
+        A call passes an integer as a value and a distribution as a reference: a plain name that may hold one is `share`d
+        (the caller's object if it holds a superposition, a copy if it holds an integer), and a computed distribution is
+        made an independent instance in an object of its own.
         """
         definition = self.module.functions.get(node.name)
         if definition is None:
@@ -306,339 +339,141 @@ class _Translator:
         if len(node.args) != len(definition.params):
             raise TranslationError(f"{node.name} takes {len(definition.params)} argument(s) but is called with "
                                    f"{len(node.args)}")
-        passed, kinds, slot_ids = [], [], []
+        passed = []
         for argument in node.args:
-            slot_id = None
-            if isinstance(argument, Variable) and argument.name in self.bindings \
-                    and self.slots[self.bindings[argument.name]].dist:
-                slot_id = self.bindings[argument.name]
-                self.refuse_alias(argument.name)
-            else:
-                value = self.expression(argument)
-                if value.dist:
-                    if not isinstance(argument, Distribution):
-                        value = self.emit(f"dist.instance {value.ssa} : {value.type} -> {value.type}", value.type)
-                    slot_id = self.new_slot(None, value.type)
-                    self.store(slot_id, value)
-                else:
-                    passed.append(value)
-                    kinds.append(value.type)
-            if slot_id is not None:
-                slot = self.slots[slot_id]
-                passed.append(_Value(slot.ssa, slot.memref))
-                kinds.append(slot.memref)
-            slot_ids.append(slot_id)
-        if self.module.fold:
-            return self.inline_call(definition, passed, kinds, slot_ids)
-        instance = self.module.instance(definition, kinds)
-        for position in instance.writes:
-            if self.shadow is not None and slot_ids[position] in self.outer:
-                raise TranslationError(f"{node.name} updates a distribution, which a conditional on a distribution "
-                                       "cannot do yet")
-            self.written.add(slot_ids[position])
-        text = (f"func.call @{instance.symbol}({', '.join(p.ssa for p in passed)}) : ({', '.join(kinds)}) -> "
-                f"{instance.result}")
-        result = self.emit(text, instance.result)
-        if instance.kind == "ref":
-            return _Slot(result.ssa, result.type[len("memref<"):-1]), instance
-        return result, instance
+            reference = self.object_of(argument)
+            if reference is not None:
+                passed.append(self.emit(f"dist.share {reference.ssa} : {self.ref} -> {self.ref}", self.ref))
+                continue
+            value = self.expression(argument)
+            if value.dist:
+                value = self.instance_of(argument, value)
+                value = self.emit(f"dist.new {value.ssa} : {self.dist} -> {self.ref}", self.ref)
+            passed.append(value)
+        instance = self.module.instance(definition, [value.type for value in passed])
+        arguments = ", ".join(value.ssa for value in passed)
+        text = f"func.call @{instance.symbol}({arguments}) : ({', '.join(value.type for value in passed)}) -> {instance.result}"
+        return self.emit(text, instance.result), instance
 
-    def inline_call(self, definition: FunctionDef, passed: List[_Value], kinds: List[str],
-                    slot_ids: List[Optional[int]]) -> Tuple[Union[_Value, _Slot], _Instance]:
-        """When folding while translating: the body is translated here, with the parameters bound to the arguments."""
-        if definition.name in self.module.active:
-            raise TranslationError(f"{definition.name} calls itself, which a circuit cannot do")
-        self.module.active.append(definition.name)
-        body = _Translator(self.width, self.names, self.ids, self.slots, {}, self.module)
-        body.lines, body.known, body.depth, body.iterations = self.lines, self.known, self.depth, self.iterations
-        for parameter, value, kind, slot_id in zip(definition.params, passed, kinds, slot_ids):
-            if slot_id is not None:  # a distribution: the parameter is the caller's own object
-                body.bindings[parameter.name] = slot_id
-            else:  # a definite value: a copy in a slot of the parameter's own
-                body.store(body.new_slot(parameter.name, kind), value)
-        *statements, final = definition.body
-        for statement in statements:
-            body.statement(statement)
-        value, slot, kind = body.returned(final.value)
-        self.module.active.pop()
-        return (slot if slot else value), _Instance("", "", kind, ())
-
-    def returned(self, node: Node) -> Tuple[_Value, Optional[_Slot], str]:
-        """What a function hands back: a distribution it holds (as its slot), or a value."""
-        if isinstance(node, Variable) and node.name in self.bindings and self.slots[self.bindings[node.name]].dist:
-            self.refuse_alias(node.name)
-            return _Value("", ""), self.slots[self.bindings[node.name]], "ref"
+    def returned(self, node: Node) -> Tuple[_Value, str]:
+        """What a function hands back: a variable it holds (as a reference, shared), or a value."""
+        reference = self.object_of(node)
+        if reference is not None:
+            return self.emit(f"dist.share {reference.ssa} : {self.ref} -> {self.ref}", self.ref), "ref"
         if isinstance(node, Call):
-            result, instance = self.call(node)
-            if isinstance(result, _Slot):
-                return _Value("", ""), result, "ref"
-            return result, None, "fresh" if instance.kind == "fresh" else "value"
-        value = self.expression(node)
-        return value, None, "fresh" if isinstance(node, Distribution) else "value"
+            value, instance = self.call(node)
+            return value, instance.kind
+        return self.expression(node), "fresh" if isinstance(node, Distribution) else "value"
 
-    def retypable(self, name: str) -> bool:
-        """
-        Whether a variable may change from an integer to a distribution here. That is a new slot and a new binding, which
-        the code after this region only sees if the variable belongs to the region. A variable from outside a branch or a
-        loop would be an integer on one path and a distribution on the other, so a probe records it, and the region is
-        translated again after the variable has been lifted (see `lift_for`). In the arm of a conditional on a
-        distribution the select takes whichever slot an arm ends with, so any variable may change.
-        """
-        bound = self.bindings[name]
-        if self.shadow is not None or not self.nested or bound >= self.region_start:
-            return True
-        if self.probe is not None:
-            self.probe.add(name)
-            return True
-        return False
+    # -- statements ------------------------------------------------------------------------------------------------
 
-    def retype_refusal(self, name: str) -> TranslationError:
-        return TranslationError(f"{name} changes from an integer to a distribution inside a branch or a loop it was "
-                                "made outside of, which is not supported yet")
-
-    def refuse_alias(self, name: str) -> None:
-        if self.slots[self.bindings[name]].lifted:
-            raise TranslationError(f"{name} may be an integer or a distribution at this point, so it cannot be aliased "
-                                   "or passed by reference yet")
-
-    def lift_for(self, node: Node) -> None:
-        """
-        Before a branch or a loop that turns an integer from outside it into a distribution on some path, lift that integer
-        here, so the variable is a distribution on every path through the region. A first translation of the region, in a
-        copy with throwaway names, finds the integers; `recover-definite` turns a lift that no path superposes back into an
-        integer, so the lift costs nothing where it is not needed.
-        """
-        if self.probe is not None:  # an enclosing probe already collects the names from every region inside it
-            return
-        probe = _Translator(self.width, _Names(), itertools.count(len(self.slots)), dict(self.slots), dict(self.bindings),
-                            self.module)
-        probe.depth, probe.iterations, probe.readonly = self.depth, self.iterations, set(self.readonly)
-        probe.nested, probe.region_start, probe.probe = self.nested, self.region_start, set()
-        probe.statement(node)
-        for name in sorted(probe.probe):
-            if name not in self.bindings or self.slots[self.bindings[name]].dist:
-                continue  # made inside the region itself, or already a distribution
-            if not self.retypable(name):
-                raise self.retype_refusal(name)
-            value = self.load(self.slot_id(name))
-            lifted = self.emit(f"dist.lift {value.ssa} : {value.type} -> {self.distribution(value.type)}",
-                               self.distribution(value.type))
-            slot_id = self.new_slot(name, lifted.type)
-            self.slots[slot_id] = self.slots[slot_id]._replace(lifted=True)
-            self.store(slot_id, lifted)
-
-    def check_writable(self, name: str) -> None:
-        if self.bindings[name] in self.readonly:
-            raise TranslationError(f"the loop variable {name} cannot be assigned to inside its loop")
-
-    def inline(self, statements: Sequence[Node]) -> None:
-        """Translate statements here, as straight-line code. Names first assigned in them end with them."""
-        before = dict(self.bindings)
+    def region(self, statements: Sequence[Node]) -> None:
+        """Translate statements in a region of their own: names first assigned in them end with them."""
+        self.scopes.append({})
+        self.level += 1
         for statement in statements:
             self.statement(statement)
-        for name in [n for n in self.bindings if n not in before]:
-            del self.bindings[name]
+        self.level -= 1
+        self.scopes.pop()
 
     def conditional(self, node: If) -> None:
         condition = self.expression(node.condition)
-        if self.module.fold and not condition.dist:  # the condition is known, so only the taken arm exists
-            if condition.const is None:
-                raise TranslationError("a condition is not known at translation time")
-            self.inline(node.body if condition.const else node.orelse)
-            return
-        if condition.dist:
-            self.select(condition, node)
-        else:
-            self.lift_for(node)
-            self.branch_on_definite(condition, node)
-
-    def branch_on_definite(self, condition: _Value, node: If) -> None:
-        """An `scf.if` whose arms store to the variables they change."""
-        arms = []
-        for statements in (node.body, node.orelse):
-            arm = self.child()
-            for statement in statements:
-                arm.statement(statement)
-            arms.append(arm)
-        self.absorb(arms)
-        indented = [["  " + line for line in arm.lines] for arm in arms]
-        self.lines += [f"scf.if {condition.ssa} {{", *indented[0], "} else {", *indented[1], "}"]
-
-    def absorb(self, regions: Sequence["_Translator"]) -> None:
-        """Take over what the regions stored to outside themselves."""
-        self.written |= {slot_id for region in regions for slot_id in region.written if slot_id < regions[0].region_start}
-
-    def select(self, condition: _Value, node: If) -> None:
-        """
-        Both arms are computed here, on copies of the definite variables they change, and one `dist.select` picks each
-        changed variable's value, using the condition once. An arm may also turn an integer into a distribution; the
-        select takes either, so the variable ends as a distribution. A changed variable then holds a distribution.
-        """
-        if self.shadow is not None or self.nested:
-            raise TranslationError("a conditional on a distribution inside another conditional or a loop is not "
-                                   "supported yet")
-        arms = []
-        for statements in (node.body, node.orelse):
-            arm = _Translator(self.width, self.names, self.ids, self.slots, dict(self.bindings), self.module)
-            arm.depth, arm.iterations, arm.readonly = self.depth, self.iterations, self.readonly
-            arm.shadow, arm.outer, arm.known = {}, set(self.slots), dict(self.known)
-            for statement in statements:
-                arm.statement(statement)
-            arms.append(arm)
-            self.lines += arm.lines
-
-        def arm_slot(arm: "_Translator", name: str) -> int:
-            """The slot holding the variable at the end of the arm."""
-            slot_id = self.bindings[name]
-            if arm.bindings.get(name, slot_id) != slot_id:  # rebound in the arm: an integer that became a distribution
-                return arm.bindings[name]
-            if slot_id in arm.shadow and arm.shadow[slot_id] in arm.written:
-                return arm.shadow[slot_id]
-            return slot_id
-
-        names = [name for name, slot_id in self.bindings.items() if any(arm_slot(arm, name) != slot_id for arm in arms)]
-        if not names:
-            return
-        element = lambda type: type[len("!dist.dist<"):-1] if type.startswith("!dist.dist") else type
-        result_types = [self.distribution(element(self.slots[self.bindings[name]].type)) for name in names]
-        pick = [[self.load(arm_slot(arm, name)) for name in names] for arm in arms]
-        results = next(self.names)
-        count = f":{len(names)}" if len(names) > 1 else ""
-        join = lambda values, key: ", ".join(key(value) for value in values)
-        self.lines.append(
-            f"{results}{count} = dist.select {condition.ssa}, ({join(pick[0], lambda v: v.ssa)}), "
-            f"({join(pick[1], lambda v: v.ssa)}) : {condition.type}, ({join(pick[0], lambda v: v.type)}), "
-            f"({join(pick[1], lambda v: v.type)}) -> ({', '.join(result_types)})")
-        for index, name in enumerate(names):
-            value = _Value(f"{results}#{index}" if len(names) > 1 else results, result_types[index])
-            self.store(self.new_slot(name, value.type), value)
+        if condition.dist:  # an integer if the distribution turns out to be a lifted one: the folding decides
+            touched = [self.reference(var) for var in self.visible().values() if var.ref]  # what the arms may change
+            names = "".join(f", {value.ssa}" for value in touched)
+            types = "".join(f", {value.type}" for value in touched)
+            condition = self.emit(f"dist.cond {condition.ssa}{names} : {condition.type}{types} -> i1", "i1")
+        self.out(f"scf.if {condition.ssa} {{")
+        self.region(node.body)
+        self.out("} else {")
+        self.region(node.orelse)
+        self.out("}")
 
     def loop(self, node: ForLoop) -> None:
-        """
-        A loop with literal bounds is an `affine.for`, whose bounds must be static, so the trip count is classical. Its
-        variable is a slot of its own that the body may only read. A pass unrolls the loop before the slots are promoted.
-        A loop that runs no times is translated for its errors and then dropped.
-        """
+        """A loop with literal bounds is an `affine.for`, whose variable the body may only read. One that runs no times is
+        translated for its errors and then dropped."""
         start, stop = node.start.value, node.stop.value
-        if self.module.fold:  # unroll here: one copy of the body per value of the loop variable
-            if self.depth + 1 > MAX_DEPTH or self.iterations * max(stop - start, 1) > MAX_ITERATIONS:
-                raise TranslationError(f"loops nested {MAX_DEPTH} deep or running {MAX_ITERATIONS} iterations in all "
-                                       "cannot be unrolled")
-            self.depth, self.iterations = self.depth + 1, self.iterations * max(stop - start, 1)
-            for k in range(start, stop):
-                before = dict(self.bindings)
-                variable = self.new_slot(node.var, self.type)
-                self.store(variable, self.constant(k))
-                self.readonly.add(variable)
-                self.inline(node.body)
-                self.readonly.discard(variable)
-                self.bindings.pop(node.var, None)
-                if node.var in before:
-                    self.bindings[node.var] = before[node.var]
-            self.depth, self.iterations = self.depth - 1, self.iterations // max(stop - start, 1)
-            return
-        self.lift_for(node)
-        body = self.child()
-        body.depth, body.iterations = self.depth + 1, self.iterations * max(stop - start, 1)
-        if body.depth > MAX_DEPTH or body.iterations > MAX_ITERATIONS:
+        iterations = self.iterations * max(stop - start, 1)
+        if len(self.loops) + 1 > MAX_DEPTH or iterations > MAX_ITERATIONS:
             raise TranslationError(f"loops nested {MAX_DEPTH} deep or running {MAX_ITERATIONS} iterations in all cannot "
                                    "be unrolled")
-        index = next(self.names)
-        counter = body.emit(f"arith.index_cast {index} : index to {self.type}", self.type)
-        variable = body.new_slot(node.var, self.type)
-        body.store(variable, counter)
-        body.readonly = self.readonly | {variable}
+        mark = len(self.lines)
+        index = f"%{next(self.names)}"
+        self.out(f"affine.for {index} = {start} to {stop} {{")
+        self.scopes.append({})
+        self.level += 1
+        self.loops.append(node.var)
+        self.iterations = iterations
+        counter = self.emit(f"arith.index_cast {index} : index to {self.type}", self.type)
+        self.bind(node.var, counter)
         for statement in node.body:
-            body.statement(statement)
-        self.absorb([body])
-        if stop > start:
-            self.lines += [f"affine.for {index} = {start} to {stop} {{", *["  " + line for line in body.lines], "}"]
+            self.statement(statement)
+        self.iterations //= max(stop - start, 1)
+        self.loops.pop()
+        self.level -= 1
+        self.scopes.pop()
+        self.out("}")
+        if stop <= start:
+            del self.lines[mark:]
 
     def update(self, node: Assign) -> None:
-        """`name += amount;` or `name -= amount;`, which the parser gives as `name = name + amount` marked in place."""
-        slot_id = self.slot_id(node.name)
+        """`name += amount;` or `name -= amount;`, which the parser gives as `name = name + amount` marked in place. For a
+        distribution the sum is computed out of place from what the object holds and stored back into it."""
+        var = self.lookup(node.name)
         self.check_writable(node.name)
-        if self.shadow is not None and slot_id in self.outer and self.slots[slot_id].dist:
-            raise TranslationError(f"{node.name} is a distribution, which a conditional on a distribution cannot update "
-                                   "yet")
-        target, amount = self.load(slot_id), self.expression(node.value.right)
-        name = {"+": "add_assign", "-": "sub_assign"}[node.value.op]
-        if not (target.dist or amount.dist):
-            folded = None
-            if self.module.fold and target.const is not None and amount.const is not None:
-                folded = self.fold_binary("+" if name == "add_assign" else "-", target.const, amount.const)
-            result = folded or self.emit(f"arith.{'addi' if name == 'add_assign' else 'subi'} {target.ssa}, "
-                                         f"{amount.ssa} : {self.type}", self.type)
-        else:
-            if not target.dist:  # an integer updated by a distribution: lift it, update the lift, and keep the result
-                if not self.retypable(node.name):
-                    raise self.retype_refusal(node.name)
-                lifted = self.emit(f"dist.lift {target.ssa} : {target.type} -> {self.distribution(target.type)}",
-                                   self.distribution(target.type))
-                result_type = self.distribution(self.type)
-                result = self.emit(
-                    f"dist.{name} {lifted.ssa}, {amount.ssa} : {lifted.type}, {amount.type} -> {result_type}", result_type)
-                self.store(self.new_slot(node.name, result_type), result)
-                return
-            right = node.value.right
-            if isinstance(right, Variable) and self.bindings.get(right.name) == self.bindings[node.name]:
-                raise TranslationError(f"{node.name} {node.value.op}= ... adds a distribution to itself, which is not "
-                                       "supported yet")
-            result_type = self.distribution(self.type)
-            result = self.emit(
-                f"dist.{name} {target.ssa}, {amount.ssa} : {target.type}, {amount.type} -> {result_type}", result_type)
-        self.store(slot_id, result)
+        name = {"+": "add", "-": "sub"}[node.value.op]
+        if var.ref:
+            reference = self.reference(var)
+            held = self.get(reference)
+            amount = self.expression(node.value.right)
+            result = self.emit(f"dist.{name}i {held.ssa}, {amount.ssa} : {held.type}, {amount.type} -> {self.dist}", self.dist)
+            self.out(f"dist.set {reference.ssa}, {result.ssa} : {self.ref}, {self.dist}")
+            return
+        target = self.read(node.name)
+        amount = self.expression(node.value.right)
+        if amount.dist:
+            raise TranslationError(f"{node.name} is updated with a distribution but is not known to hold one")
+        self.store(var, self.emit(f"arith.{name}i {target.ssa}, {amount.ssa} : {self.type}", self.type))
 
     def assign(self, node: Assign) -> None:
-        bound = self.bindings.get(node.name, -1)
-        held = self.slots.get(bound)
-        if held is not None and held.dist and not held.lifted:
-            raise TranslationError(f"assigning to {node.name} would drop the distribution it holds; only an in-place "
-                                   "update changes one")
-        if isinstance(node.value, Variable) and node.value.name in self.bindings \
-                and self.slots[self.bindings[node.value.name]].dist:  # an alias of a distribution
-            self.refuse_alias(node.value.name)
-            self.bindings[node.name] = self.bindings[node.value.name]
-            return
-        if isinstance(node.value, Call):
+        exists = self.exists(node.name)
+        if exists:
+            self.check_writable(node.name)
+        source = self.object_of(node.value)
+        fresh = isinstance(node.value, Distribution)
+        if source is None and isinstance(node.value, Call):
             result, instance = self.call(node.value)
-            if isinstance(result, _Slot):  # a distribution the function returned by reference: an alias
-                slot_id = next(self.ids)
-                self.slots[slot_id] = result
-                self.bindings[node.name] = slot_id
-                return
-            value, fresh = result, instance.kind == "fresh"
-        else:
+            if result.type == self.ref:
+                source = result
+            else:
+                value, fresh = result, instance.kind == "fresh"
+        elif source is None:
             value = self.expression(node.value)
-            fresh = isinstance(node.value, Distribution)
-        if value.dist and not fresh:  # a computed value: an independent instance
-            result = value.type
-            value = self.emit(f"dist.instance {value.ssa} : {result} -> {result}", result)
-        if held is None:
-            self.store(self.new_slot(node.name, value.type), value)
-            return
-        self.check_writable(node.name)
-        if held.lifted:  # a variable that may be a distribution takes either, as a distribution
-            if self.shadow is not None and bound in self.outer:
-                raise TranslationError(f"{node.name} may be a distribution, which a conditional on a distribution cannot "
-                                       "assign yet")
-            if not value.dist:
-                value = self.emit(f"dist.lift {value.ssa} : {value.type} -> {self.distribution(value.type)}",
-                                  self.distribution(value.type))
-            self.store(bound, value)
-            return
-        if held.type != value.type:
-            if value.dist:  # an integer variable that now holds a distribution
-                if not self.retypable(node.name):
-                    raise self.retype_refusal(node.name)
-                self.store(self.new_slot(node.name, value.type), value)
+        if source is not None:  # a plain name, or a variable a call returned: a copy or an alias, once it is known
+            if not exists:
+                self.declare(node.name, self.emit(f"dist.share {source.ssa} : {self.ref} -> {self.ref}", self.ref))
                 return
-            raise TranslationError(f"{node.name} holds {held.type}, which cannot take a value of type {value.type}")
-        self.store(self.slot_id(node.name), value)
+            var = self.lookup(node.name)
+            if not var.ref:
+                raise TranslationError(f"{node.name} takes a distribution but is not known to hold one")
+            target = self.reference(var)
+            self.store(var, self.emit(f"dist.assign {target.ssa}, {source.ssa} : {self.ref}, {self.ref} -> {self.ref}",
+                                      self.ref))
+            return
+        if value.dist and not fresh:
+            value = self.instance_of(node.value, value)
+        if not exists:
+            self.bind(node.name, value)
+            return
+        var = self.lookup(node.name)
+        if var.ref:
+            self.out(f"dist.overwrite {self.reference(var).ssa}, {self.lift(value).ssa} : {self.ref}, {self.dist}")
+        elif value.dist:
+            raise TranslationError(f"{node.name} takes a distribution but is not known to hold one")
+        else:
+            self.store(var, value)
 
     def statement(self, node: Node) -> None:
-        if self.shadow is not None and isinstance(node, (If, ForLoop)) and not self.module.fold:
-            raise TranslationError("a conditional or a loop inside a conditional on a distribution is not supported yet")
         if isinstance(node, Assign) and node.inplace:
             self.update(node)
         elif isinstance(node, Assign):
@@ -668,9 +503,12 @@ class _Translator:
 
 
 def translate(program: Sequence[Node], width: int = WIDTH, fold: bool = False) -> str:
-    """With `fold`, the translation evaluates what it can as it goes: known integer values are constants, a conditional on
-    one keeps only the arm taken, and loops and calls are expanded in place. Without it they are left to MLIR's passes."""
-    module = _Module(program, width, fold)
-    main = _Translator(width, _Names(), itertools.count(), {}, {}, module)
-    text = main.program([node for node in program if not isinstance(node, FunctionDef)])
+    """`fold` selects approach B (`translate_folding.py`), which evaluates what it can while translating."""
+    if fold:
+        from experiment_existing_ir.translate_folding import translate as folding
+        return folding(program, width, True)
+    module = _Module(program, width)
+    statements = [node for node in program if not isinstance(node, FunctionDef)]
+    main = _Translator(width, module, _may_hold_distribution(statements, set(), module.functions))
+    text = main.program(statements)
     return "\n\n".join([*module.texts, text])

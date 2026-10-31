@@ -82,6 +82,13 @@ PROGRAMS: Tuple[Tuple[str, str], ...] = (
      "a = 0..4; x = 2; y = 0; k = 9; for i in 0..3 { if k < 3 { x += a; } if x < 5 { y += 1; } } return y;"),
     ("a possibly superposed variable passed to a function",
      BUMP + "a = 0..4; x = 2; k = 9; for i in 0..2 { if k < 3 { x += a; } } y = bump(x); return x;"),
+    # conditionals on a distribution inside conditionals, loops and calls, and an alias made inside a branch
+    ("a distribution conditional inside another, in a loop",
+     "a = 0..4; b = 0..2; s = 0; for i in 0..2 { if a < 2 { if b < 1 { s += 1; } } } return s;"),
+    ("a loop inside an arm of a distribution conditional", "a = 0..4; s = 0; if a < 2 { for i in 0..3 { s += 1; } } return s;"),
+    ("a distribution added to itself", "a = 0..4; a += a; return a;"),
+    ("an outer name aliased inside a live branch", "a = 0..4; x = 2; k = 1; if k < 3 { x = a; } x += 1; return a;"),
+    ("an outer name aliased inside a dead branch", "a = 0..4; x = 2; k = 9; if k < 3 { x = a; } x += 1; return a;"),
 )
 
 
@@ -137,20 +144,67 @@ def random_program(rng: random.Random) -> str:
     return " ".join(lines)
 
 
-def fuzz(count: int, seed: int) -> None:
+RICH_FUNCTIONS = (BUMP + "function plus(p) { return p + 1; }\n"
+                  "function pick(p, n) { if n < 2 { p += 1; } return p; }\n")
+
+
+def random_rich_program(rng: random.Random) -> str:
+    """
+    The same kind of program with the constructs that used to be refused: conditionals on a distribution (on a range, on
+    a variable that may hold one, or on a loop variable) inside conditionals and loops, loops and conditionals inside
+    them, a distribution added to itself, aliases of both distributions, and calls that update or return a variable.
+    """
+    names = ["x", "y", "z"]
+
+    def number() -> int:
+        return rng.randint(1, 3)
+
+    def simple(in_loop: bool) -> str:
+        v, w = rng.sample(names, 2)
+        options = [f"{v} += a;", f"{v} += b;", f"{v} += {number()};", f"{v} = {w};", f"{v} = {w};", f"{v} = {number()};",
+                   f"{v} += {w};", f"{v} -= {w};", f"{v} = {w} + a;", f"{v} = a;", f"a += {v};", "a += a;", f"b += {v};",
+                   f"{v} = bump({w});", f"bump({v});", f"{v} = plus({w});", f"{v} = pick({w}, {rng.randint(0, 3)});"]
+        if in_loop:
+            options += [f"{v} += i;", f"{v} = i;"]
+        return rng.choice(options)
+
+    def condition(in_loop: bool) -> str:
+        options = ["kl < 3", "kd < 3", "a < 2", "a < 2", "b < 1", "x < 4", "y < 3", "z < 6", "a < x", "x < a"]
+        return rng.choice(options + (["a < i", "i < 1"] if in_loop else []))
+
+    def block(depth: int, in_loop: bool) -> str:
+        return " ".join(statement(depth + 1, in_loop) for _ in range(rng.randint(1, 2)))
+
+    def statement(depth: int, in_loop: bool) -> str:
+        kind = rng.choice(["plain"] * 4 + ["if", "if", "loop"] if depth < 3 else ["plain"])
+        if kind == "if":
+            text = f"if {condition(in_loop)} {{ {block(depth, in_loop)} }}"
+            return text + (f" else {{ {block(depth, in_loop)} }}" if rng.random() < 0.4 else "")
+        if kind == "loop" and not in_loop:
+            return f"for i in 0..{rng.randint(2, 3)} {{ {block(depth, True)} }}"
+        return simple(in_loop)
+
+    lines = ["a = 0..4;", "b = 0..2;", "x = 2;", "y = 3;", "z = 5;", "kl = 1;", "kd = 9;"]
+    lines += [statement(0, False) for _ in range(rng.randint(3, 6))]
+    lines.append(rng.choice(["return x;", "return y;", "return x - y;", "return x + z;", "return z - y;", "return a;"]))
+    return RICH_FUNCTIONS + " ".join(lines)
+
+
+def fuzz(count: int, seed: int, rich: bool = False) -> None:
+    """Random programs, each compiled both ways and compared with the reference; `rich` uses the larger generator and only A."""
     rng = random.Random(seed)
     tally: Dict[Tuple[str, str], int] = {}
     reasons: Dict[Tuple[str, str], int] = {}
     wrong: List[str] = []
     checked = 0
     while checked < count:
-        source = random_program(rng)
+        source = random_rich_program(rng) if rich else random_program(rng)
         try:
             expected = law(parse(source, "v2"))
         except ReferenceError_:
             continue
         checked += 1
-        for label, fold in (("A", False), ("B", True)):
+        for label, fold in (("A", False),) if rich else (("A", False), ("B", True)):
             outcome = check(source, expected, fold)
             tally[(label, outcome.status)] = tally.get((label, outcome.status), 0) + 1
             if outcome.status == "refused":
@@ -159,7 +213,7 @@ def fuzz(count: int, seed: int) -> None:
             if outcome.status == "WRONG":
                 wrong.append(f"{label}: {source}\n     {outcome.detail}  expected {expected}")
     print(f"{checked} random programs valid under the semantics (seed {seed})")
-    for label in ("A", "B"):
+    for label in ("A",) if rich else ("A", "B"):
         print(f"  {label}: " + ", ".join(f"{status} {tally.get((label, status), 0)}" for status in ("ok", "refused", "WRONG")))
     for (label, reason), times in sorted(reasons.items(), key=lambda item: -item[1])[:8]:
         print(f"    refused by {label} x{times}: {reason}")
@@ -169,7 +223,8 @@ def fuzz(count: int, seed: int) -> None:
 
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "fuzz":
-        fuzz(int(sys.argv[2]) if len(sys.argv) > 2 else 200, int(sys.argv[3]) if len(sys.argv) > 3 else 1)
+        fuzz(int(sys.argv[2]) if len(sys.argv) > 2 else 200, int(sys.argv[3]) if len(sys.argv) > 3 else 1,
+             rich=sys.argv[4:] == ["rich"])
         return
     wrong: List[str] = []
     print(f"{'program':<56}{'reference':<22}{'A':<10}{'B':<10}")

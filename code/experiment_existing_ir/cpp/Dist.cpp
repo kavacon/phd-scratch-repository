@@ -1,4 +1,5 @@
 #include "Dialects.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/Transforms/InliningUtils.h"
 #include "mlir/Interfaces/Utils/InferIntRangeCommon.h"
@@ -153,4 +154,78 @@ void SelectOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRange
 }
 void MeasureOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   setResultRange(getResult(), ranges[0]);
+}
+
+// ---- objects -------------------------------------------------------------------------------------------------------
+
+// A reference and the distribution it holds have the same element type.
+static LogicalResult verifyHolds(Operation *op, Type ref, Type value) {
+  if (cast<RefType>(ref).getElement() != elementOf(value))
+    return op->emitOpError("needs a reference whose element type is the distribution's");
+  return success();
+}
+LogicalResult NewOp::verify() { return verifyHolds(*this, getResult().getType(), getInitial().getType()); }
+LogicalResult GetOp::verify() { return verifyHolds(*this, getRef().getType(), getResult().getType()); }
+LogicalResult SetOp::verify() { return verifyHolds(*this, getRef().getType(), getValue().getType()); }
+LogicalResult OverwriteOp::verify() { return verifyHolds(*this, getRef().getType(), getValue().getType()); }
+LogicalResult ShareOp::verify() {
+  if (getSource().getType() != getResult().getType())
+    return emitOpError("needs a result of the type of its source");
+  return success();
+}
+LogicalResult AssignOp::verify() {
+  if (getTarget().getType() != getSource().getType() || getTarget().getType() != getResult().getType())
+    return emitOpError("needs references of one type");
+  return success();
+}
+LogicalResult CondOp::verify() {
+  if (!elementOf(getInput().getType()).isInteger(1))
+    return emitOpError("needs a distribution of one-bit integers");
+  return success();
+}
+
+// A condition that is a lift of an integer is that integer.
+OpFoldResult CondOp::fold(FoldAdaptor) {
+  if (auto lift = getInput().getDefiningOp<LiftOp>())
+    return lift.getInput();
+  return {};
+}
+
+// Promoting an object to a value: `mem2reg` treats `new` as an allocation whose first content is its initial value, `get` as
+// a load and `set` as a store. It does so only when nothing else uses the reference (a marker, or a yield out of a
+// conditional), so an object that is still ambiguous stays in memory.
+SmallVector<MemorySlot> NewOp::getPromotableSlots() { return {MemorySlot{getResult(), getInitial().getType()}}; }
+Value NewOp::getDefaultValue(const MemorySlot &, OpBuilder &) { return getInitial(); }
+void NewOp::handleBlockArgument(const MemorySlot &, BlockArgument, OpBuilder &) {}
+std::optional<PromotableAllocationOpInterface> NewOp::handlePromotionComplete(const MemorySlot &, Value, OpBuilder &) {
+  erase();
+  return std::nullopt;
+}
+
+// The reference is the only thing a memory operation may block with, and as its operand.
+static bool usesOnlyTheSlot(Value ref, const SmallPtrSetImpl<OpOperand *> &blocking, const MemorySlot &slot) {
+  return blocking.size() == 1 && (*blocking.begin())->get() == slot.ptr && ref == slot.ptr;
+}
+bool GetOp::loadsFrom(const MemorySlot &slot) { return getRef() == slot.ptr; }
+bool GetOp::storesTo(const MemorySlot &) { return false; }
+Value GetOp::getStored(const MemorySlot &, OpBuilder &, Value, const DataLayout &) { return {}; }
+bool GetOp::canUsesBeRemoved(const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blocking,
+                             SmallVectorImpl<OpOperand *> &, const DataLayout &) {
+  return usesOnlyTheSlot(getRef(), blocking, slot);
+}
+DeletionKind GetOp::removeBlockingUses(const MemorySlot &, const SmallPtrSetImpl<OpOperand *> &, OpBuilder &,
+                                       Value reachingDefinition, const DataLayout &) {
+  getResult().replaceAllUsesWith(reachingDefinition);
+  return DeletionKind::Delete;
+}
+bool SetOp::loadsFrom(const MemorySlot &) { return false; }
+bool SetOp::storesTo(const MemorySlot &slot) { return getRef() == slot.ptr; }
+Value SetOp::getStored(const MemorySlot &, OpBuilder &, Value, const DataLayout &) { return getValue(); }
+bool SetOp::canUsesBeRemoved(const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blocking,
+                             SmallVectorImpl<OpOperand *> &, const DataLayout &) {
+  return usesOnlyTheSlot(getRef(), blocking, slot);
+}
+DeletionKind SetOp::removeBlockingUses(const MemorySlot &, const SmallPtrSetImpl<OpOperand *> &, OpBuilder &, Value,
+                                       const DataLayout &) {
+  return DeletionKind::Delete;
 }

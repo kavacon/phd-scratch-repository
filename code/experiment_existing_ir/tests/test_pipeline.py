@@ -6,7 +6,7 @@ from experiment_existing_ir import simulate
 from experiment_existing_ir.translate import TranslationError, translate
 
 ARITHMETIC = "x = 5; y = x + 3; y = y - 1; return y;"
-TIED = (*simulate.PREPARE, "--tie-instances", "--canonicalize", "--lower-to-qc")
+TIED = (*simulate.PREPARE, *simulate.RESOLVE, "--tie-instances", "--canonicalize", "--lower-to-qc")
 CONDITIONAL = "a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;"
 
 
@@ -15,8 +15,8 @@ def program(source: str, grammar: str = "v1", **options) -> str:
 
 
 def optimise(source: str, *passes: str) -> str:
-    """The program after its loops are unrolled and its slots promoted to values, then the given passes."""
-    return simulate.optimise(source, *simulate.PREPARE, *passes)
+    """The program after its loops are unrolled, its slots promoted and its references resolved, then the given passes."""
+    return simulate.optimise(source, *simulate.PREPARE, *simulate.RESOLVE, *passes)
 
 
 def registers(qc: str) -> int:
@@ -30,8 +30,8 @@ class Pipeline(unittest.TestCase):
             self.assertEqual(simulate.run(program(ARITHMETIC), (*simulate.PREPARE, *passes)), {7: 2000}, passes)
 
     def test_folding_the_source_first_removes_the_arithmetic_from_the_circuit(self):
-        plain = optimise(program(ARITHMETIC), "--lower-to-qc")
-        folded = optimise(program(ARITHMETIC), "--canonicalize", "--lower-to-qc")
+        plain = simulate.optimise(program(ARITHMETIC), *simulate.PREPARE, "--lower-to-qc")
+        folded = simulate.optimise(program(ARITHMETIC), *simulate.PREPARE, "--canonicalize", "--lower-to-qc")
         self.assertEqual((registers(plain), "qc.call" in plain), (9, True))
         self.assertEqual((registers(folded), "qc.call" in folded), (1, False))  # 7 is 0111, in one register
 
@@ -55,7 +55,7 @@ class Pipeline(unittest.TestCase):
     def test_updates_reuse_the_distribution_s_register_however_far_they_widen_it(self):
         # three constants, the distribution, and for each update only a temporary and a carry: no fresh result register
         source = program("a = 0..4; a += 3; a += 5; a -= 20; return a;", "v2")
-        lowered = optimise(source, "--canonicalize", "--lower-to-qc")
+        lowered = optimise(source, "--canonicalize", "--in-place-updates", "--lower-to-qc")
         self.assertEqual(registers(lowered), 3 + 1 + 3 * 2)
         self.assertEqual(set(simulate.run(source)), {-12, -11, -10, -9})  # 0..3 + 3 + 5 - 20
 
@@ -173,11 +173,10 @@ class Pipeline(unittest.TestCase):
             registers_by_approach = [registers(simulate.optimise(program(source, "v2", fold=fold), *simulate.DEFAULT))
                                      for fold in (False, True)]
             self.assertEqual(registers_by_approach[0], registers_by_approach[1], source)
-        # a variable that a dead branch could superpose is lifted by A, which then cannot treat it as an integer
+        # a condition on a variable that a dead branch could superpose folds in both: the branch is dead, so x stays 2
         source = "a = 0..4; x = 2; y = 0; k = 9; for i in 0..3 { if k < 3 { x += a; } if x < 5 { y += 1; } } return y;"
-        with self.assertRaises(TranslationError):
-            program(source, "v2")
-        self.assertEqual(simulate.run(program(source, "v2", fold=True), shots=100), {3: 100})
+        for fold in (False, True):
+            self.assertEqual(simulate.run(program(source, "v2", fold=fold), shots=100), {3: 100})
 
     def test_conditionals_and_loops_on_definite_values_nest_in_either_order(self):
         # i < 2 adds 10 twice and the rest add 1 twice; a nest counts the pairs i < j; a local reset each pass; a loop in an arm
@@ -206,7 +205,44 @@ class Pipeline(unittest.TestCase):
         source = "x = 2; if x < 3 { x += 5; } else { x -= 1; } return x;"
         self.assertEqual(simulate.run(program(source)), {7: 2000})  # canonicalize folds the arms and the select
         with self.assertRaises(subprocess.CalledProcessError):  # a condition held in qubits cannot be branched on
-            optimise(program(source), "--lower-to-qc")
+            simulate.optimise(program(source), *simulate.PREPARE, "--lower-to-qc")
+
+    def test_conditionals_on_a_distribution_nest_and_may_update_a_distribution(self):
+        # a < 2 half the time and b < 1 half the time, independently, in each of two passes: s is 2 a quarter of the time
+        counts = simulate.run(program("a = 0..4; b = 0..2; s = 0; for i in 0..2 { if a < 2 { if b < 1 { s += 1; } } } return s;",
+                                      "v2"), shots=4000)
+        self.assertEqual(set(counts), {0, 2})
+        self.assertAlmostEqual(counts[0] / 4000, 0.75, delta=0.04)  # b is one roll: both passes add or neither does
+        self.assertAlmostEqual(counts[2] / 4000, 0.25, delta=0.04)
+        # the loop of a < 2 (R10): all three passes add, or none does
+        counts = simulate.run(program("a = 0..4; s = 0; for i in 0..3 { if a < 2 { s += 1; } } return s;", "v2"), shots=4000)
+        self.assertEqual(set(counts), {0, 3})
+        # an update of a distribution under a condition, also through a call: a shifts by one when b < 1 (half the time)
+        bump = "function bump(p) { p += 1; return p; }\n"
+        for source in ("a = 0..4; b = 0..2; if b < 1 { a += 1; } return a;",
+                       bump + "a = 0..4; b = 0..2; if b < 1 { bump(a); } return a;"):
+            counts = simulate.run(program(source, "v2"), shots=8000)
+            for value, weight in zip(range(5), (1, 2, 2, 2, 1)):
+                self.assertAlmostEqual(counts[value] / 8000, weight / 8, delta=0.03, msg=source)
+
+    def test_a_distribution_added_to_itself_is_twice_one_roll(self):
+        self.assertEqual(set(simulate.run(program("a = 0..4; a += a; return a;", "v2"))), {0, 2, 4, 6})
+
+    def test_a_name_aliased_inside_a_branch_is_the_distribution_only_when_the_branch_is_live(self):
+        # x = a in a live branch makes x the object a, so x += 1 shifts a to 1..4; in a dead branch x stays the integer 2
+        live = simulate.run(program("a = 0..4; x = 2; k = 1; if k < 3 { x = a; } x += 1; return a;", "v2"))
+        dead = simulate.run(program("a = 0..4; x = 2; k = 9; if k < 3 { x = a; } x += 1; return a;", "v2"))
+        self.assertEqual((set(live), set(dead)), ({1, 2, 3, 4}, {0, 1, 2, 3}))
+
+    def test_what_the_semantics_refuse_is_refused_with_a_reason(self):
+        # overwriting a distribution would drop it; a name bound to different objects in the arms of a conditional on a
+        # distribution would mean an object that depends on the outcome
+        for source, message in (("a = 0..4; a = 5; return a;", "would drop"),
+                                ("a = 0..4; b = 0..2; y = a; x = 2; if b < 1 { x = y; } return x;", "different objects")):
+            with self.assertRaises(subprocess.CalledProcessError) as caught:
+                simulate.optimise(program(source, "v2"), *simulate.DEFAULT)
+            self.assertIn(message, caught.exception.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
