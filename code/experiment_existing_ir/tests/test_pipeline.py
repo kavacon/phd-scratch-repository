@@ -3,7 +3,7 @@ import unittest
 
 from compiler.parser.parser import parse
 from experiment_existing_ir import simulate
-from experiment_existing_ir.translate import translate
+from experiment_existing_ir.translate import TranslationError, translate
 
 ARITHMETIC = "x = 5; y = x + 3; y = y - 1; return y;"
 TIED = (*simulate.PREPARE, "--tie-instances", "--canonicalize", "--lower-to-qc")
@@ -164,6 +164,20 @@ class Pipeline(unittest.TestCase):
         counts = simulate.run(program("a = 0..4; b = 0..2; x = 2; if b < 1 { x += a; } return x;", "v2"), shots=4000)
         for value, weight in zip(range(2, 6), (5, 1, 1, 1)):
             self.assertAlmostEqual(counts[value] / 4000, weight / 8, delta=0.04, msg=value)
+
+    def test_folding_while_translating_gives_the_same_circuit_as_folding_afterwards_where_both_compile(self):
+        # approach A leaves the folding to MLIR's passes; approach B does it as it translates
+        for source in ("a = 0..4; x = 2; k = 1; if k < 3 { x += a; } return x;",
+                       "a = 0..4; x = 0; for i in 0..6 { if i < 3 { x += a; } else { x -= 1; } } return x;",
+                       "function shift(p, k) { return p + k; }\na = 0..4; t = 0; for i in 0..4 { t += shift(a, i); } return t;"):
+            registers_by_approach = [registers(simulate.optimise(program(source, "v2", fold=fold), *simulate.DEFAULT))
+                                     for fold in (False, True)]
+            self.assertEqual(registers_by_approach[0], registers_by_approach[1], source)
+        # a variable that a dead branch could superpose is lifted by A, which then cannot treat it as an integer
+        source = "a = 0..4; x = 2; y = 0; k = 9; for i in 0..3 { if k < 3 { x += a; } if x < 5 { y += 1; } } return y;"
+        with self.assertRaises(TranslationError):
+            program(source, "v2")
+        self.assertEqual(simulate.run(program(source, "v2", fold=True), shots=100), {3: 100})
 
     def test_conditionals_and_loops_on_definite_values_nest_in_either_order(self):
         # i < 2 adds 10 twice and the rest add 1 twice; a nest counts the pairs i < j; a local reset each pass; a loop in an arm

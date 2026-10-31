@@ -61,6 +61,7 @@ class _Names:
 class _Value(NamedTuple):
     ssa: str
     type: str  # "i32", "i1", "!dist.dist<i32>" or "!dist.dist<i1>"
+    const: Optional[int] = None  # the value, when folding while translating and it is known
 
     @property
     def dist(self) -> bool:
@@ -96,7 +97,8 @@ class _Module:
     distribution is passed as its slot, which makes the parameter the caller's own object.
     """
 
-    def __init__(self, program: Sequence[Node], width: int) -> None:
+    def __init__(self, program: Sequence[Node], width: int, fold: bool = False) -> None:
+        self.fold = fold
         self.width = width
         self.functions = {node.name: node for node in program if isinstance(node, FunctionDef)}
         self.instances: Dict[tuple, _Instance] = {}
@@ -169,6 +171,7 @@ class _Translator:
         self.shadow: Optional[Dict[int, int]] = None  # in the arm of a conditional on a distribution: slot -> its copy
         self.outer: Set[int] = set()  # the slots that existed when that arm began
         self.probe: Optional[Set[str]] = None  # while probing a region: the outside integers it would turn into distributions
+        self.known: Dict[int, int] = {}  # when folding: the value of each integer slot, if it is known
 
     def emit(self, text: str, type: str) -> _Value:
         """Add an operation that produces one value."""
@@ -183,7 +186,22 @@ class _Translator:
         low, high = -(1 << (self.width - 1)), (1 << (self.width - 1)) - 1
         if not low <= value <= high:
             raise TranslationError(f"{value} does not fit in {self.type}")
-        return self.emit(f"arith.constant {value} : {self.type}", self.type)
+        result = self.emit(f"arith.constant {value} : {self.type}", self.type)
+        return result._replace(const=value)
+
+    def wrap(self, value: int) -> int:
+        """The value in two's complement at the program's width, as an integer operation gives it."""
+        half = 1 << (self.width - 1)
+        return (value + half) % (1 << self.width) - half
+
+    def fold_binary(self, op: str, left: int, right: int) -> Optional[_Value]:
+        """When folding while translating: the constant an integer operation on two known values gives."""
+        if op == "<":
+            result = self.emit(f"arith.constant {int(left < right)} : i1", "i1")
+            return result._replace(const=int(left < right))
+        if op in ("+", "-"):
+            return self.constant(self.wrap(left + right if op == "+" else left - right))
+        return None
 
     def child(self) -> "_Translator":
         """A translator for the arm of a branch or the body of a loop, on a copy of the bindings."""
@@ -203,12 +221,19 @@ class _Translator:
 
     def load(self, slot_id: int) -> _Value:
         slot = self.slots[slot_id]
+        if self.module.fold and slot_id in self.known:
+            return self.constant(self.known[slot_id])
         return self.emit(f"memref.load {slot.ssa}[] : {slot.memref}", slot.type)
 
     def store(self, slot_id: int, value: _Value) -> None:
         slot = self.slots[slot_id]
         self.lines.append(f"memref.store {value.ssa}, {slot.ssa}[] : {slot.memref}")
         self.written.add(slot_id)
+        if self.module.fold:
+            if value.const is not None and not slot.dist:
+                self.known[slot_id] = value.const
+            else:
+                self.known.pop(slot_id, None)
 
     def slot_id(self, name: str) -> int:
         """The slot a name reads and writes: in the arm of a conditional on a distribution, a copy of a definite variable."""
@@ -235,6 +260,10 @@ class _Translator:
                 raise TranslationError(f"operator {node.op!r} is not supported on a distribution yet")
             result = self.distribution("i1" if node.op == "<" else self.type)
             return self.emit(f"{name} {left.ssa}, {right.ssa} : {left.type}, {right.type} -> {result}", result)
+        if self.module.fold and left.const is not None and right.const is not None:
+            folded = self.fold_binary(node.op, left.const, right.const)
+            if folded is not None:
+                return folded
         if node.op == "<":
             return self.emit(f"arith.cmpi slt, {left.ssa}, {right.ssa} : {self.type}", "i1")
         name = {"+": "arith.addi", "-": "arith.subi"}.get(node.op)
@@ -299,6 +328,8 @@ class _Translator:
                 passed.append(_Value(slot.ssa, slot.memref))
                 kinds.append(slot.memref)
             slot_ids.append(slot_id)
+        if self.module.fold:
+            return self.inline_call(definition, passed, kinds, slot_ids)
         instance = self.module.instance(definition, kinds)
         for position in instance.writes:
             if self.shadow is not None and slot_ids[position] in self.outer:
@@ -311,6 +342,26 @@ class _Translator:
         if instance.kind == "ref":
             return _Slot(result.ssa, result.type[len("memref<"):-1]), instance
         return result, instance
+
+    def inline_call(self, definition: FunctionDef, passed: List[_Value], kinds: List[str],
+                    slot_ids: List[Optional[int]]) -> Tuple[Union[_Value, _Slot], _Instance]:
+        """When folding while translating: the body is translated here, with the parameters bound to the arguments."""
+        if definition.name in self.module.active:
+            raise TranslationError(f"{definition.name} calls itself, which a circuit cannot do")
+        self.module.active.append(definition.name)
+        body = _Translator(self.width, self.names, self.ids, self.slots, {}, self.module)
+        body.lines, body.known, body.depth, body.iterations = self.lines, self.known, self.depth, self.iterations
+        for parameter, value, kind, slot_id in zip(definition.params, passed, kinds, slot_ids):
+            if slot_id is not None:  # a distribution: the parameter is the caller's own object
+                body.bindings[parameter.name] = slot_id
+            else:  # a definite value: a copy in a slot of the parameter's own
+                body.store(body.new_slot(parameter.name, kind), value)
+        *statements, final = definition.body
+        for statement in statements:
+            body.statement(statement)
+        value, slot, kind = body.returned(final.value)
+        self.module.active.pop()
+        return (slot if slot else value), _Instance("", "", kind, ())
 
     def returned(self, node: Node) -> Tuple[_Value, Optional[_Slot], str]:
         """What a function hands back: a distribution it holds (as its slot), or a value."""
@@ -380,8 +431,21 @@ class _Translator:
         if self.bindings[name] in self.readonly:
             raise TranslationError(f"the loop variable {name} cannot be assigned to inside its loop")
 
+    def inline(self, statements: Sequence[Node]) -> None:
+        """Translate statements here, as straight-line code. Names first assigned in them end with them."""
+        before = dict(self.bindings)
+        for statement in statements:
+            self.statement(statement)
+        for name in [n for n in self.bindings if n not in before]:
+            del self.bindings[name]
+
     def conditional(self, node: If) -> None:
         condition = self.expression(node.condition)
+        if self.module.fold and not condition.dist:  # the condition is known, so only the taken arm exists
+            if condition.const is None:
+                raise TranslationError("a condition is not known at translation time")
+            self.inline(node.body if condition.const else node.orelse)
+            return
         if condition.dist:
             self.select(condition, node)
         else:
@@ -417,7 +481,7 @@ class _Translator:
         for statements in (node.body, node.orelse):
             arm = _Translator(self.width, self.names, self.ids, self.slots, dict(self.bindings), self.module)
             arm.depth, arm.iterations, arm.readonly = self.depth, self.iterations, self.readonly
-            arm.shadow, arm.outer = {}, set(self.slots)
+            arm.shadow, arm.outer, arm.known = {}, set(self.slots), dict(self.known)
             for statement in statements:
                 arm.statement(statement)
             arms.append(arm)
@@ -456,6 +520,23 @@ class _Translator:
         A loop that runs no times is translated for its errors and then dropped.
         """
         start, stop = node.start.value, node.stop.value
+        if self.module.fold:  # unroll here: one copy of the body per value of the loop variable
+            if self.depth + 1 > MAX_DEPTH or self.iterations * max(stop - start, 1) > MAX_ITERATIONS:
+                raise TranslationError(f"loops nested {MAX_DEPTH} deep or running {MAX_ITERATIONS} iterations in all "
+                                       "cannot be unrolled")
+            self.depth, self.iterations = self.depth + 1, self.iterations * max(stop - start, 1)
+            for k in range(start, stop):
+                before = dict(self.bindings)
+                variable = self.new_slot(node.var, self.type)
+                self.store(variable, self.constant(k))
+                self.readonly.add(variable)
+                self.inline(node.body)
+                self.readonly.discard(variable)
+                self.bindings.pop(node.var, None)
+                if node.var in before:
+                    self.bindings[node.var] = before[node.var]
+            self.depth, self.iterations = self.depth - 1, self.iterations // max(stop - start, 1)
+            return
         self.lift_for(node)
         body = self.child()
         body.depth, body.iterations = self.depth + 1, self.iterations * max(stop - start, 1)
@@ -483,8 +564,11 @@ class _Translator:
         target, amount = self.load(slot_id), self.expression(node.value.right)
         name = {"+": "add_assign", "-": "sub_assign"}[node.value.op]
         if not (target.dist or amount.dist):
-            result = self.emit(f"arith.{'addi' if name == 'add_assign' else 'subi'} {target.ssa}, "
-                               f"{amount.ssa} : {self.type}", self.type)
+            folded = None
+            if self.module.fold and target.const is not None and amount.const is not None:
+                folded = self.fold_binary("+" if name == "add_assign" else "-", target.const, amount.const)
+            result = folded or self.emit(f"arith.{'addi' if name == 'add_assign' else 'subi'} {target.ssa}, "
+                                         f"{amount.ssa} : {self.type}", self.type)
         else:
             if not target.dist:  # an integer updated by a distribution: lift it, update the lift, and keep the result
                 if not self.retypable(node.name):
@@ -553,7 +637,7 @@ class _Translator:
         self.store(self.slot_id(node.name), value)
 
     def statement(self, node: Node) -> None:
-        if self.shadow is not None and isinstance(node, (If, ForLoop)):
+        if self.shadow is not None and isinstance(node, (If, ForLoop)) and not self.module.fold:
             raise TranslationError("a conditional or a loop inside a conditional on a distribution is not supported yet")
         if isinstance(node, Assign) and node.inplace:
             self.update(node)
@@ -583,8 +667,10 @@ class _Translator:
         return "\n".join([f"func.func @main() -> {self.type} {{", *body, "}"])
 
 
-def translate(program: Sequence[Node], width: int = WIDTH) -> str:
-    module = _Module(program, width)
+def translate(program: Sequence[Node], width: int = WIDTH, fold: bool = False) -> str:
+    """With `fold`, the translation evaluates what it can as it goes: known integer values are constants, a conditional on
+    one keeps only the arm taken, and loops and calls are expanded in place. Without it they are left to MLIR's passes."""
+    module = _Module(program, width, fold)
     main = _Translator(width, _Names(), itertools.count(), {}, {}, module)
     text = main.program([node for node in program if not isinstance(node, FunctionDef)])
     return "\n\n".join([*module.texts, text])
