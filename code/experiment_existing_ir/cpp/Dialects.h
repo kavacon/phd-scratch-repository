@@ -25,6 +25,5 @@ void registerLowerToQC();
 void registerDistStatus();
 void registerInstances();
 void registerInPlaceUpdates();
-void registerFlattenDistIf();
 void registerCheckResolved();
 } // namespace existing_ir

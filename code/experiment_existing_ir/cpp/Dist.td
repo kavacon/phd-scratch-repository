@@ -21,6 +21,7 @@ def Dist_Dialect : Dialect {
   let name = "dist";
   let cppNamespace = "::existing_ir::dist";
   let useDefaultTypePrinterParser = 1;
+  let hasCanonicalizer = 1;  // the conditional on a superposition (Refs.cpp)
   let dependentDialects = ["::mlir::arith::ArithDialect"];  // the patterns of `canonicalize` turn lifted arithmetic into arith
 }
 

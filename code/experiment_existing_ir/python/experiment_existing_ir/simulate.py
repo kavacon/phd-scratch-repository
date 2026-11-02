@@ -37,8 +37,7 @@ def built() -> bool:
 
 
 # The tool's own passes that are anchored on a function. Flags nest them by themselves; in a pipeline they are nested here.
-FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "resolve-refs", "flatten-dist-if",
-                   "check-resolved"}
+FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "check-resolved"}
 
 
 def command(*passes: str) -> list:
@@ -77,11 +76,13 @@ def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
     return {to_signed(value, width): count for value, count in sorted(counts.items())}
 
 
-# The default pipeline. Resolving the references: `resolve-refs` repeats `canonicalize` (which folds the conditions that are definite, forwards the
-# value an object holds to the markers and the reads that depend on it, and turns arithmetic on lifted integers back into
-# integers), `mem2reg` (which promotes the objects nothing escapes any more) and `flatten-dist-if` (which takes the
-# conditionals that stay on a superposition) until nothing changes. `check-resolved` refuses what is still open.
-RESOLVE = ("--resolve-refs", "--check-resolved")
+# The default pipeline. Resolving the references is two rounds of stock passes: `canonicalize` folds the definite
+# conditions, forwards the value an object holds to the reads and markers that depend on it, turns arithmetic on lifted
+# integers back into integers, and flattens the conditionals that stay on a superposition (patterns of the dist dialect, so
+# the greedy driver carries down a chain of them in one run); `mem2reg` then promotes the objects that nothing escapes any
+# more; the last `canonicalize` folds what that exposed. However long the chain of conditionals, this is enough (the first
+# `canonicalize` finishes the chain). `check-resolved` refuses what is still open.
+RESOLVE = ("--canonicalize", PROMOTE, "--canonicalize", "--check-resolved")
 DEFAULT = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--in-place-updates", "--lower-to-qc")
 
 
