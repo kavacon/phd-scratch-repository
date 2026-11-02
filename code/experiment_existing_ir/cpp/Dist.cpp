@@ -156,33 +156,23 @@ void MeasureOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRang
   setResultRange(getResult(), ranges[0]);
 }
 
-// ---- objects -------------------------------------------------------------------------------------------------------
+// ---- references ------------------------------------------------------------------------------------------------------
 
-// A reference and the distribution it holds have the same element type.
-static LogicalResult verifyHolds(Operation *op, Type ref, Type value) {
-  if (cast<RefType>(ref).getElement() != elementOf(value))
-    return op->emitOpError("needs a reference whose element type is the distribution's");
-  return success();
-}
-LogicalResult NewOp::verify() { return verifyHolds(*this, getResult().getType(), getInitial().getType()); }
-LogicalResult GetOp::verify() { return verifyHolds(*this, getRef().getType(), getResult().getType()); }
-LogicalResult SetOp::verify() { return verifyHolds(*this, getRef().getType(), getValue().getType()); }
-LogicalResult OverwriteOp::verify() { return verifyHolds(*this, getRef().getType(), getValue().getType()); }
-LogicalResult ShareOp::verify() {
-  if (getSource().getType() != getResult().getType())
-    return emitOpError("needs a result of the type of its source");
-  return success();
-}
-LogicalResult AssignOp::verify() {
-  if (getTarget().getType() != getSource().getType() || getTarget().getType() != getResult().getType())
-    return emitOpError("needs references of one type");
-  return success();
-}
 LogicalResult CondOp::verify() {
   if (!elementOf(getInput().getType()).isInteger(1))
     return emitOpError("needs a distribution of one-bit integers");
   return success();
 }
+
+// A cell holds a distribution of the element type of what it is read or written with.
+static LogicalResult verifyCell(Operation *op, Type cell, Type value) {
+  auto memref = dyn_cast<MemRefType>(cell);
+  if (!memref || memref.getRank() != 0 || memref.getElementType() != value)
+    return op->emitOpError("needs a rank 0 memref whose element is the distribution");
+  return success();
+}
+LogicalResult GetOp::verify() { return verifyCell(*this, getCell().getType(), getResult().getType()); }
+LogicalResult SetOp::verify() { return verifyCell(*this, getCell().getType(), getValue().getType()); }
 
 // A condition that is a lift of an integer is that integer.
 OpFoldResult CondOp::fold(FoldAdaptor) {
@@ -191,41 +181,25 @@ OpFoldResult CondOp::fold(FoldAdaptor) {
   return {};
 }
 
-// Promoting an object to a value: `mem2reg` treats `new` as an allocation whose first content is its initial value, `get` as
-// a load and `set` as a store. It does so only when nothing else uses the reference (a marker, or a yield out of a
-// conditional), so an object that is still ambiguous stays in memory.
-SmallVector<MemorySlot> NewOp::getPromotableSlots() { return {MemorySlot{getResult(), getInitial().getType()}}; }
-Value NewOp::getDefaultValue(const MemorySlot &, OpBuilder &) { return getInitial(); }
-void NewOp::handleBlockArgument(const MemorySlot &, BlockArgument, OpBuilder &) {}
-std::optional<PromotableAllocationOpInterface> NewOp::handlePromotionComplete(const MemorySlot &, Value, OpBuilder &) {
-  erase();
-  return std::nullopt;
+// Whether a value holds one value is read off how it was made; until that is certain the question stays.
+OpFoldResult IsSingleOp::fold(FoldAdaptor) {
+  switch (kindOf(getInput())) {
+  case Kind::Definite:
+    return BoolAttr::get(getContext(), true);
+  case Kind::Superposed:
+    return BoolAttr::get(getContext(), false);
+  default:
+    return {};
+  }
 }
 
-// The reference is the only thing a memory operation may block with, and as its operand.
-static bool usesOnlyTheSlot(Value ref, const SmallPtrSetImpl<OpOperand *> &blocking, const MemorySlot &slot) {
-  return blocking.size() == 1 && (*blocking.begin())->get() == slot.ptr && ref == slot.ptr;
+Operation *DistDialect::materializeConstant(OpBuilder &builder, Attribute value, Type type, Location loc) {
+  return arith::ConstantOp::materialize(builder, value, type, loc);
 }
-bool GetOp::loadsFrom(const MemorySlot &slot) { return getRef() == slot.ptr; }
-bool GetOp::storesTo(const MemorySlot &) { return false; }
-Value GetOp::getStored(const MemorySlot &, OpBuilder &, Value, const DataLayout &) { return {}; }
-bool GetOp::canUsesBeRemoved(const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blocking,
-                             SmallVectorImpl<OpOperand *> &, const DataLayout &) {
-  return usesOnlyTheSlot(getRef(), blocking, slot);
-}
-DeletionKind GetOp::removeBlockingUses(const MemorySlot &, const SmallPtrSetImpl<OpOperand *> &, OpBuilder &,
-                                       Value reachingDefinition, const DataLayout &) {
-  getResult().replaceAllUsesWith(reachingDefinition);
-  return DeletionKind::Delete;
-}
-bool SetOp::loadsFrom(const MemorySlot &) { return false; }
-bool SetOp::storesTo(const MemorySlot &slot) { return getRef() == slot.ptr; }
-Value SetOp::getStored(const MemorySlot &, OpBuilder &, Value, const DataLayout &) { return getValue(); }
-bool SetOp::canUsesBeRemoved(const MemorySlot &slot, const SmallPtrSetImpl<OpOperand *> &blocking,
-                             SmallVectorImpl<OpOperand *> &, const DataLayout &) {
-  return usesOnlyTheSlot(getRef(), blocking, slot);
-}
-DeletionKind SetOp::removeBlockingUses(const MemorySlot &, const SmallPtrSetImpl<OpOperand *> &, OpBuilder &, Value,
-                                       const DataLayout &) {
-  return DeletionKind::Delete;
+
+// Neither arm changed the object: it is what it was before. (Two integers that are equal are the same.)
+OpFoldResult MergeOp::fold(FoldAdaptor) {
+  if (same(getWhenTrue(), getBefore()) && same(getWhenFalse(), getBefore()))
+    return getBefore();
+  return {};
 }

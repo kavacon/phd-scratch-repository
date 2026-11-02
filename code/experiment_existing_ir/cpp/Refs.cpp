@@ -1,40 +1,30 @@
-// References to objects, and the conditionals on a superposition.
+// What is left of references and conditionals on a superposition once stock passes have done what they can.
 //
-// A name that can hold a distribution holds a reference to an object (`dist.new`, `dist.get`, `dist.set`). `mem2reg`
-// promotes an object to a value, but only when nothing but loads and stores uses its reference, and a reference that is
-// yielded out of a conditional or shared under a second name is such a use. What those uses mean depends on the value the
-// object holds, so each is a marker (`dist.share`, `dist.assign`, `dist.overwrite`) that a canonicalization pattern here
-// replaces once that value is known. The value is found by looking back along the straight-line code (`reaching`), which is
-// all `canonicalize` has to work with: it is the part of store-to-load forwarding that `mem2reg` cannot do for an object
-// whose reference escapes. Folding a condition needs the same lookup, so `dist.get` forwards too.
+// A variable that may hold a distribution holds a reference to an object: a `memref<!dist.dist<T>>` cell, read and written
+// with `dist.get` and `dist.set`. `mem2reg` promotes the variable's slot (a memref of cells), which makes rebinding
+// a name a value that branches yield. The cells stay in memory because `mem2reg` does not touch affine operations, and
+// the stock `affine-scalrep` forwards a stored value to the reads that follow it and removes the stores nothing reads, so
+// the objects become values once nothing says otherwise. `y = x` is `arith.select(is_single(x's value), copy, x)`, which
+// folds when the value is known, and `canonicalize` finishes the rest.
 //
-// Whether a value is definite (an integer, so a copy is a copy) or a superposition (so a copy is an alias) is read off the
-// operation that made it (`kindOf`), after the patterns of `canonicalize` (Recover.cpp) have turned arithmetic on lifted integers back into lifts.
-// Until the kind is certain a marker stays, and `resolve-refs` repeats `canonicalize`, `mem2reg` and `flatten-dist-if` until nothing changes.
-//
-// `flatten-dist-if` is the other half. A conditional on a superposition (an `scf.if` on a `dist.cond` that stays) holds the
-// objects its arms change in memory, because the condition names them (`touched`). When the arms are straight-line and the
-// value each changed object holds at the end of each arm is known, the conditional is both arms computed out of place, and
-// each changed object is stored `select(condition, then value, else value)`: the variable is tied to the condition. An
-// object an arm leaves as it was (a store of an equal integer is that too) is not changed, as the semantics say.
+// What this file adds to that is the conditional on a superposition. An `scf.if` on a `dist.cond` that stays has the objects
+// its arms store to in memory. It becomes both arms, each working on a copy of those objects (so the arms do not meet), and
+// one `dist.merge` per object, which is a select tying the object to the condition unless neither arm changed it.
 #include "Dialects.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/Pass/PassManager.h"
-#include "mlir/Pass/PassRegistry.h"
 
 using namespace mlir;
 using namespace existing_ir::dist;
 
-namespace {
+namespace existing_ir::dist {
 
-enum class Kind { Definite, Superposed, Unknown };
-
-// What a value of an object is, from how it was made. A lift is definite and a range is not; an operation is a
-// superposition if any operand is, and is otherwise not yet known (it becomes a lift when `canonicalize` rewrites it).
+// A lift is definite and a range is not; an operation is a superposition if any operand is, and is otherwise not yet known
+// (it becomes a lift when `canonicalize` rewrites it, see Recover.cpp).
 Kind kindOf(Value value) {
   if (isa<IntegerType>(value.getType()))
     return Kind::Definite;
@@ -54,118 +44,6 @@ Kind kindOf(Value value) {
   return Kind::Unknown;
 }
 
-// Two references to different allocations are different objects. Anything else may be the same one.
-bool distinct(Value a, Value b) { return a != b && a.getDefiningOp<NewOp>() && b.getDefiningOp<NewOp>(); }
-
-// The value an object holds just before `at`: the nearest store or creation before it, looking back through straight-line
-// code and out of the arms of `scf.if` (the arm starts with what held before the conditional). It stops, and gives nothing,
-// at anything that may write the object.
-Value reaching(Value ref, Operation *at) {
-  for (;;) {
-    for (Operation *op = at->getPrevNode(); op; op = op->getPrevNode()) {
-      if (auto set = dyn_cast<SetOp>(op); set && set.getRef() == ref)
-        return set.getValue();
-      if (auto created = dyn_cast<NewOp>(op); created && created.getResult() == ref)
-        return created.getInitial();
-      auto effects = getEffectsRecursively(op);
-      if (!effects)
-        return {};
-      for (const MemoryEffects::EffectInstance &effect : *effects) {
-        if (!isa<MemoryEffects::Write>(effect.getEffect()))
-          continue;
-        Value written = effect.getValue();
-        if (!written)
-          return {};
-        if (isa<RefType>(written.getType()) && !distinct(written, ref))
-          return {};
-      }
-    }
-    at = at->getParentOp();
-    if (!isa<scf::IfOp>(at))
-      return {};
-  }
-}
-
-Value copyOf(PatternRewriter &rewriter, Location loc, Value definite) {
-  return LiftOp::create(rewriter, loc, definite.getType(), definite.getDefiningOp<LiftOp>().getInput());
-}
-
-// Reading an object after a store to it is the stored value.
-struct ForwardGet : OpRewritePattern<GetOp> {
-  using OpRewritePattern::OpRewritePattern;
-  LogicalResult matchAndRewrite(GetOp op, PatternRewriter &rewriter) const override {
-    Value held = reaching(op.getRef(), op);
-    if (!held)
-      return failure();
-    rewriter.replaceOp(op, held);
-    return success();
-  }
-};
-
-// `y = x` with a new y: a new object when x holds an integer, x itself when it holds a superposition.
-struct ResolveShare : OpRewritePattern<ShareOp> {
-  using OpRewritePattern::OpRewritePattern;
-  LogicalResult matchAndRewrite(ShareOp op, PatternRewriter &rewriter) const override {
-    Value held = reaching(op.getSource(), op);
-    if (!held)
-      return failure();
-    switch (kindOf(held)) {
-    case Kind::Definite:
-      rewriter.replaceOpWithNewOp<NewOp>(op, op.getType(), copyOf(rewriter, op.getLoc(), held));
-      return success();
-    case Kind::Superposed:
-      rewriter.replaceOp(op, op.getSource());
-      return success();
-    default:
-      return failure();
-    }
-  }
-};
-
-// `y = x` with an existing y, which must hold an integer: a store of the integer, or x itself.
-struct ResolveAssign : OpRewritePattern<AssignOp> {
-  using OpRewritePattern::OpRewritePattern;
-  LogicalResult matchAndRewrite(AssignOp op, PatternRewriter &rewriter) const override {
-    Value target = reaching(op.getTarget(), op), source = reaching(op.getSource(), op);
-    if (!target || !source || kindOf(target) != Kind::Definite)
-      return failure();
-    switch (kindOf(source)) {
-    case Kind::Definite:
-      SetOp::create(rewriter, op.getLoc(), op.getTarget(), copyOf(rewriter, op.getLoc(), source));
-      rewriter.replaceOp(op, op.getTarget());
-      return success();
-    case Kind::Superposed:
-      rewriter.replaceOp(op, op.getSource());
-      return success();
-    default:
-      return failure();
-    }
-  }
-};
-
-// `y = e` with an existing y: a store, unless y holds a distribution, which stays for `check-resolved` to refuse.
-struct ResolveOverwrite : OpRewritePattern<OverwriteOp> {
-  using OpRewritePattern::OpRewritePattern;
-  LogicalResult matchAndRewrite(OverwriteOp op, PatternRewriter &rewriter) const override {
-    Value held = reaching(op.getRef(), op);
-    if (!held || kindOf(held) != Kind::Definite)
-      return failure();
-    rewriter.replaceOpWithNewOp<SetOp>(op, op.getRef(), op.getValue());
-    return success();
-  }
-};
-
-// An operation that only allocates, or has no effects, and so may be done in both arms of a conditional.
-bool speculatable(Operation *op) {
-  auto effects = dyn_cast<MemoryEffectOpInterface>(op);
-  if (op->getNumRegions() != 0 || !effects)
-    return false;
-  SmallVector<MemoryEffects::EffectInstance> list;
-  effects.getEffects(list);
-  return llvm::all_of(list, [](auto &effect) { return isa<MemoryEffects::Allocate>(effect.getEffect()); });
-}
-
-// Whether two values are the same: one value, or two integers that are equal. (A superposition is only ever equal to itself.)
 bool same(Value a, Value b) {
   if (a == b)
     return true;
@@ -175,7 +53,6 @@ bool same(Value a, Value b) {
          matchPattern(right.getInput(), m_ConstantInt(&y)) && x == y;
 }
 
-// Whether a value is settled enough to tell from another: a superposition, or an integer that has folded to a constant.
 bool settled(Value value) {
   if (kindOf(value) == Kind::Superposed)
     return true;
@@ -183,96 +60,182 @@ bool settled(Value value) {
   return lift && matchPattern(lift.getInput(), m_Constant());
 }
 
-// A conditional on a superposition, as a pattern of the dialect: `canonicalize` applies it, and since a flattened conditional
-// makes the reads after it forwardable, the greedy driver carries on down a chain of conditionals in one run.
-// It does nothing for a conditional that is not yet certainly on a superposition, or whose arms still hold anything but
-// allocations and stores (reads that did not forward, markers, conditionals of their own): it matches again after they are
-// resolved. None of that depends on this conditional, so waiting cannot deadlock.
+} // namespace existing_ir::dist
+
+namespace {
+
+// An operation that may be done in both arms of a conditional: it only allocates, reads or has no effect.
+bool speculatable(Operation *op) {
+  if (isa<cf::AssertOp>(op))
+    return true;
+  auto effects = dyn_cast<MemoryEffectOpInterface>(op);
+  if (op->getNumRegions() != 0 || !effects)
+    return false;
+  SmallVector<MemoryEffects::EffectInstance> list;
+  effects.getEffects(list);
+  return llvm::all_of(list, [](auto &effect) { return !isa<MemoryEffects::Write>(effect.getEffect()); });
+}
+
+Value memrefOf(Operation *op) {
+  if (auto load = dyn_cast<GetOp>(op))
+    return load.getCell();
+  if (auto store = dyn_cast<SetOp>(op))
+    return store.getCell();
+  return {};
+}
+
+// Two cells from different allocations are different objects. Anything else (a cell picked by a select) may be the same one.
+bool distinct(Value a, Value b) { return a != b && a.getDefiningOp<memref::AllocaOp>() && b.getDefiningOp<memref::AllocaOp>(); }
+
+// The value a cell holds just before `at`: the nearest store before it, looking back through straight-line code and out of the
+// arms of `scf.if` (an arm starts with what held before the conditional). It stops, and gives nothing, at anything that may
+// write the cell. `affine-scalrep` does this for a read in the block of the store, but not out of an `scf.if` arm, which is
+// where the conditions of nested conditionals are.
+Value reaching(Value cell, Operation *at) {
+  for (;;) {
+    for (Operation *op = at->getPrevNode(); op; op = op->getPrevNode()) {
+      if (auto store = dyn_cast<SetOp>(op); store && store.getCell() == cell)
+        return store.getValue();
+      auto effects = getEffectsRecursively(op);
+      if (!effects)
+        return {};
+      for (const MemoryEffects::EffectInstance &effect : *effects) {
+        if (!isa<MemoryEffects::Write>(effect.getEffect()))
+          continue;
+        Value written = effect.getValue();
+        if (!written || (isa<MemRefType>(written.getType()) && !distinct(written, cell)))
+          return {};
+      }
+    }
+    at = at->getParentOp();
+    if (!isa<scf::IfOp>(at))
+      return {};
+  }
+}
+
+// Reading a cell after a store to it is the stored value.
+struct ForwardGet : OpRewritePattern<GetOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(GetOp op, PatternRewriter &rewriter) const override {
+    Value held = reaching(op.getCell(), op);
+    if (!held)
+      return failure();
+    rewriter.replaceOp(op, held);
+    return success();
+  }
+};
+
+// A conditional on a superposition, as a pattern of the dialect: `canonicalize` applies it. It does nothing for a conditional
+// that is not yet certainly on a superposition, or whose arms touch a cell it cannot tell from another (one picked by a
+// select that has not folded) or hold anything but straight-line code: it matches again after they are resolved.
 struct FlattenDistIf : OpRewritePattern<scf::IfOp> {
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(scf::IfOp op, PatternRewriter &rewriter) const override {
     auto condition = op.getCondition().getDefiningOp<CondOp>();
     if (!condition || kindOf(condition.getInput()) != Kind::Superposed)
       return failure();
-    SmallVector<Value> changed;  // the objects from outside the conditional that an arm stores to
-    SmallVector<SetOp> stores;
+    SmallVector<Value> changed;  // the cells from outside the conditional that an arm stores to
     for (Region *region : {&op.getThenRegion(), &op.getElseRegion()}) {
       if (region->empty())
         continue;
       for (Operation &inner : region->front().without_terminator()) {
-        auto store = dyn_cast<SetOp>(inner);
-        if (!store && !speculatable(&inner))
+        if (Value cell = memrefOf(&inner)) {
+          if (!cell.getDefiningOp<memref::AllocaOp>())  // a cell picked by a select may be any of its operands
+            return failure();
+          if (isa<SetOp>(inner) && !op->isAncestor(cell.getParentBlock()->getParentOp()) && !llvm::is_contained(changed, cell))
+            changed.push_back(cell);
+        } else if (!speculatable(&inner)) {
           return failure();
-        if (!store)
-          continue;
-        stores.push_back(store);
-        if (!op->isAncestor(store.getRef().getParentBlock()->getParentOp()) && !llvm::is_contained(changed, store.getRef()))
-          changed.push_back(store.getRef());
+        }
       }
-    }
-    // What each changed object holds before, and at the end of each arm.
-    Operation *thenEnd = op.thenYield(), *elseEnd = op.getElseRegion().empty() ? nullptr : op.elseYield();
-    SmallVector<Value> before, whenTrue, whenFalse;
-    for (Value object : changed) {
-      Value start = reaching(object, op), t = reaching(object, thenEnd), f = elseEnd ? reaching(object, elseEnd) : start;
-      if (!start || !t || !f || !settled(start) || !settled(t) || !settled(f))
-        return failure();
-      before.push_back(start);
-      whenTrue.push_back(t);
-      whenFalse.push_back(f);
     }
     // A name rebound in the arms is bound to different objects in them, which would depend on the outcome: left for
     // `check-resolved` to refuse.
     for (auto [index, result] : llvm::enumerate(op.getResults()))
-      if (!elseEnd || op.thenYield().getOperand(index) != op.elseYield().getOperand(index))
+      if (op.getElseRegion().empty() || op.thenYield().getOperand(index) != op.elseYield().getOperand(index))
         return failure();
+    Location loc = op.getLoc();
+    SmallVector<Value> before, shadows[2];
+    for (Value cell : changed) {  // each arm works on a copy of the cell, starting from what it holds
+      before.push_back(GetOp::create(rewriter, loc, cast<MemRefType>(cell.getType()).getElementType(), cell));
+      for (int arm = 0; arm < 2; ++arm) {
+        Value copy = memref::AllocaOp::create(rewriter, loc, cast<MemRefType>(cell.getType()));
+        SetOp::create(rewriter, loc, before.back(), copy);
+        shadows[arm].push_back(copy);
+        Region *region = arm == 0 ? &op.getThenRegion() : &op.getElseRegion();
+        rewriter.replaceUsesWithIf(cell, copy, [&](OpOperand &use) { return !isa<scf::YieldOp>(use.getOwner()) && region->isAncestor(use.getOwner()->getParentRegion()); });
+      }
+    }
     for (auto [index, result] : llvm::enumerate(op.getResults()))
       rewriter.replaceAllUsesWith(result, op.thenYield().getOperand(index));
-    for (SetOp store : stores)
-      if (llvm::is_contained(changed, store.getRef()))
-        rewriter.eraseOp(store);
     for (Region *region : {&op.getThenRegion(), &op.getElseRegion()})
       if (!region->empty())
         for (Operation &inner : llvm::make_early_inc_range(region->front().without_terminator()))
           rewriter.moveOpBefore(&inner, op);
-    for (auto [index, object] : llvm::enumerate(changed)) {
-      if (same(whenTrue[index], before[index]) && same(whenFalse[index], before[index]))
-        continue;
-      auto select = SelectOp::create(rewriter, op.getLoc(), TypeRange{whenTrue[index].getType()}, condition.getInput(),
-                                     ValueRange{whenTrue[index]}, ValueRange{whenFalse[index]});
-      SetOp::create(rewriter, op.getLoc(), object, select.getResult(0));
+    for (auto [index, cell] : llvm::enumerate(changed)) {
+      Value whenTrue = GetOp::create(rewriter, loc, before[index].getType(), shadows[0][index]);
+      Value whenFalse = GetOp::create(rewriter, loc, before[index].getType(), shadows[1][index]);
+      Value merged = MergeOp::create(rewriter, loc, before[index].getType(), condition.getInput(), before[index], whenTrue, whenFalse);
+      SetOp::create(rewriter, loc, merged, cell);
     }
     rewriter.eraseOp(op);
     return success();
   }
 };
 
-// Whatever is left of the references after the pipeline has folded what it can is a program the semantics allow but the
-// translation cannot decide, or one they refuse.
+// A cell that is only stored to: `affine-scalrep` forwards the reads away but leaves the stores, and the memref dialect's own
+// removal of such an allocation only knows `memref.store`.
+struct DeadCell : OpRewritePattern<memref::AllocaOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(memref::AllocaOp op, PatternRewriter &rewriter) const override {
+    if (!isa<DistType>(op.getType().getElementType()) ||
+        !llvm::all_of(op->getUsers(), [](Operation *user) { return isa<SetOp>(user); }))
+      return failure();
+    for (Operation *user : llvm::make_early_inc_range(op->getUsers()))
+      rewriter.eraseOp(user);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
+// A merge whose arms changed the object: a select, once the values can be told apart.
+struct SelectMerge : OpRewritePattern<MergeOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(MergeOp op, PatternRewriter &rewriter) const override {
+    if (!settled(op.getBefore()) || !settled(op.getWhenTrue()) || !settled(op.getWhenFalse()))
+      return failure();
+    rewriter.replaceOpWithNewOp<SelectOp>(op, TypeRange{op.getType()}, op.getCondition(), ValueRange{op.getWhenTrue()},
+                                          ValueRange{op.getWhenFalse()});
+    return success();
+  }
+};
+
+// Whatever is left after the pipeline has folded what it can is a program the semantics refuse (a drop, a name bound to
+// different objects under a condition on a distribution) or one the translation cannot decide.
 struct CheckResolved : PassWrapper<CheckResolved, OperationPass<func::FuncOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(CheckResolved)
   StringRef getArgument() const final { return "check-resolved"; }
-  StringRef getDescription() const final { return "Report the references and conditionals that were not resolved"; }
+  StringRef getDescription() const final { return "Report the references, checks and conditionals that were not resolved"; }
   void getDependentDialects(DialectRegistry &registry) const override { registry.insert<DistDialect>(); }
 
   void runOnOperation() override {
     getOperation().walk([&](Operation *op) {
-      // `canonicalize` turns a conditional that only picks a reference into a select; if it is still there, the condition
-      // is a superposition (or unknown), and the reference it picks would depend on the outcome.
-      if (isa<arith::SelectOp, scf::IfOp>(op) && llvm::any_of(op->getResultTypes(), [](Type t) { return isa<RefType>(t); })) {
-        op->emitError("a name is bound to different objects in the arms of a conditional on a distribution, so which object "
-                      "it means would depend on the outcome");
+      if (auto check = dyn_cast<cf::AssertOp>(op)) {
+        op->emitError(check.getMsg());
         return signalPassFailure();
       }
-      if (!isa<NewOp, GetOp, SetOp, ShareOp, AssignOp, OverwriteOp, CondOp>(op))
-        return;
-      Value written = isa<OverwriteOp>(op) ? op->getOperand(0) : isa<AssignOp>(op) ? op->getOperand(0) : Value();
-      Value held = written ? reaching(written, op) : Value();
-      if (held && kindOf(held) == Kind::Superposed)
-        op->emitError("assigning to a name would drop the distribution it holds; only an in-place update changes one");
-      else
+      bool object = llvm::any_of(op->getResultTypes(), [](Type t) {
+        auto memref = dyn_cast<MemRefType>(t);
+        return memref && (isa<DistType>(memref.getElementType()) || isa<MemRefType>(memref.getElementType()));
+      });
+      if (object && isa<arith::SelectOp, scf::IfOp>(op))
+        op->emitError("which object a name means could not be decided: it is bound to different objects in the arms of a "
+                      "conditional on a distribution, or depends on something that is not known when compiling");
+      else if (object || isa<GetOp, SetOp, CondOp, IsSingleOp, MergeOp>(op))
         op->emitError("could not be resolved: what this name refers to depends on something that is not known when "
                       "compiling");
+      else
+        return;
       signalPassFailure();
     });
   }
@@ -283,17 +246,11 @@ struct CheckResolved : PassWrapper<CheckResolved, OperationPass<func::FuncOp>> {
 void GetOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
   results.add<ForwardGet>(context);
 }
-void ShareOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
-  results.add<ResolveShare>(context);
+void MergeOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
+  results.add<SelectMerge>(context);
 }
-void AssignOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
-  results.add<ResolveAssign>(context);
-}
-void OverwriteOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRContext *context) {
-  results.add<ResolveOverwrite>(context);
+void DistDialect::getCanonicalizationPatterns(RewritePatternSet &results) const {
+  results.add<FlattenDistIf, DeadCell>(getContext());
 }
 
-void DistDialect::getCanonicalizationPatterns(RewritePatternSet &results) const {
-  results.add<FlattenDistIf>(getContext());
-}
 void existing_ir::registerCheckResolved() { PassRegistration<CheckResolved>(); }

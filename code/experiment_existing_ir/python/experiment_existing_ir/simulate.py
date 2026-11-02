@@ -76,13 +76,13 @@ def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
     return {to_signed(value, width): count for value, count in sorted(counts.items())}
 
 
-# The default pipeline. Resolving the references is two rounds of stock passes: `canonicalize` folds the definite
-# conditions, forwards the value an object holds to the reads and markers that depend on it, turns arithmetic on lifted
-# integers back into integers, and flattens the conditionals that stay on a superposition (patterns of the dist dialect, so
-# the greedy driver carries down a chain of them in one run); `mem2reg` then promotes the objects that nothing escapes any
-# more; the last `canonicalize` folds what that exposed. However long the chain of conditionals, this is enough (the first
-# `canonicalize` finishes the chain). `check-resolved` refuses what is still open.
-RESOLVE = ("--canonicalize", PROMOTE, "--canonicalize", "--check-resolved")
+# The default pipeline. Resolving the references is rounds of two stock passes: `affine-scalrep` forwards the value stored in
+# a cell to the reads that follow it (and removes the stores nothing reads), and `canonicalize` folds what that makes known:
+# the `dist.is_single` that decides a copy or an alias, the definite conditions, arithmetic on lifted integers, and the
+# conditionals on a superposition (which become both arms and a merge). `check-resolved` refuses what is still open.
+SCALREP = "func.func(affine-scalrep)"
+ROUNDS = 3
+RESOLVE = ("--canonicalize", "symbol-dce", "--check-resolved")
 DEFAULT = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--in-place-updates", "--lower-to-qc")
 
 

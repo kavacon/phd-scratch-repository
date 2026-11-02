@@ -9,17 +9,17 @@ one fixed width (`WIDTH`), an upper bound that range analysis narrows later.
 
 A variable is either plain or a reference. Which one is decided by name, from the syntax alone (`_may_hold_distribution`):
 a variable that is assigned or updated with something that involves a distribution, or inside a conditional whose condition
-does, may hold a distribution on some path. Its slot holds a `!dist.ref<i32>`, a reference to an object (`dist.new`) that
-holds a `!dist.dist<i32>`; reading it is `dist.get`, updating it `dist.set`. Every other variable is a plain integer.
+does, may hold a distribution on some path. Its slot holds a reference to an object, a cell (`memref<!dist.dist<i32>>`),
+read and written with `dist.get` and `dist.set`; every other variable is a plain integer.
 What `y = x` means (the semantics: a copy of an integer, the same object for a distribution) depends on what the object
-holds at that point, which only folding shows, so the translation emits a marker and decides nothing:
-- `dist.share` for a new name, `dist.assign` for one that exists, `dist.overwrite` for `y = e` with a computed value;
+holds at that point, which only folding shows. So the translation emits both and selects: `arith.select` of a copy and of
+x on `dist.is_single` of x's value, which folds once that is known. The same question guards `y = e` over a name that holds
+a distribution (a `cf.assert`: the semantics refuse to drop one).
 - a conditional is an `scf.if` on the condition's `dist.cond` (an integer when the condition is definite). Both arms are
-  ordinary regions: a definite condition folds, and one on a superposition is turned by `flatten-dist-if` into both arms
-  and one `dist.select` for each object they change. The `dist.cond` names the objects in scope, so they stay in memory
-  (unpromoted) while it is open;
+  ordinary regions: a definite condition folds, and one on a superposition is turned by the dialect's canonicalization into
+  both arms on copies of the cells they store to, and a `dist.merge` for each;
 - a computed distribution assigned to a new variable is marked with `dist.instance` (see `resolve-instances`);
-- an update is computed out of place and stored back into the same object; `in-place-updates` finds the ones that
+- an update is computed out of place and stored back into the same cell; `in-place-updates` finds the ones that
   can be done in the target's register.
 A loop with literal bounds is an `affine.for`, unrolled before the slots are promoted. A call is a `func.call` of a function
 translated once for each combination of argument types (an integer, or a reference), removed by the stock `inline` pass. A
@@ -34,6 +34,7 @@ from compiler.parser.grammar import (Assign, BinOp, Call, Distribution, ExprStmt
 
 WIDTH = 32
 MAX_DEPTH = 8  # loops nested in one another
+DROP = "assigning to a name would drop the distribution it holds; only an in-place update changes one"
 MAX_ITERATIONS = 10_000  # times the innermost body runs, which is how many copies unrolling makes
 
 
@@ -43,7 +44,7 @@ class TranslationError(ValueError):
 
 class _Value(NamedTuple):
     ssa: str
-    type: str  # "i32", "i1", "!dist.dist<i32>", "!dist.dist<i1>" or "!dist.ref<i32>"
+    type: str  # "i32", "i1", "!dist.dist<i32>", "!dist.dist<i1>" or a cell
 
     @property
     def dist(self) -> bool:
@@ -164,13 +165,13 @@ class _Module:
         *statements, final = definition.body
         if not isinstance(final, Return):
             raise TranslationError(f"{definition.name} must end with a return")
-        references = {p.name for p, kind in zip(definition.params, kinds) if kind.startswith("!dist.ref")}
+        references = {p.name for p, kind in zip(definition.params, kinds) if kind.startswith("memref<")}
         body = _Translator(self.width, self, _may_hold_distribution(definition.body, references, self.functions))
         arguments = []
         for parameter, kind in zip(definition.params, kinds):
             argument = f"%a{len(arguments)}"
             arguments.append(f"{argument}: {kind}")
-            if kind.startswith("!dist.ref"):  # the caller's object (or a copy of its integer), held as it is
+            if kind.startswith("memref<"):  # the caller's object (or a copy of its integer), held as it is
                 body.declare(parameter.name, _Value(argument, kind))
             else:
                 body.bind(parameter.name, _Value(argument, kind))
@@ -196,7 +197,7 @@ class _Translator:
         self.width = width
         self.type = f"i{width}"
         self.dist = f"!dist.dist<{self.type}>"
-        self.ref = f"!dist.ref<{self.type}>"
+        self.ref = f"memref<{self.dist}>"  # a reference: the cell of an object
         self.names = itertools.count()
         self.lines: List[str] = []
         self.level = 0
@@ -232,10 +233,6 @@ class _Translator:
                 return scope[name]
         raise TranslationError(f"{name} is used before it is assigned")
 
-    def visible(self) -> Dict[str, _Var]:
-        """The variables in scope, an inner one hiding an outer one of the same name."""
-        return {name: var for scope in self.scopes for name, var in scope.items()}
-
     def exists(self, name: str) -> bool:
         return any(name in scope for scope in self.scopes)
 
@@ -258,7 +255,7 @@ class _Translator:
     def bind(self, name: str, value: _Value) -> None:
         """A new name for a value: an integer in a slot of its own, or a new object when the name may hold a distribution."""
         if name in self.distribution_names:
-            self.declare(name, self.emit(f"dist.new {self.lift(value).ssa} : {self.dist} -> {self.ref}", self.ref))
+            self.declare(name, self.new(self.lift(value)))
         elif value.dist:
             raise TranslationError(f"{name} holds a distribution but is not known to")
         else:
@@ -272,6 +269,28 @@ class _Translator:
 
     def get(self, reference: _Value) -> _Value:
         return self.emit(f"dist.get {reference.ssa} : {self.ref} -> {self.dist}", self.dist)
+
+    def new(self, value: _Value) -> _Value:
+        """A new object holding a distribution."""
+        cell = self.emit(f"memref.alloca() : {self.ref}", self.ref)
+        self.out(f"dist.set {value.ssa}, {cell.ssa} : {self.dist}, {self.ref}")
+        return cell
+
+    def single(self, value: _Value) -> _Value:
+        return self.emit(f"dist.is_single {value.ssa} : {value.type} -> i1", "i1")
+
+    def share(self, source: _Value) -> _Value:
+        """The object a new name for `source` means: a copy if it holds one value, the object itself otherwise."""
+        held = self.get(source)
+        copy = self.new(held)
+        single = self.single(held)
+        return self.emit(f"arith.select {single.ssa}, {copy.ssa}, {source.ssa} : {self.ref}", self.ref)
+
+    def check_single(self, reference: _Value, message: str) -> _Value:
+        """The distribution an object holds, which must be one value (or the program is refused with `message`)."""
+        held = self.get(reference)
+        self.out(f'cf.assert {self.single(held).ssa}, "{message}"')
+        return held
 
     def check_writable(self, name: str) -> None:
         if name in self.loops:
@@ -343,12 +362,12 @@ class _Translator:
         for argument in node.args:
             reference = self.object_of(argument)
             if reference is not None:
-                passed.append(self.emit(f"dist.share {reference.ssa} : {self.ref} -> {self.ref}", self.ref))
+                passed.append(self.share(reference))
                 continue
             value = self.expression(argument)
             if value.dist:
                 value = self.instance_of(argument, value)
-                value = self.emit(f"dist.new {value.ssa} : {self.dist} -> {self.ref}", self.ref)
+                value = self.new(value)
             passed.append(value)
         instance = self.module.instance(definition, [value.type for value in passed])
         arguments = ", ".join(value.ssa for value in passed)
@@ -359,7 +378,7 @@ class _Translator:
         """What a function hands back: a variable it holds (as a reference, shared), or a value."""
         reference = self.object_of(node)
         if reference is not None:
-            return self.emit(f"dist.share {reference.ssa} : {self.ref} -> {self.ref}", self.ref), "ref"
+            return self.share(reference), "ref"
         if isinstance(node, Call):
             value, instance = self.call(node)
             return value, instance.kind
@@ -379,10 +398,7 @@ class _Translator:
     def conditional(self, node: If) -> None:
         condition = self.expression(node.condition)
         if condition.dist:  # an integer if the distribution turns out to be a lifted one: the folding decides
-            touched = [self.reference(var) for var in self.visible().values() if var.ref]  # what the arms may change
-            names = "".join(f", {value.ssa}" for value in touched)
-            types = "".join(f", {value.type}" for value in touched)
-            condition = self.emit(f"dist.cond {condition.ssa}{names} : {condition.type}{types} -> i1", "i1")
+            condition = self.emit(f"dist.cond {condition.ssa} : {condition.type} -> i1", "i1")
         self.out(f"scf.if {condition.ssa} {{")
         self.region(node.body)
         self.out("} else {")
@@ -427,7 +443,7 @@ class _Translator:
             held = self.get(reference)
             amount = self.expression(node.value.right)
             result = self.emit(f"dist.{name}i {held.ssa}, {amount.ssa} : {held.type}, {amount.type} -> {self.dist}", self.dist)
-            self.out(f"dist.set {reference.ssa}, {result.ssa} : {self.ref}, {self.dist}")
+            self.out(f"dist.set {result.ssa}, {reference.ssa} : {self.dist}, {self.ref}")
             return
         target = self.read(node.name)
         amount = self.expression(node.value.right)
@@ -451,14 +467,18 @@ class _Translator:
             value = self.expression(node.value)
         if source is not None:  # a plain name, or a variable a call returned: a copy or an alias, once it is known
             if not exists:
-                self.declare(node.name, self.emit(f"dist.share {source.ssa} : {self.ref} -> {self.ref}", self.ref))
+                self.declare(node.name, self.share(source))
                 return
             var = self.lookup(node.name)
             if not var.ref:
                 raise TranslationError(f"{node.name} takes a distribution but is not known to hold one")
             target = self.reference(var)
-            self.store(var, self.emit(f"dist.assign {target.ssa}, {source.ssa} : {self.ref}, {self.ref} -> {self.ref}",
-                                      self.ref))
+            held = self.check_single(target, DROP)
+            incoming = self.get(source)
+            single = self.single(incoming)
+            copied = self.emit(f"arith.select {single.ssa}, {incoming.ssa}, {held.ssa} : {self.dist}", self.dist)
+            self.out(f"dist.set {copied.ssa}, {target.ssa} : {self.dist}, {self.ref}")
+            self.store(var, self.emit(f"arith.select {single.ssa}, {target.ssa}, {source.ssa} : {self.ref}", self.ref))
             return
         if value.dist and not fresh:
             value = self.instance_of(node.value, value)
@@ -467,7 +487,9 @@ class _Translator:
             return
         var = self.lookup(node.name)
         if var.ref:
-            self.out(f"dist.overwrite {self.reference(var).ssa}, {self.lift(value).ssa} : {self.ref}, {self.dist}")
+            target = self.reference(var)
+            self.check_single(target, DROP)
+            self.out(f"dist.set {self.lift(value).ssa}, {target.ssa} : {self.dist}, {self.ref}")
         elif value.dist:
             raise TranslationError(f"{node.name} takes a distribution but is not known to hold one")
         else:
