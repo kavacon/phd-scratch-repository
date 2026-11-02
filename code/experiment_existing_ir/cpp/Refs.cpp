@@ -183,21 +183,17 @@ bool settled(Value value) {
   return lift && matchPattern(lift.getInput(), m_Constant());
 }
 
-struct FlattenDistIf : PassWrapper<FlattenDistIf, OperationPass<func::FuncOp>> {
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(FlattenDistIf)
-  StringRef getArgument() const final { return "flatten-dist-if"; }
-  StringRef getDescription() const final {
-    return "Turn an scf.if on a superposition into both arms and a dist.select of what they change";
-  }
-  void getDependentDialects(DialectRegistry &registry) const override { registry.insert<DistDialect>(); }
-
-  // Does nothing for a conditional that is not yet certainly on a superposition, or whose arms still hold anything but
-  // allocations and stores (reads that did not forward, markers, conditionals of their own): the pipeline tries again after
-  // they are resolved. None of that depends on this conditional, so waiting cannot deadlock.
-  LogicalResult flatten(scf::IfOp op) {
+// A conditional on a superposition, as a pattern of the dialect: `canonicalize` applies it, and since a flattened conditional
+// makes the reads after it forwardable, the greedy driver carries on down a chain of conditionals in one run.
+// It does nothing for a conditional that is not yet certainly on a superposition, or whose arms still hold anything but
+// allocations and stores (reads that did not forward, markers, conditionals of their own): it matches again after they are
+// resolved. None of that depends on this conditional, so waiting cannot deadlock.
+struct FlattenDistIf : OpRewritePattern<scf::IfOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(scf::IfOp op, PatternRewriter &rewriter) const override {
     auto condition = op.getCondition().getDefiningOp<CondOp>();
     if (!condition || kindOf(condition.getInput()) != Kind::Superposed)
-      return success();
+      return failure();
     SmallVector<Value> changed;  // the objects from outside the conditional that an arm stores to
     SmallVector<SetOp> stores;
     for (Region *region : {&op.getThenRegion(), &op.getElseRegion()}) {
@@ -206,13 +202,12 @@ struct FlattenDistIf : PassWrapper<FlattenDistIf, OperationPass<func::FuncOp>> {
       for (Operation &inner : region->front().without_terminator()) {
         auto store = dyn_cast<SetOp>(inner);
         if (!store && !speculatable(&inner))
-          return success();
-        if (store && !op->isAncestor(store.getRef().getParentBlock()->getParentOp())) {
-          if (!llvm::is_contained(changed, store.getRef()))
-            changed.push_back(store.getRef());
-        }
-        if (store)
-          stores.push_back(store);
+          return failure();
+        if (!store)
+          continue;
+        stores.push_back(store);
+        if (!op->isAncestor(store.getRef().getParentBlock()->getParentOp()) && !llvm::is_contained(changed, store.getRef()))
+          changed.push_back(store.getRef());
       }
     }
     // What each changed object holds before, and at the end of each arm.
@@ -221,86 +216,34 @@ struct FlattenDistIf : PassWrapper<FlattenDistIf, OperationPass<func::FuncOp>> {
     for (Value object : changed) {
       Value start = reaching(object, op), t = reaching(object, thenEnd), f = elseEnd ? reaching(object, elseEnd) : start;
       if (!start || !t || !f || !settled(start) || !settled(t) || !settled(f))
-        return success();
+        return failure();
       before.push_back(start);
       whenTrue.push_back(t);
       whenFalse.push_back(f);
     }
-    // A name rebound in the arms is bound to different objects in them, which would depend on the outcome.
-    for (auto [index, result] : llvm::enumerate(op.getResults())) {
-      Value t = op.thenYield().getOperand(index), f = elseEnd ? op.elseYield().getOperand(index) : Value();
-      if (t == f) {
-        result.replaceAllUsesWith(t);
-        continue;
-      }
-      return op.emitError(isa<RefType>(result.getType())
-                              ? "a name is bound to different objects in the arms of a conditional on a distribution, so "
-                                "which object it means would depend on the outcome"
-                              : "a variable that is not a distribution changes in an arm of a conditional on a distribution");
-    }
+    // A name rebound in the arms is bound to different objects in them, which would depend on the outcome: left for
+    // `check-resolved` to refuse.
+    for (auto [index, result] : llvm::enumerate(op.getResults()))
+      if (!elseEnd || op.thenYield().getOperand(index) != op.elseYield().getOperand(index))
+        return failure();
+    for (auto [index, result] : llvm::enumerate(op.getResults()))
+      rewriter.replaceAllUsesWith(result, op.thenYield().getOperand(index));
     for (SetOp store : stores)
       if (llvm::is_contained(changed, store.getRef()))
-        store.erase();
+        rewriter.eraseOp(store);
     for (Region *region : {&op.getThenRegion(), &op.getElseRegion()})
       if (!region->empty())
         for (Operation &inner : llvm::make_early_inc_range(region->front().without_terminator()))
-          inner.moveBefore(op);
-    OpBuilder builder(op);
+          rewriter.moveOpBefore(&inner, op);
     for (auto [index, object] : llvm::enumerate(changed)) {
       if (same(whenTrue[index], before[index]) && same(whenFalse[index], before[index]))
         continue;
-      auto select = SelectOp::create(builder, op.getLoc(), TypeRange{whenTrue[index].getType()}, condition.getInput(),
+      auto select = SelectOp::create(rewriter, op.getLoc(), TypeRange{whenTrue[index].getType()}, condition.getInput(),
                                      ValueRange{whenTrue[index]}, ValueRange{whenFalse[index]});
-      SetOp::create(builder, op.getLoc(), object, select.getResult(0));
+      SetOp::create(rewriter, op.getLoc(), object, select.getResult(0));
     }
-    op.erase();
-    if (condition->use_empty())
-      condition.erase();
+    rewriter.eraseOp(op);
     return success();
-  }
-
-  void runOnOperation() override {
-    SmallVector<scf::IfOp> conditionals;
-    getOperation().walk([&](scf::IfOp op) { conditionals.push_back(op); });  // inner ones first
-    for (scf::IfOp op : conditionals)
-      if (failed(flatten(op)))
-        return signalPassFailure();
-  }
-};
-
-// MLIR has no combinator that repeats passes until nothing changes, and resolving references needs one: folding a condition
-// lets an object be promoted, which lets the next condition fold. So this runs the stock passes in a loop until the
-// function stops changing.
-struct ResolveRefs : PassWrapper<ResolveRefs, OperationPass<func::FuncOp>> {
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ResolveRefs)
-  StringRef getArgument() const final { return "resolve-refs"; }
-  StringRef getDescription() const final {
-    return "Repeat canonicalize, mem2reg and flatten-dist-if until the references are resolved";
-  }
-  void getDependentDialects(DialectRegistry &registry) const override { registry.insert<DistDialect>(); }
-
-  static std::string text(Operation *op) {
-    std::string result;
-    llvm::raw_string_ostream stream(result);
-    op->print(stream);
-    return result;
-  }
-
-  void runOnOperation() override {
-    OpPassManager round(func::FuncOp::getOperationName());
-    if (failed(parsePassPipeline("canonicalize,mem2reg,flatten-dist-if", round)))
-      return signalPassFailure();
-    std::string previous = text(getOperation());
-    for (unsigned i = 0; i < 100; ++i) {
-      if (failed(runPipeline(round, getOperation())))
-        return signalPassFailure();
-      std::string current = text(getOperation());
-      if (current == previous)
-        return;
-      previous = std::move(current);
-    }
-    getOperation().emitError("the references did not settle");
-    signalPassFailure();
   }
 };
 
@@ -350,8 +293,7 @@ void OverwriteOp::getCanonicalizationPatterns(RewritePatternSet &results, MLIRCo
   results.add<ResolveOverwrite>(context);
 }
 
-void existing_ir::registerFlattenDistIf() {
-  PassRegistration<FlattenDistIf>();
-  PassRegistration<ResolveRefs>();
+void DistDialect::getCanonicalizationPatterns(RewritePatternSet &results) const {
+  results.add<FlattenDistIf>(getContext());
 }
 void existing_ir::registerCheckResolved() { PassRegistration<CheckResolved>(); }
