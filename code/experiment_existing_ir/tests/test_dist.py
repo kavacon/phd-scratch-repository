@@ -23,7 +23,7 @@ READ_AFTER_UPDATE = "func.func @main() -> i32 {\n" + HEADER + """  %3 = dist.add
 
 
 def status(source: str) -> str:
-    return simulate.optimise(translate(parse(source, "v2")), *simulate.PREPARE, "--dist-status")
+    return simulate.optimise(translate(parse(source, "v2")), *simulate.PREPARE, *simulate.RESOLVE, "--dist-status")
 
 
 @unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
@@ -36,8 +36,10 @@ class Distributions(unittest.TestCase):
 
     def test_independent_distributions_form_separate_groups_until_an_update_joins_them(self):
         separate = status("a = 0..4; p = 0..2; a += 1; p += 1; return a;")
-        self.assertIn("dist.groups = 2 : i64", separate)
-        self.assertIn("dist.largest_group = 2 : i64", separate)  # a and its update; p and its update
+        self.assertIn("dist.groups = 1 : i64", separate)  # p is never read, so its updates are removed with it
+        self.assertIn("dist.largest_group = 2 : i64", separate)  # a and its update
+        two = status("a = 0..4; p = 0..2; a += 1; p += 1; return a - a;")
+        self.assertIn("dist.groups = 1 : i64", two)
         joined = status("a = 0..4; p = 0..2; a += p; return a;")
         self.assertIn("dist.groups = 1 : i64", joined)
         self.assertIn("dist.largest_group = 3 : i64", joined)  # a, p and the updated a

@@ -81,11 +81,11 @@ class Translate(unittest.TestCase):
 
     def test_a_variable_that_may_hold_a_distribution_holds_a_reference_and_a_copy_is_a_marker(self):
         # x may become a distribution, so it holds a reference to an object; `y = x` is a copy or an alias, which only
-        # folding can tell, so the translation emits `dist.share` and decides nothing. A variable that never touches a
+        # folding can tell, so the translation selects between the two on `dist.is_single` and decides nothing. A variable that never touches a
         # distribution stays a plain integer.
         text = translated("a = 0..4; x = 2; for i in 0..3 { x += a; } y = x; return y;", "v2")
-        self.assertIn("memref<!dist.ref<i32>>", text)
-        self.assertEqual(text.count("dist.share"), 1)
+        self.assertIn("memref<memref<!dist.dist<i32>>>", text)  # the slot of a name holds a reference to a cell
+        self.assertEqual(text.count("dist.is_single"), 1)  # the copy-or-alias question of `y = x`
         self.assertNotIn("dist.", translated("x = 2; y = x; y += 1; return y;", "v2"))
 
 
@@ -168,11 +168,11 @@ class Promoted(unittest.TestCase):
 }""")
 
     def test_a_computed_value_assigned_to_a_new_variable_is_marked_as_an_instance(self):
-        self.assertEqual(promoted("a = 0..4; c = a + 1; return c;", "v2"), """module {
+        self.assertEqual(resolved("a = 0..4; c = a + 1; return c;"), """module {
   func.func @main() -> i32 {
-    %0 = dist.uniform 0, 4 : !dist.dist<i32>
     %c1_i32 = arith.constant 1 : i32
-    %1 = dist.addi %0, %c1_i32 : !dist.dist<i32>, i32 -> !dist.dist<i32>
+    %0 = dist.uniform 0, 4 : !dist.dist<i32>
+    %1 = dist.add_assign %0, %c1_i32 : !dist.dist<i32>, i32 -> !dist.dist<i32>
     %2 = dist.instance %1 : !dist.dist<i32> -> !dist.dist<i32>
     %3 = dist.measure %2 : !dist.dist<i32> -> i32
     return %3 : i32
