@@ -170,6 +170,15 @@ LogicalResult CondOp::verify() {
   return success();
 }
 
+// A cell holds a distribution of the element type of what it is read or written with.
+static LogicalResult verifyCell(Operation *op, Type cell, Type value) {
+  auto memref = dyn_cast<MemRefType>(cell);
+  if (!memref || memref.getRank() != 0 || memref.getElementType() != value)
+    return op->emitOpError("needs a rank 0 memref whose element is the distribution");
+  return success();
+}
+LogicalResult GetOp::verify() { return verifyCell(*this, getCell().getType(), getResult().getType()); }
+LogicalResult SetOp::verify() { return verifyCell(*this, getCell().getType(), getValue().getType()); }
 
 // ---- folding definite distributions -----------------------------------------------------------------------------------------
 
