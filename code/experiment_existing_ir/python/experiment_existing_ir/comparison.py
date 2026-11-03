@@ -2,7 +2,7 @@
 The same programs through two ways of folding what is known at compile time, and what each gives.
 
 A leaves it to MLIR: the translation keeps loops, conditionals and calls, a variable that may hold a distribution holds a
-reference to an object, and `canonicalize`, `mem2reg` and `flatten-dist-if` resolve the rest.
+reference to an object, and `mem2reg`, `resolve-dist` and `canonicalize` resolve the rest.
 B folds as it translates: known integers are constants, a conditional keeps only the arm taken, and loops and calls are
 expanded in place, so nothing is left for the passes to decide.
 

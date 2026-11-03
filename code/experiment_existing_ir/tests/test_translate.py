@@ -124,8 +124,8 @@ class Promoted(unittest.TestCase):
         # x is 2 before the conditional, so its two arms are the integers 5 and 1, and one select ties x to a < 2
         self.assertEqual(resolved("a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;"), """module {
   func.func @main() -> i32 {
-    %c1_i32 = arith.constant 1 : i32
     %c5_i32 = arith.constant 5 : i32
+    %c1_i32 = arith.constant 1 : i32
     %c2_i32 = arith.constant 2 : i32
     %0 = dist.uniform 0, 4 : !dist.dist<i32>
     %1 = dist.slt %0, %c2_i32 : !dist.dist<i32>, i32 -> !dist.dist<i1>

@@ -37,7 +37,7 @@ def built() -> bool:
 
 
 # The tool's own passes that are anchored on a function. Flags nest them by themselves; in a pipeline they are nested here.
-FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "check-resolved"}
+FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "resolve-dist"}
 
 
 def command(*passes: str) -> list:
@@ -76,13 +76,10 @@ def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
     return {to_signed(value, width): count for value, count in sorted(counts.items())}
 
 
-# The default pipeline. Resolving the references is rounds of two stock passes: `affine-scalrep` forwards the value stored in
-# a cell to the reads that follow it (and removes the stores nothing reads), and `canonicalize` folds what that makes known:
-# the `dist.is_single` that decides a copy or an alias, the definite conditions, arithmetic on lifted integers, and the
-# conditionals on a superposition (which become both arms and a merge). `check-resolved` refuses what is still open.
-SCALREP = "func.func(affine-scalrep)"
-ROUNDS = 3
-RESOLVE = ("--canonicalize", "symbol-dce", "--check-resolved")
+# The default pipeline. `resolve-dist` runs one dataflow analysis (which branch is live, what each value is, what each cell holds,
+# which cell each reference names) and rewrites once from what it found; it refuses what the analysis could not decide.
+# Stock `canonicalize` then folds the constant selects and removes what is dead.
+RESOLVE = ("--resolve-dist", "--canonicalize")
 DEFAULT = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--in-place-updates", "--lower-to-qc")
 
 

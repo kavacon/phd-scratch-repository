@@ -234,6 +234,13 @@ class Pipeline(unittest.TestCase):
         dead = simulate.run(program("a = 0..4; x = 2; k = 9; if k < 3 { x = a; } x += 1; return a;", "v2"))
         self.assertEqual((set(live), set(dead)), ({1, 2, 3, 4}, {0, 1, 2, 3}))
 
+    def test_a_comparison_kept_in_a_variable_is_a_condition_and_a_number_is_true_when_it_is_not_zero(self):
+        self.assertEqual(simulate.run(program("x = 3; c = x < 5; if c { x += 1; } return x;", "v2")), {4: 2000})
+        self.assertEqual(simulate.run(program("c = -2 < 1; return c;", "v2")), {1: 2000})
+        counts = simulate.run(program("a = 0..2; x = 0; if a { x = 7; } return x;", "v2"), shots=3000)  # a is 0 or 1
+        self.assertEqual(set(counts), {0, 7})
+        self.assertAlmostEqual(counts[0] / 3000, 1 / 2, delta=0.05)
+
     def test_what_the_semantics_refuse_is_refused_with_a_reason(self):
         # overwriting a distribution would drop it; a name bound to different objects in the arms of a conditional on a
         # distribution would mean an object that depends on the outcome

@@ -16,8 +16,8 @@ holds at that point, which only folding shows. So the translation emits both and
 x on `dist.is_single` of x's value, which folds once that is known. The same question guards `y = e` over a name that holds
 a distribution (a `cf.assert`: the semantics refuse to drop one).
 - a conditional is an `scf.if` on the condition's `dist.cond` (an integer when the condition is definite). Both arms are
-  ordinary regions: a definite condition folds, and one on a superposition is turned by the dialect's canonicalization into
-  both arms on copies of the cells they store to, and a `dist.merge` for each;
+  ordinary regions: `resolve-dist` keeps the arm a definite condition takes, and turns one on a superposition into both
+  arms and a `dist.select` for each cell either arm changed;
 - a computed distribution assigned to a new variable is marked with `dist.instance` (see `resolve-instances`);
 - an update is computed out of place and stored back into the same cell; `in-place-updates` finds the ones that
   can be done in the target's register.
@@ -54,6 +54,7 @@ class _Value(NamedTuple):
 class _Var(NamedTuple):
     slot: str  # the `memref.alloca` that holds the variable
     ref: bool  # whether it holds a reference to an object rather than an integer
+    type: str  # what the slot holds: an integer type (a comparison's `i1` too) or a reference
 
 
 def _mentions(node: Node, names: Set[str], functions: Dict[str, FunctionDef]) -> bool:
@@ -239,7 +240,7 @@ class _Translator:
     def slot(self, name: str, type: str) -> _Var:
         ssa = f"%{next(self.names)}"
         self.out(f"{ssa} = memref.alloca() : memref<{type}>")
-        self.scopes[-1][name] = _Var(ssa, type == self.ref)
+        self.scopes[-1][name] = _Var(ssa, type == self.ref, type)
         return self.scopes[-1][name]
 
     def store(self, var: _Var, value: _Value) -> None:
@@ -265,7 +266,7 @@ class _Translator:
         var = self.lookup(name)
         if var.ref:
             return self.get(self.reference(var))
-        return self.emit(f"memref.load {var.slot}[] : memref<{self.type}>", self.type)
+        return self.emit(f"memref.load {var.slot}[] : memref<{var.type}>", var.type)
 
     def get(self, reference: _Value) -> _Value:
         return self.emit(f"dist.get {reference.ssa} : {self.ref} -> {self.dist}", self.dist)
@@ -395,8 +396,21 @@ class _Translator:
         self.level -= 1
         self.scopes.pop()
 
+    def truth(self, value: _Value) -> _Value:
+        """A condition as a boolean: a comparison already is one, and any other integer is true when it is not zero (for a
+        distribution, below zero or above it, which cannot both hold, so their sum is their disjunction)."""
+        if value.type in ("i1", "!dist.dist<i1>"):
+            return value
+        zero = self.constant(0)
+        if not value.dist:
+            return self.emit(f"arith.cmpi ne, {value.ssa}, {zero.ssa} : {self.type}", "i1")
+        flag = "!dist.dist<i1>"
+        below = self.emit(f"dist.slt {value.ssa}, {zero.ssa} : {value.type}, {self.type} -> {flag}", flag)
+        above = self.emit(f"dist.slt {zero.ssa}, {value.ssa} : {self.type}, {value.type} -> {flag}", flag)
+        return self.emit(f"dist.addi {below.ssa}, {above.ssa} : {flag}, {flag} -> {flag}", flag)
+
     def conditional(self, node: If) -> None:
-        condition = self.expression(node.condition)
+        condition = self.truth(self.expression(node.condition))
         if condition.dist:  # an integer if the distribution turns out to be a lifted one: the folding decides
             condition = self.emit(f"dist.cond {condition.ssa} : {condition.type} -> i1", "i1")
         self.out(f"scf.if {condition.ssa} {{")
@@ -518,6 +532,8 @@ class _Translator:
                 self.statement(statement)
         if returned is None:
             raise TranslationError("a program must end with a return")
+        if returned.type == "i1":  # the result of a comparison
+            returned = self.emit(f"arith.extui {returned.ssa} : i1 to {self.type}", self.type)
         if returned.dist:  # using a distribution as the result measures it
             returned = self.emit(f"dist.measure {returned.ssa} : {returned.type} -> {self.type}", self.type)
         body = ["  " + line for line in [*self.lines, f"func.return {returned.ssa} : {self.type}"]]

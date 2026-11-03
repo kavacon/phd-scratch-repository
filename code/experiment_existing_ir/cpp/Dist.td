@@ -20,9 +20,7 @@ def Dist_Dialect : Dialect {
   let name = "dist";
   let cppNamespace = "::existing_ir::dist";
   let useDefaultTypePrinterParser = 1;
-  let hasCanonicalizer = 1;  // the conditional on a superposition (Refs.cpp)
-  let hasConstantMaterializer = 1;  // a folded question (`is_single`) is an arith constant
-  let dependentDialects = ["::mlir::arith::ArithDialect"];  // the patterns of `canonicalize` turn lifted arithmetic into arith
+  let dependentDialects = ["::mlir::arith::ArithDialect"];  // `resolve-dist` writes the constants it finds as arith
 }
 
 def Dist_DistType : TypeDef<Dist_Dialect, "Dist", [MemRefElementTypeInterface]> {
@@ -54,7 +52,7 @@ def Dist_UniformOp : Dist_Op<"uniform"> {
 
 // An integer taken as a one-point distribution. Physically nothing changes: a definite value and a distribution are both a
 // register, and this only says that the value may now be updated in place together with distributions. It creates a new
-// object, so two lifts of the same integer stay two (as for a range), and `recover-definite` turns what was lifted
+// object, so two lifts of the same integer stay two (as for a range), and `resolve-dist` turns what was lifted
 // without ever being made superposed back into integers.
 def Dist_LiftOp : Dist_Op<"lift"> {
   let arguments = (ins AnySignlessInteger:$input);
@@ -68,7 +66,6 @@ class Dist_BinaryOp<string mnemonic> : Dist_PureOp<mnemonic> {
   let results = (outs Dist_Dist:$result);
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($lhs) `,` type($rhs) `->` type($result)";
   let hasVerifier = 1;
-  let hasCanonicalizer = 1;
 }
 // Sum and difference computed out of place: a new distribution, correlated with its operands, which are only used.
 def Dist_AddIOp : Dist_BinaryOp<"addi">;
@@ -84,7 +81,6 @@ def Dist_InstanceOp : Dist_Op<"instance"> {
   let results = (outs Res<Dist_Dist, "a new independent distribution", [MemAlloc]>:$result);
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
   let hasVerifier = 1;
-  let hasCanonicalizer = 1;
 }
 
 // `target += amount` and `target -= amount`: the result is the updated target, in the target's register when it fits.
@@ -94,7 +90,6 @@ class Dist_UpdateOp<string mnemonic> : Dist_PureOp<mnemonic> {
   let results = (outs Dist_Dist:$result);
   let assemblyFormat = "$target `,` $amount attr-dict `:` type($target) `,` type($amount) `->` type($result)";
   let hasVerifier = 1;
-  let hasCanonicalizer = 1;
 }
 def Dist_AddAssignOp : Dist_UpdateOp<"add_assign">;
 def Dist_SubAssignOp : Dist_UpdateOp<"sub_assign">;
@@ -107,7 +102,6 @@ def Dist_SelectOp : Dist_PureOp<"select", [AttrSizedOperandSegments]> {
   let assemblyFormat = "$condition `,` `(` $trueValues `)` `,` `(` $falseValues `)` attr-dict `:` type($condition) `,` "
                        "`(` type($trueValues) `)` `,` `(` type($falseValues) `)` `->` `(` type($results) `)`";
   let hasVerifier = 1;
-  let hasCanonicalizer = 1;
 }
 
 // Reading a distribution measures it: the integer it came out as.
@@ -116,7 +110,6 @@ def Dist_MeasureOp : Dist_PureOp<"measure"> {
   let results = (outs AnySignlessInteger:$result);
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
   let hasVerifier = 1;
-  let hasCanonicalizer = 1;
 }
 
 // ---- references ------------------------------------------------------------------------------------------------------
@@ -125,7 +118,7 @@ class Dist_RawOp<string mnemonic, list<Trait> traits = []> : Op<Dist_Dialect, mn
 // A variable that may hold a distribution holds a reference to an object: a `memref<!dist.dist<T>>` cell, read and written
 // with affine.load and affine.store (which `affine-scalrep` forwards and `mem2reg` leaves alone, so a cell stays in memory
 // until its value is known). What `y = x` means is an `arith.select` of a copy and of x on whether x holds one value; that
-// question, the condition of a conditional, and the merge of a conditional's arms are the operations that are new here.
+// question and the condition of a conditional are the operations that are new here; `resolve-dist` answers both.
 
 // Reading and writing the cell of an object. (Not affine.load and affine.store: `mem2reg` must not promote a cell while a
 // conditional on a distribution is open, and the affine inliner refuses their operands inside an `scf.if`.)
@@ -134,7 +127,6 @@ def Dist_GetOp : Dist_RawOp<"get"> {
   let results = (outs Dist_Dist:$result);
   let assemblyFormat = "$cell attr-dict `:` type($cell) `->` type($result)";
   let hasVerifier = 1;
-  let hasCanonicalizer = 1;
 }
 def Dist_SetOp : Dist_RawOp<"set"> {
   let arguments = (ins Dist_Dist:$value, Arg<AnyMemRef, "the cell written", [MemWrite]>:$cell);
@@ -148,26 +140,13 @@ def Dist_IsSingleOp : Dist_RawOp<"is_single", [Pure]> {
   let arguments = (ins Dist_Dist:$input);
   let results = (outs I1:$result);
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
-  let hasFolder = 1;
 }
 
-// `scf.if` branches on this: the condition of a conditional as an integer, when it is definite. A lift of an integer folds to
-// that integer, so the `scf.if` is an ordinary one and folds in turn. One that stays is a conditional on a superposition,
-// which the dialect's canonicalization turns into both arms and a merge.
+// `scf.if` branches on this: the condition of a conditional as an integer, when it is definite. `resolve-dist` finds it a
+// constant and the `scf.if` keeps one arm; one it finds superposed becomes both arms and a `dist.select` per tied cell.
 def Dist_CondOp : Dist_RawOp<"cond", [Pure]> {
   let arguments = (ins Dist_Dist:$input);
   let results = (outs I1:$result);
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
   let hasVerifier = 1;
-  let hasFolder = 1;
-}
-
-// What an object holds after a conditional on `condition` whose arms left it `whenTrue` and `whenFalse`, from `before`: the
-// same if neither arm changed it, and otherwise one select, which ties it to the condition.
-def Dist_MergeOp : Dist_RawOp<"merge", [Pure]> {
-  let arguments = (ins Dist_Dist:$condition, Dist_Dist:$before, Dist_Dist:$whenTrue, Dist_Dist:$whenFalse);
-  let results = (outs Dist_Dist:$result);
-  let assemblyFormat = "$condition `,` $before `,` $whenTrue `,` $whenFalse attr-dict `:` type(operands) `->` type($result)";
-  let hasCanonicalizer = 1;
-  let hasFolder = 1;
 }
