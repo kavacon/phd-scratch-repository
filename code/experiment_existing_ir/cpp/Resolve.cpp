@@ -27,6 +27,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 using namespace mlir;
 using namespace mlir::dataflow;
@@ -440,19 +441,27 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
   }
 
   void apply() {
-    // Conditionals keep the arms that run, which are moved out, in order.
+    // A conditional on a constant is given that constant and inlined by the stock patterns of scf.if (only those operations are
+    // visited, so nothing the plan holds is erased). One on a superposition runs both arms: they are moved out, in order.
+    SmallVector<Operation *> constants;
+    for (auto [op, taken] : plan.conditionals)
+      if (taken) {
+        OpBuilder builder(op);
+        op->setOperand(0, arith::ConstantOp::create(builder, op.getLoc(), builder.getBoolAttr(*taken)));
+        constants.push_back(op);
+      }
+    RewritePatternSet patterns(&getContext());
+    scf::IfOp::getCanonicalizationPatterns(patterns, &getContext());
+    (void)applyOpPatternsGreedily(constants, std::move(patterns));
     for (auto [op, taken] : plan.conditionals) {
-      SmallVector<Region *> live;
-      if (!taken || *taken)
-        live.push_back(&op.getThenRegion());
-      if (!taken || !*taken)
-        live.push_back(&op.getElseRegion());
-      for (Region *region : live)
+      if (taken)
+        continue;
+      for (Region *region : {&op.getThenRegion(), &op.getElseRegion()})
         if (!region->empty())
           for (Operation &inner : llvm::make_early_inc_range(region->front().without_terminator()))
             inner.moveBefore(op);
       if (op->getNumResults())
-        op.replaceAllUsesWith(live.front()->front().getTerminator()->getOperands());
+        op.replaceAllUsesWith(op.thenYield()->getOperands());
     }
     for (auto &[read, content] : plan.reads) {
       if (content) {
@@ -464,7 +473,8 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
       read.erase();
     }
     for (auto &entry : plan.conditionals)
-      entry.first.erase();
+      if (!entry.second)
+        entry.first.erase();
     getOperation().walk([](memref::StoreOp store) {
       if (isWrite(store))
         store.erase();
