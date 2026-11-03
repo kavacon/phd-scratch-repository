@@ -34,6 +34,10 @@ using namespace existing_ir::dist;
 
 namespace {
 
+// A cell is a rank 0 memref of a distribution; these are its reads and writes.
+bool isRead(Operation *op) { auto load = dyn_cast<memref::LoadOp>(op); return load && isa<DistType>(load.getType()); }
+bool isWrite(Operation *op) { auto store = dyn_cast<memref::StoreOp>(op); return store && isa<DistType>(store.getValue().getType()); }
+
 // ---- facts about values ------------------------------------------------------------------------------------------------
 
 ConstantValue superposed(MLIRContext *context) {
@@ -78,7 +82,7 @@ public:
     for (Lattice<CellRef> *result : results) {
       if (!isa<MemRefType>(result->getAnchor().getType()))
         continue;
-      if (isa<memref::AllocaOp>(op)) {
+      if (isa<memref::AllocaOp, memref::AllocOp>(op)) {
         propagateIfChanged(result, result->join({CellRef::Cell, result->getAnchor()}));
       } else if (isa<arith::SelectOp>(op)) {  // a copy or the object itself, once the question is answered
         auto *condition = getOrCreateFor<Lattice<ConstantValue>>(getProgramPointAfter(op), op->getOperand(0));
@@ -184,8 +188,8 @@ public:
     if (!before.known)
       return success();
     Contents next = before.contents;
-    if (auto store = dyn_cast<SetOp>(op)) {
-      auto *ref = getOrCreateFor<Lattice<CellRef>>(getProgramPointAfter(op), store.getCell());
+    if (auto store = dyn_cast<memref::StoreOp>(op); store && isWrite(op)) {
+      auto *ref = getOrCreateFor<Lattice<CellRef>>(getProgramPointAfter(op), store.getMemRef());
       if (ref->getValue().kind == CellRef::Unreached)
         return success();
       if (ref->getValue().kind == CellRef::Cell)
@@ -270,20 +274,18 @@ public:
 
   LogicalResult visitOperation(Operation *op, ArrayRef<const Lattice<ConstantValue> *> operands,
                                ArrayRef<Lattice<ConstantValue> *> results) override {
-    if (!isa<DistDialect>(op->getDialect()))
+    if (!isa<DistDialect>(op->getDialect()) && !isRead(op))
       return SparseConstantPropagation::visitOperation(op, operands, results);
     ProgramPoint *here = getProgramPointAfter(op);
     std::optional<ConstantValue> fact;
-    if (auto read = dyn_cast<GetOp>(op)) {
-      auto *ref = getOrCreateFor<Lattice<CellRef>>(here, read.getCell());
+    if (auto read = dyn_cast<memref::LoadOp>(op)) {
+      auto *ref = getOrCreateFor<Lattice<CellRef>>(here, read.getMemRef());
       auto *state = getOrCreateFor<Cells>(here, getProgramPointBefore(op));
       if (ref->getValue().kind == CellRef::Unreached || !state->known)
         return success();
       fact = ref->getValue().kind == CellRef::Cell ? contentFact(state->contents, ref->getValue().cell, here) : unknown();
     } else if (isa<UniformOp>(op)) {
       fact = superposed(op->getContext());
-    } else if (isa<SetOp>(op)) {
-      return success();
     } else if (isa<AddIOp, SubIOp, SltOp, AddAssignOp, SubAssignOp, InstanceOp>(op) &&
                llvm::any_of(operands, [](auto *operand) { return isSuperposed(operand->getValue()); })) {
       fact = superposed(op->getContext());  // a result computed from a superposition is one
@@ -312,7 +314,7 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
   // What the solver found, read before anything is changed.
   struct Plan {
     SmallVector<std::pair<scf::IfOp, std::optional<bool>>> conditionals;  // in program order, outermost first, and the arm taken
-    SmallVector<std::pair<GetOp, std::optional<Content>>> reads;  // the content each read gives
+    SmallVector<std::pair<memref::LoadOp, std::optional<Content>>> reads;  // the content each read gives
   } plan;
 
   ConstantValue fact(Value value) {
@@ -346,11 +348,9 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
                     "conditional on a distribution, or depends on something that is not known when compiling");
         continue;
       }
-      if (!isa<DistDialect>(op.getDialect()) || isa<SetOp>(op))
-        continue;
-      if (auto read = dyn_cast<GetOp>(op)) {
+      if (auto read = dyn_cast<memref::LoadOp>(op); read && isRead(&op)) {
         const Cells *state = cellsAt(flow->getProgramPointBefore(&op));
-        auto *ref = flow->lookupState<Lattice<CellRef>>(read.getCell());
+        auto *ref = flow->lookupState<Lattice<CellRef>>(read.getMemRef());
         std::optional<Content> content;
         if (state && ref && ref->getValue().kind == CellRef::Cell && !state->contents.clobbered) {
           auto it = state->contents.cells.find(ref->getValue().cell);
@@ -393,7 +393,7 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
     for (Region *region : {&op.getThenRegion(), &op.getElseRegion()})
       if (!region->empty())
         for (Operation &inner : region->front().without_terminator())
-          if (!isa<SetOp, scf::IfOp, cf::AssertOp>(inner))
+          if (!isWrite(&inner) && !isa<scf::IfOp, cf::AssertOp>(inner))
             if (auto effects = getEffectsRecursively(&inner); !effects || llvm::any_of(*effects, [](auto &e) { return isa<MemoryEffects::Write>(e.getEffect()); }))
               flat = false;
     // A name rebound in the arms is bound to different objects in them, which would depend on the outcome.
@@ -456,7 +456,7 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
     }
     for (auto &[read, content] : plan.reads) {
       if (content) {
-        auto ref = flow->lookupState<Lattice<CellRef>>(read.getCell());
+        auto ref = flow->lookupState<Lattice<CellRef>>(read.getMemRef());
         Value value = valueOf(*content, ref->getValue().cell);
         forwarded[read.getResult()] = value;
         read.getResult().replaceAllUsesWith(value);
@@ -465,7 +465,10 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
     }
     for (auto &entry : plan.conditionals)
       entry.first.erase();
-    getOperation().walk([](SetOp store) { store.erase(); });
+    getOperation().walk([](memref::StoreOp store) {
+      if (isWrite(store))
+        store.erase();
+    });
   }
 
   void runOnOperation() override {
