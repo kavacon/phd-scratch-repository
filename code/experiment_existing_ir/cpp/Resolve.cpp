@@ -281,6 +281,8 @@ public:
       if (ref->getValue().kind == CellRef::Unreached || !state->known)
         return success();
       fact = ref->getValue().kind == CellRef::Cell ? contentFact(state->contents, ref->getValue().cell, here) : unknown();
+    } else if (auto point = dyn_cast<ConstantOp>(op)) {  // what folding left of a lift of a constant
+      fact = integer(point.getValue().getValue().getValue(), point.getValue().getValue().getType());
     } else if (isa<UniformOp>(op)) {
       fact = superposed(context);
     } else if (isa<SetOp>(op)) {

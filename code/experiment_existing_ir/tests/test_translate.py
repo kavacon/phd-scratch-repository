@@ -118,20 +118,18 @@ class Promoted(unittest.TestCase):
 
     def test_a_distribution_can_be_read_by_several_conditions(self):
         text = resolved("a = 0..4; x = 0; y = 0; if a < 2 { x += 1; } if a < 3 { y += 2; } return x + y;")
-        self.assertEqual(text.count("dist.slt %0,"), 2)  # both read the one distribution
+        self.assertEqual(text.count("dist.slt %3,"), 2)  # both read the one distribution
 
     def test_a_conditional_on_a_distribution_computes_both_arms_and_selects_once(self):
         # x is 2 before the conditional, so its two arms are the integers 5 and 1, and one select ties x to a < 2
         self.assertEqual(resolved("a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;"), """module {
   func.func @main() -> i32 {
-    %c5_i32 = arith.constant 5 : i32
-    %c1_i32 = arith.constant 1 : i32
+    %0 = dist.constant <1 : i32> : !dist.dist<i32>
+    %1 = dist.constant <5 : i32> : !dist.dist<i32>
     %c2_i32 = arith.constant 2 : i32
-    %0 = dist.uniform 0, 4 : !dist.dist<i32>
-    %1 = dist.slt %0, %c2_i32 : !dist.dist<i32>, i32 -> !dist.dist<i1>
-    %2 = dist.lift %c5_i32 : i32 -> !dist.dist<i32>
-    %3 = dist.lift %c1_i32 : i32 -> !dist.dist<i32>
-    %4 = dist.select %1, (%2), (%3) : !dist.dist<i1>, (!dist.dist<i32>), (!dist.dist<i32>) -> (!dist.dist<i32>)
+    %2 = dist.uniform 0, 4 : !dist.dist<i32>
+    %3 = dist.slt %2, %c2_i32 : !dist.dist<i32>, i32 -> !dist.dist<i1>
+    %4 = dist.select %3, (%1), (%0) : !dist.dist<i1>, (!dist.dist<i32>), (!dist.dist<i32>) -> (!dist.dist<i32>)
     %5 = dist.measure %4 : !dist.dist<i32> -> i32
     return %5 : i32
   }
