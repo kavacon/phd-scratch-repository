@@ -10,7 +10,7 @@ one fixed width (`WIDTH`), an upper bound that range analysis narrows later.
 A variable is either plain or a reference. Which one is decided by name, from the syntax alone (`_may_hold_distribution`):
 a variable that is assigned or updated with something that involves a distribution, or inside a conditional whose condition
 does, may hold a distribution on some path. Its slot holds a reference to an object, a cell (`memref<!dist.dist<i32>>`),
-read and written with `dist.get` and `dist.set`; every other variable is a plain integer.
+read and written with `memref.load` and `memref.store`; every other variable is a plain integer.
 What `y = x` means (the semantics: a copy of an integer, the same object for a distribution) depends on what the object
 holds at that point, which only folding shows. So the translation emits both and selects: `arith.select` of a copy and of
 x on `dist.is_single` of x's value, which folds once that is known. The same question guards `y = e` over a name that holds
@@ -269,12 +269,12 @@ class _Translator:
         return self.emit(f"memref.load {var.slot}[] : memref<{var.type}>", var.type)
 
     def get(self, reference: _Value) -> _Value:
-        return self.emit(f"dist.get {reference.ssa} : {self.ref} -> {self.dist}", self.dist)
+        return self.emit(f"memref.load {reference.ssa}[] : {self.ref}", self.dist)
 
     def new(self, value: _Value) -> _Value:
         """A new object holding a distribution."""
         cell = self.emit(f"memref.alloca() : {self.ref}", self.ref)
-        self.out(f"dist.set {value.ssa}, {cell.ssa} : {self.dist}, {self.ref}")
+        self.out(f"memref.store {value.ssa}, {cell.ssa}[] : {self.ref}")
         return cell
 
     def single(self, value: _Value) -> _Value:
@@ -457,7 +457,7 @@ class _Translator:
             held = self.get(reference)
             amount = self.expression(node.value.right)
             result = self.emit(f"dist.{name}i {held.ssa}, {amount.ssa} : {held.type}, {amount.type} -> {self.dist}", self.dist)
-            self.out(f"dist.set {result.ssa}, {reference.ssa} : {self.dist}, {self.ref}")
+            self.out(f"memref.store {result.ssa}, {reference.ssa}[] : {self.ref}")
             return
         target = self.read(node.name)
         amount = self.expression(node.value.right)
@@ -491,7 +491,7 @@ class _Translator:
             incoming = self.get(source)
             single = self.single(incoming)
             copied = self.emit(f"arith.select {single.ssa}, {incoming.ssa}, {held.ssa} : {self.dist}", self.dist)
-            self.out(f"dist.set {copied.ssa}, {target.ssa} : {self.dist}, {self.ref}")
+            self.out(f"memref.store {copied.ssa}, {target.ssa}[] : {self.ref}")
             self.store(var, self.emit(f"arith.select {single.ssa}, {target.ssa}, {source.ssa} : {self.ref}", self.ref))
             return
         if value.dist and not fresh:
@@ -503,7 +503,7 @@ class _Translator:
         if var.ref:
             target = self.reference(var)
             self.check_single(target, DROP)
-            self.out(f"dist.set {self.lift(value).ssa}, {target.ssa} : {self.dist}, {self.ref}")
+            self.out(f"memref.store {self.lift(value).ssa}, {target.ssa}[] : {self.ref}")
         elif value.dist:
             raise TranslationError(f"{node.name} takes a distribution but is not known to hold one")
         else:
