@@ -145,19 +145,7 @@ class Dist_RawOp<string mnemonic, list<Trait> traits = []> : Op<Dist_Dialect, mn
 // until its value is known). What `y = x` means is an `arith.select` of a copy and of x on whether x holds one value; that
 // question and the condition of a conditional are the operations that are new here; `resolve-dist` answers both.
 
-// Reading and writing the cell of an object. (Not affine.load and affine.store: `mem2reg` must not promote a cell while a
-// conditional on a distribution is open, and the affine inliner refuses their operands inside an `scf.if`.)
-def Dist_GetOp : Dist_RawOp<"get"> {
-  let arguments = (ins Arg<AnyMemRef, "the cell read", [MemRead]>:$cell);
-  let results = (outs Dist_Dist:$result);
-  let assemblyFormat = "$cell attr-dict `:` type($cell) `->` type($result)";
-  let hasVerifier = 1;
-}
-def Dist_SetOp : Dist_RawOp<"set"> {
-  let arguments = (ins Dist_Dist:$value, Arg<AnyMemRef, "the cell written", [MemWrite]>:$cell);
-  let assemblyFormat = "$value `,` $cell attr-dict `:` type($value) `,` type($cell)";
-  let hasVerifier = 1;
-}
+// Reading and writing the cell of an object are `memref.load` and `memref.store` of the rank 0 cell.
 
 // Whether a distribution holds one value: it is made of lifted integers only. Folded from how the value was made (not from
 // its range, which cannot tell a select of equal integers on a superposed condition from an integer).
