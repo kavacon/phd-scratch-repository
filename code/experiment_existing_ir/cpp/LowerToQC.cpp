@@ -334,6 +334,13 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
 
   void runOnOperation() override {
     ModuleOp module = getOperation();
+    // A constant distribution is a lift of an integer constant again, which is what becomes a register.
+    module.walk([&](existing_ir::dist::ConstantOp constant) {
+      OpBuilder builder(constant);
+      Value integer = arith::ConstantOp::create(builder, constant.getLoc(), constant.getValue().getValue());
+      constant.replaceAllUsesWith(existing_ir::dist::LiftOp::create(builder, constant.getLoc(), constant.getType(), integer).getResult());
+      constant.erase();
+    });
     // MLIR's own range analysis sizes each register; no analysis of ours.
     DataFlowSolver solver;
     solver.load<dataflow::DeadCodeAnalysis>();

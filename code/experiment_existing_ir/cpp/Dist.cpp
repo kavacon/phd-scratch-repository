@@ -11,6 +11,8 @@ using namespace existing_ir::dist;
 #include "DistDialect.cpp.inc"
 #define GET_TYPEDEF_CLASSES
 #include "DistTypes.cpp.inc"
+#define GET_ATTRDEF_CLASSES
+#include "DistAttrs.cpp.inc"
 #define GET_OP_CLASSES
 #include "DistOps.cpp.inc"
 
@@ -28,6 +30,10 @@ void DistDialect::initialize() {
   addTypes<
 #define GET_TYPEDEF_LIST
 #include "DistTypes.cpp.inc"
+      >();
+  addAttributes<
+#define GET_ATTRDEF_LIST
+#include "DistAttrs.cpp.inc"
       >();
   addOperations<
 #define GET_OP_LIST
@@ -173,3 +179,70 @@ static LogicalResult verifyCell(Operation *op, Type cell, Type value) {
 }
 LogicalResult GetOp::verify() { return verifyCell(*this, getCell().getType(), getResult().getType()); }
 LogicalResult SetOp::verify() { return verifyCell(*this, getCell().getType(), getValue().getType()); }
+
+// ---- folding definite distributions -----------------------------------------------------------------------------------------
+
+// The integer a known operand stands for: a point (a definite distribution) or an integer constant.
+static std::optional<APInt> known(Attribute attr) {
+  if (auto point = dyn_cast_or_null<PointAttr>(attr))
+    return point.getValue().getValue();
+  if (auto integer = dyn_cast_or_null<IntegerAttr>(attr))
+    return integer.getValue();
+  return std::nullopt;
+}
+static Attribute pointOf(Type result, const APInt &value) {
+  return PointAttr::get(result.getContext(), cast<DistType>(result), IntegerAttr::get(elementOf(result), value));
+}
+
+Operation *DistDialect::materializeConstant(OpBuilder &builder, Attribute value, Type type, Location loc) {
+  if (auto point = dyn_cast<PointAttr>(value))
+    return ConstantOp::create(builder, loc, type, point);
+  return arith::ConstantOp::materialize(builder, value, type, loc);
+}
+
+OpFoldResult LiftOp::fold(FoldAdaptor adaptor) {
+  if (auto value = known(adaptor.getInput()))
+    return pointOf(getType(), *value);
+  return {};
+}
+OpFoldResult InstanceOp::fold(FoldAdaptor adaptor) {  // an instance of a definite value is another definite value
+  if (isa_and_nonnull<PointAttr>(adaptor.getInput()))
+    return adaptor.getInput();
+  return {};
+}
+OpFoldResult MeasureOp::fold(FoldAdaptor adaptor) {
+  if (auto value = known(adaptor.getInput()))
+    return IntegerAttr::get(getType(), value->sextOrTrunc(getType().getIntOrFloatBitWidth()));
+  return {};
+}
+OpFoldResult CondOp::fold(FoldAdaptor adaptor) {
+  if (auto value = known(adaptor.getInput()))
+    return IntegerAttr::get(getType(), *value);
+  return {};
+}
+OpFoldResult IsSingleOp::fold(FoldAdaptor adaptor) {
+  if (known(adaptor.getInput()))
+    return BoolAttr::get(getContext(), true);
+  if (getInput().getDefiningOp<UniformOp>())
+    return BoolAttr::get(getContext(), false);
+  return {};
+}
+template <typename Op> static OpFoldResult foldBinary(Op op, typename Op::FoldAdaptor adaptor, APInt (*compute)(const APInt &, const APInt &)) {
+  auto lhs = known(adaptor.getOperands()[0]), rhs = known(adaptor.getOperands()[1]);
+  if (lhs && rhs)
+    return pointOf(op.getType(), compute(*lhs, *rhs));
+  return {};
+}
+static APInt plus(const APInt &a, const APInt &b) { return a + b; }
+static APInt minus(const APInt &a, const APInt &b) { return a - b; }
+static APInt less(const APInt &a, const APInt &b) { return APInt(1, a.slt(b)); }
+OpFoldResult AddIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, plus); }
+OpFoldResult SubIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, minus); }
+OpFoldResult SltOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, less); }
+OpFoldResult AddAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, plus); }
+OpFoldResult SubAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, minus); }
+OpFoldResult ConstantOp::fold(FoldAdaptor) { return getValue(); }
+void ConstantOp::inferResultRanges(ArrayRef<ConstantIntRanges>, SetIntRangeFn setResultRange) {
+  APInt value = getValue().getValue().getValue();
+  setResultRange(getResult(), ConstantIntRanges::constant(value));
+}

@@ -13,6 +13,7 @@
 include "mlir/IR/OpBase.td"
 include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/BuiltinTypeInterfaces.td"
+include "mlir/IR/BuiltinAttributeInterfaces.td"
 include "mlir/Interfaces/InferIntRangeInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
@@ -20,6 +21,8 @@ def Dist_Dialect : Dialect {
   let name = "dist";
   let cppNamespace = "::existing_ir::dist";
   let useDefaultTypePrinterParser = 1;
+  let useDefaultAttributePrinterParser = 1;
+  let hasConstantMaterializer = 1;  // a folded definite distribution is a lift of an arith constant
   let dependentDialects = ["::mlir::arith::ArithDialect"];  // `resolve-dist` writes the constants it finds as arith
 }
 
@@ -28,6 +31,13 @@ def Dist_DistType : TypeDef<Dist_Dialect, "Dist", [MemRefElementTypeInterface]> 
   let mnemonic = "dist";
   let parameters = (ins "::mlir::Type":$element);
   let assemblyFormat = "`<` $element `>`";
+}
+// A definite distribution holding one value, as an attribute: what a fold of a distribution operation gives when every
+// operand is known, and what `materializeConstant` turns back into `dist.lift` of an `arith.constant`.
+def Dist_PointAttr : AttrDef<Dist_Dialect, "Point", [TypedAttrInterface]> {
+  let mnemonic = "point";
+  let parameters = (ins AttributeSelfTypeParameter<"", "::existing_ir::dist::DistType">:$type, "::mlir::IntegerAttr":$value);
+  let assemblyFormat = "`<` $value `>`";
 }
 def Dist_Dist : DialectType<Dist_Dialect, CPred<"::llvm::isa<::existing_ir::dist::DistType>($_self)">, "distribution">;
 def Dist_DistOrInt : AnyTypeOf<[Dist_Dist, AnySignlessInteger], "a distribution or an integer">;
@@ -59,9 +69,21 @@ def Dist_LiftOp : Dist_Op<"lift"> {
   let results = (outs Res<Dist_Dist, "a new independent distribution", [MemAlloc]>:$result);
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
   let hasVerifier = 1;
+  let hasFolder = 1;
+}
+
+// A definite distribution written as a constant: what a fold of any distribution operation on known operands becomes. The
+// lowering writes it back as `dist.lift` of an `arith.constant`. (Not a `lift`, which has an operand: a constant-like
+// operation has none, and without that `canonicalize` refolds a materialized lift for ever.)
+def Dist_ConstantOp : Dist_Op<"constant", [Pure, ConstantLike]> {
+  let arguments = (ins Dist_PointAttr:$value);
+  let results = (outs Dist_Dist:$result);
+  let assemblyFormat = "$value attr-dict `:` type($result)";
+  let hasFolder = 1;
 }
 
 class Dist_BinaryOp<string mnemonic> : Dist_PureOp<mnemonic> {
+  let hasFolder = 1;
   let arguments = (ins Dist_DistOrInt:$lhs, Dist_DistOrInt:$rhs);
   let results = (outs Dist_Dist:$result);
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($lhs) `,` type($rhs) `->` type($result)";
@@ -81,11 +103,13 @@ def Dist_InstanceOp : Dist_Op<"instance"> {
   let results = (outs Res<Dist_Dist, "a new independent distribution", [MemAlloc]>:$result);
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
   let hasVerifier = 1;
+  let hasFolder = 1;
 }
 
 // `target += amount` and `target -= amount`: the result is the updated target, in the target's register when it fits.
 // The target is consumed, so its other uses must come first; the amount is only read.
 class Dist_UpdateOp<string mnemonic> : Dist_PureOp<mnemonic> {
+  let hasFolder = 1;
   let arguments = (ins Dist_DistOrInt:$target, Dist_DistOrInt:$amount);
   let results = (outs Dist_Dist:$result);
   let assemblyFormat = "$target `,` $amount attr-dict `:` type($target) `,` type($amount) `->` type($result)";
@@ -110,6 +134,7 @@ def Dist_MeasureOp : Dist_PureOp<"measure"> {
   let results = (outs AnySignlessInteger:$result);
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
   let hasVerifier = 1;
+  let hasFolder = 1;
 }
 
 // ---- references ------------------------------------------------------------------------------------------------------
@@ -140,6 +165,7 @@ def Dist_IsSingleOp : Dist_RawOp<"is_single", [Pure]> {
   let arguments = (ins Dist_Dist:$input);
   let results = (outs I1:$result);
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
+  let hasFolder = 1;
 }
 
 // `scf.if` branches on this: the condition of a conditional as an integer, when it is definite. `resolve-dist` finds it a
@@ -149,4 +175,5 @@ def Dist_CondOp : Dist_RawOp<"cond", [Pure]> {
   let results = (outs I1:$result);
   let assemblyFormat = "$input attr-dict `:` type($input) `->` type($result)";
   let hasVerifier = 1;
+  let hasFolder = 1;
 }

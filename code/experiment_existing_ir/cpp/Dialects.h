@@ -15,6 +15,9 @@
 #define GET_TYPEDEF_CLASSES
 #include "DistTypes.h.inc"
 
+#define GET_ATTRDEF_CLASSES
+#include "DistAttrs.h.inc"
+
 #define GET_OP_CLASSES
 #include "DistOps.h.inc"
 
