@@ -79,7 +79,7 @@ def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
 # The default pipeline. `resolve-dist` runs one dataflow analysis (which branch is live, what each value is, what each cell holds,
 # which cell each reference names) and rewrites once from what it found; it refuses what the analysis could not decide.
 # Stock `canonicalize` then folds the constant selects and removes what is dead.
-RESOLVE = ("--resolve-dist", "--canonicalize")
+RESOLVE = ("--resolve-dist", "--sccp", "--canonicalize")
 DEFAULT = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--in-place-updates", "--lower-to-qc")
 
 

@@ -39,9 +39,6 @@ namespace {
 ConstantValue superposed(MLIRContext *context) {
   return ConstantValue(UnitAttr::get(context), context->getLoadedDialect<DistDialect>());
 }
-ConstantValue integer(const APInt &value, Type type) {
-  return ConstantValue(IntegerAttr::get(type, value), type.getContext()->getLoadedDialect<DistDialect>());
-}
 ConstantValue unknown() { return ConstantValue::getUnknownConstant(); }
 bool isSuperposed(const ConstantValue &fact) {
   return !fact.isUninitialized() && fact.getConstantValue() && isa<UnitAttr>(fact.getConstantValue());
@@ -51,9 +48,10 @@ std::optional<APInt> constantOf(const ConstantValue &fact) {
     return std::nullopt;
   if (auto attr = dyn_cast<IntegerAttr>(fact.getConstantValue()))
     return attr.getValue();
+  if (auto point = dyn_cast<PointAttr>(fact.getConstantValue()))
+    return point.getValue().getValue();
   return std::nullopt;
 }
-Type elementOf(Type type) { return isa<DistType>(type) ? cast<DistType>(type).getElement() : type; }
 
 // ---- which cell a reference names ----------------------------------------------------------------------------------------
 
@@ -239,6 +237,8 @@ public:
 
 // ---- facts about values, extending constant propagation ----------------------------------------------------------------
 
+// Stock constant propagation, which folds the operations (their `fold` hooks) and so knows definite distributions, plus the
+// two things folding cannot say: a superposition, and what a read of a cell gives.
 class DistConstants : public SparseConstantPropagation {
 public:
   using SparseConstantPropagation::SparseConstantPropagation;
@@ -272,7 +272,6 @@ public:
                                ArrayRef<Lattice<ConstantValue> *> results) override {
     if (!isa<DistDialect>(op->getDialect()))
       return SparseConstantPropagation::visitOperation(op, operands, results);
-    MLIRContext *context = op->getContext();
     ProgramPoint *here = getProgramPointAfter(op);
     std::optional<ConstantValue> fact;
     if (auto read = dyn_cast<GetOp>(op)) {
@@ -281,47 +280,15 @@ public:
       if (ref->getValue().kind == CellRef::Unreached || !state->known)
         return success();
       fact = ref->getValue().kind == CellRef::Cell ? contentFact(state->contents, ref->getValue().cell, here) : unknown();
-    } else if (auto point = dyn_cast<ConstantOp>(op)) {  // what folding left of a lift of a constant
-      fact = integer(point.getValue().getValue().getValue(), point.getValue().getValue().getType());
     } else if (isa<UniformOp>(op)) {
-      fact = superposed(context);
+      fact = superposed(op->getContext());
     } else if (isa<SetOp>(op)) {
       return success();
+    } else if (isa<AddIOp, SubIOp, SltOp, AddAssignOp, SubAssignOp, InstanceOp>(op) &&
+               llvm::any_of(operands, [](auto *operand) { return isSuperposed(operand->getValue()); })) {
+      fact = superposed(op->getContext());  // a result computed from a superposition is one
     } else {
-      SmallVector<ConstantValue> in;
-      for (const auto *operand : operands) {
-        if (operand->getValue().isUninitialized())
-          return success();
-        in.push_back(operand->getValue());
-      }
-      Type type = elementOf(op->getResult(0).getType());
-      auto number = [&](unsigned i) { return constantOf(in[i]); };
-      if (isa<LiftOp, InstanceOp>(op)) {
-        fact = in[0];
-      } else if (isa<AddIOp, SubIOp, AddAssignOp, SubAssignOp, SltOp>(op)) {
-        std::optional<APInt> x = number(0), y = number(1);
-        if (isSuperposed(in[0]) || isSuperposed(in[1]))
-          fact = superposed(context);
-        else if (x && y && isa<AddIOp, AddAssignOp>(op))
-          fact = integer(*x + *y, type);
-        else if (x && y && isa<SubIOp, SubAssignOp>(op))
-          fact = integer(*x - *y, type);
-        else if (x && y)
-          fact = integer(APInt(1, x->slt(*y)), type);
-        else
-          fact = unknown();
-      } else if (isa<MeasureOp>(op)) {  // reading a superposition is a measurement, which is not known when compiling
-        std::optional<APInt> x = number(0);
-        fact = x ? integer(x->sextOrTrunc(cast<IntegerType>(op->getResult(0).getType()).getWidth()), op->getResult(0).getType())
-                 : unknown();
-      } else if (isa<CondOp>(op)) {  // an integer when the distribution is definite; otherwise left to the conditional
-        fact = number(0) ? in[0] : unknown();
-      } else if (isa<IsSingleOp>(op)) {
-        std::optional<APInt> x = number(0);
-        fact = x ? integer(APInt(1, 1), type) : isSuperposed(in[0]) ? integer(APInt(1, 0), type) : unknown();
-      } else {
-        fact = unknown();
-      }
+      return SparseConstantPropagation::visitOperation(op, operands, results);  // the folds of the operations
     }
     if (fact)
       propagateIfChanged(results[0], results[0]->join(*fact));
@@ -345,8 +312,7 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
   // What the solver found, read before anything is changed.
   struct Plan {
     SmallVector<std::pair<scf::IfOp, std::optional<bool>>> conditionals;  // in program order, outermost first, and the arm taken
-    SmallVector<std::pair<GetOp, std::optional<Content>>> reads;  // the content to read, unless the read is a constant
-    SmallVector<Value> constants;                              // results to replace by their constant
+    SmallVector<std::pair<GetOp, std::optional<Content>>> reads;  // the content each read gives
   } plan;
 
   ConstantValue fact(Value value) {
@@ -382,11 +348,6 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
       }
       if (!isa<DistDialect>(op.getDialect()) || isa<SetOp>(op))
         continue;
-      Value result = op.getResult(0);
-      auto lift = dyn_cast<LiftOp>(op);
-      bool constant = constantOf(fact(result)).has_value();
-      if (constant && !(lift && lift.getInput().getDefiningOp<arith::ConstantOp>()))
-        plan.constants.push_back(result);
       if (auto read = dyn_cast<GetOp>(op)) {
         const Cells *state = cellsAt(flow->getProgramPointBefore(&op));
         auto *ref = flow->lookupState<Lattice<CellRef>>(read.getCell());
@@ -396,10 +357,10 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
           if (it != state->contents.cells.end() && it->second.kind != Content::Conflict)
             content = it->second;
         }
-        if (!constant && !content)
+        if (!content)
           refuse(&op, "could not be resolved: what this name refers to depends on something that is not known when compiling");
-        plan.reads.push_back({read, constant ? std::nullopt : content});
-      } else if (isa<IsSingleOp>(op) && !constant) {
+        plan.reads.push_back({read, content});
+      } else if (isa<IsSingleOp>(op) && !constantOf(fact(op.getResult(0)))) {
         refuse(&op, "could not be resolved: what this name refers to depends on something that is not known when compiling");
       }
     }
@@ -451,10 +412,22 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
 
   // The value that holds what a cell holds: the one stored, or the select that ties the cell to the condition.
   DenseMap<std::pair<Operation *, Value>, Value> tied;
-  DenseMap<Value, Value> folded;  // a value that is a constant, and the constant that replaced it
-  Value valueOf(const Content &content, Value cell) {
+  // The integer a content holds when every path gives the same one.
+  std::optional<APInt> constantOfContent(const Content &content) {
     if (content.kind == Content::Store)
-      return folded.lookup_or(content.value, content.value);
+      return constantOf(fact(content.value));
+    if (content.kind == Content::Conflict)
+      return std::nullopt;
+    std::optional<APInt> a = constantOfContent((*content.parts)[0]), b = constantOfContent((*content.parts)[1]),
+                         c = constantOfContent((*content.parts)[2]);
+    return a && b && c && *a == *b && *b == *c ? a : std::nullopt;
+  }
+  DenseMap<Value, Value> forwarded;  // a read that has been replaced, and what it was replaced by
+  Value valueOf(const Content &content, Value cell) {
+    if (content.kind == Content::Store)  // (a stored value may itself be a read, which is replaced first, as reads come in order)
+      return forwarded.lookup_or(content.value, content.value);
+    if (constantOfContent(content))  // neither arm changed what it held: not tied to the condition
+      return valueOf((*content.parts)[0], cell);
     auto key = std::make_pair(content.conditional, cell);
     if (Value done = tied.lookup(key))
       return done;
@@ -467,17 +440,6 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
   }
 
   void apply() {
-    // Values that are constants.
-    for (Value value : plan.constants) {
-      OpBuilder builder(value.getDefiningOp());
-      Location loc = value.getLoc();
-      APInt number = *constantOf(fact(value));
-      Type type = elementOf(value.getType());
-      Value constant = arith::ConstantOp::create(builder, loc, type, builder.getIntegerAttr(type, number));
-      Value replacement = isa<DistType>(value.getType()) ? LiftOp::create(builder, loc, value.getType(), constant).getResult() : constant;
-      folded[value] = replacement;
-      value.replaceAllUsesWith(replacement);
-    }
     // Conditionals keep the arms that run, which are moved out, in order.
     for (auto [op, taken] : plan.conditionals) {
       SmallVector<Region *> live;
@@ -495,7 +457,9 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
     for (auto &[read, content] : plan.reads) {
       if (content) {
         auto ref = flow->lookupState<Lattice<CellRef>>(read.getCell());
-        read.getResult().replaceAllUsesWith(valueOf(*content, ref->getValue().cell));
+        Value value = valueOf(*content, ref->getValue().cell);
+        forwarded[read.getResult()] = value;
+        read.getResult().replaceAllUsesWith(value);
       }
       read.erase();
     }
