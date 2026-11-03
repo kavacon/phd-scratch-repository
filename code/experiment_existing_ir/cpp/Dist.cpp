@@ -182,7 +182,7 @@ static std::optional<APInt> known(Attribute attr) {
   return std::nullopt;
 }
 static Attribute pointOf(Type result, const APInt &value) {
-  return PointAttr::get(result.getContext(), cast<DistType>(result), IntegerAttr::get(elementOf(result), value));
+  return PointAttr::get(result.getContext(), IntegerAttr::get(elementOf(result), value));
 }
 
 Operation *DistDialect::materializeConstant(OpBuilder &builder, Attribute value, Type type, Location loc) {

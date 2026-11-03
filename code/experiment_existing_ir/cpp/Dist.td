@@ -13,7 +13,6 @@
 include "mlir/IR/OpBase.td"
 include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/BuiltinTypeInterfaces.td"
-include "mlir/IR/BuiltinAttributeInterfaces.td"
 include "mlir/Interfaces/InferIntRangeInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
@@ -34,9 +33,9 @@ def Dist_DistType : TypeDef<Dist_Dialect, "Dist", [MemRefElementTypeInterface]> 
 }
 // A definite distribution holding one value, as an attribute: what a fold of a distribution operation gives when every
 // operand is known, and what `materializeConstant` turns back into `dist.lift` of an `arith.constant`.
-def Dist_PointAttr : AttrDef<Dist_Dialect, "Point", [TypedAttrInterface]> {
+def Dist_PointAttr : AttrDef<Dist_Dialect, "Point", []> {
   let mnemonic = "point";
-  let parameters = (ins AttributeSelfTypeParameter<"", "::existing_ir::dist::DistType">:$type, "::mlir::IntegerAttr":$value);
+  let parameters = (ins "::mlir::IntegerAttr":$value);
   let assemblyFormat = "`<` $value `>`";
 }
 def Dist_Dist : DialectType<Dist_Dialect, CPred<"::llvm::isa<::existing_ir::dist::DistType>($_self)">, "distribution">;
