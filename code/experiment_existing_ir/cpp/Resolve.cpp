@@ -34,6 +34,10 @@ using namespace existing_ir::dist;
 
 namespace {
 
+// A cell is a rank 0 memref of a distribution; these are its reads and writes.
+bool isRead(Operation *op) { auto load = dyn_cast<memref::LoadOp>(op); return load && isa<DistType>(load.getType()); }
+bool isWrite(Operation *op) { auto store = dyn_cast<memref::StoreOp>(op); return store && isa<DistType>(store.getValue().getType()); }
+
 // ---- facts about values ------------------------------------------------------------------------------------------------
 
 ConstantValue superposed(MLIRContext *context) {
@@ -184,8 +188,8 @@ public:
     if (!before.known)
       return success();
     Contents next = before.contents;
-    if (auto store = dyn_cast<SetOp>(op)) {
-      auto *ref = getOrCreateFor<Lattice<CellRef>>(getProgramPointAfter(op), store.getCell());
+    if (auto store = dyn_cast<memref::StoreOp>(op); store && isWrite(op)) {
+      auto *ref = getOrCreateFor<Lattice<CellRef>>(getProgramPointAfter(op), store.getMemRef());
       if (ref->getValue().kind == CellRef::Unreached)
         return success();
       if (ref->getValue().kind == CellRef::Cell)
@@ -268,25 +272,46 @@ public:
     return factOf(it->second, dependent);
   }
 
+  // A superposition: by its fact, or a distribution that a conditional on a superposition yields (which the join of its arms
+  // calls unknown, since the arms differ, but which is tied to the condition).
+  bool isSuperposedValue(Value value, ProgramPoint *dependent) {
+    const ConstantValue &fact = getLatticeElementFor(dependent, value)->getValue();
+    if (isSuperposed(fact))
+      return true;
+    if (constantOf(fact))  // the arms left it the same
+      return false;
+    auto result = dyn_cast<OpResult>(value);
+    auto branch = result ? dyn_cast<scf::IfOp>(result.getOwner()) : scf::IfOp();
+    auto condition = branch ? branch.getCondition().getDefiningOp<CondOp>() : CondOp();
+    return condition && isa<DistType>(value.getType()) && isSuperposedValue(condition.getInput(), dependent);
+  }
+
   LogicalResult visitOperation(Operation *op, ArrayRef<const Lattice<ConstantValue> *> operands,
                                ArrayRef<Lattice<ConstantValue> *> results) override {
-    if (!isa<DistDialect>(op->getDialect()))
+    if (!isa<DistDialect>(op->getDialect()) && !isRead(op))
       return SparseConstantPropagation::visitOperation(op, operands, results);
     ProgramPoint *here = getProgramPointAfter(op);
+    // What a conditional yields is only known once both its arms have said what they yield.
+    for (Value operand : op->getOperands())
+      if (auto branch = operand.getDefiningOp<scf::IfOp>(); branch && isa<DistType>(operand.getType()))
+        for (Region *arm : {&branch.getThenRegion(), &branch.getElseRegion()})
+          if (!arm->empty() && getLatticeElementFor(here, arm->front().getTerminator()->getOperand(cast<OpResult>(operand).getResultNumber()))
+                                   ->getValue().isUninitialized())
+            return success();
     std::optional<ConstantValue> fact;
-    if (auto read = dyn_cast<GetOp>(op)) {
-      auto *ref = getOrCreateFor<Lattice<CellRef>>(here, read.getCell());
+    if (auto read = dyn_cast<memref::LoadOp>(op)) {
+      auto *ref = getOrCreateFor<Lattice<CellRef>>(here, read.getMemRef());
       auto *state = getOrCreateFor<Cells>(here, getProgramPointBefore(op));
       if (ref->getValue().kind == CellRef::Unreached || !state->known)
         return success();
       fact = ref->getValue().kind == CellRef::Cell ? contentFact(state->contents, ref->getValue().cell, here) : unknown();
     } else if (isa<UniformOp>(op)) {
       fact = superposed(op->getContext());
-    } else if (isa<SetOp>(op)) {
-      return success();
     } else if (isa<AddIOp, SubIOp, SltOp, AddAssignOp, SubAssignOp, InstanceOp>(op) &&
-               llvm::any_of(operands, [](auto *operand) { return isSuperposed(operand->getValue()); })) {
+               llvm::any_of(op->getOperands(), [&](Value operand) { return isSuperposedValue(operand, here); })) {
       fact = superposed(op->getContext());  // a result computed from a superposition is one
+    } else if (isa<IsSingleOp>(op) && isSuperposedValue(op->getOperand(0), here)) {
+      fact = ConstantValue(BoolAttr::get(op->getContext(), false), op->getContext()->getLoadedDialect<DistDialect>());
     } else {
       return SparseConstantPropagation::visitOperation(op, operands, results);  // the folds of the operations
     }
@@ -312,7 +337,7 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
   // What the solver found, read before anything is changed.
   struct Plan {
     SmallVector<std::pair<scf::IfOp, std::optional<bool>>> conditionals;  // in program order, outermost first, and the arm taken
-    SmallVector<std::pair<GetOp, std::optional<Content>>> reads;  // the content each read gives
+    SmallVector<std::pair<memref::LoadOp, std::optional<Content>>> reads;  // the content each read gives
   } plan;
 
   ConstantValue fact(Value value) {
@@ -346,11 +371,9 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
                     "conditional on a distribution, or depends on something that is not known when compiling");
         continue;
       }
-      if (!isa<DistDialect>(op.getDialect()) || isa<SetOp>(op))
-        continue;
-      if (auto read = dyn_cast<GetOp>(op)) {
+      if (auto read = dyn_cast<memref::LoadOp>(op); read && isRead(&op)) {
         const Cells *state = cellsAt(flow->getProgramPointBefore(&op));
-        auto *ref = flow->lookupState<Lattice<CellRef>>(read.getCell());
+        auto *ref = flow->lookupState<Lattice<CellRef>>(read.getMemRef());
         std::optional<Content> content;
         if (state && ref && ref->getValue().kind == CellRef::Cell && !state->contents.clobbered) {
           auto it = state->contents.cells.find(ref->getValue().cell);
@@ -393,13 +416,13 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
     for (Region *region : {&op.getThenRegion(), &op.getElseRegion()})
       if (!region->empty())
         for (Operation &inner : region->front().without_terminator())
-          if (!isa<SetOp, scf::IfOp, cf::AssertOp>(inner))
+          if (!isWrite(&inner) && !isa<scf::IfOp, cf::AssertOp>(inner))
             if (auto effects = getEffectsRecursively(&inner); !effects || llvm::any_of(*effects, [](auto &e) { return isa<MemoryEffects::Write>(e.getEffect()); }))
               flat = false;
     // A name rebound in the arms is bound to different objects in them, which would depend on the outcome.
     if (flat && !op.getElseRegion().empty())
       for (auto [t, f] : llvm::zip(op.thenYield().getOperands(), op.elseYield().getOperands()))
-        flat &= same(t, f);
+        flat &= isa<DistType>(t.getType()) || same(t, f);
     if (!flat)
       return refuse(op, isa<MemRefType>(op->getNumResults() ? op->getResult(0).getType() : Type())
                             ? "which object a name means could not be decided: it is bound to different objects in the arms of a "
@@ -451,12 +474,25 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
         if (!region->empty())
           for (Operation &inner : llvm::make_early_inc_range(region->front().without_terminator()))
             inner.moveBefore(op);
-      if (op->getNumResults())
-        op.replaceAllUsesWith(live.front()->front().getTerminator()->getOperands());
+      if (op->getNumResults()) {
+        Operation *then = op.thenYield(), *otherwise = op.getElseRegion().empty() ? nullptr : op.elseYield();
+        for (auto [index, result] : llvm::enumerate(op->getResults())) {
+          Value onTrue = then->getOperand(index);
+          // a distribution that the arms leave differently is tied to the condition
+          if (!taken && isa<DistType>(result.getType()) && !same(onTrue, otherwise->getOperand(index))) {
+            OpBuilder builder(op);
+            onTrue = SelectOp::create(builder, op.getLoc(), TypeRange{result.getType()}, op.getCondition().getDefiningOp<CondOp>().getInput(),
+                                      ValueRange{onTrue}, ValueRange{otherwise->getOperand(index)}).getResult(0);
+          } else if (taken && !*taken) {
+            onTrue = otherwise->getOperand(index);
+          }
+          result.replaceAllUsesWith(onTrue);
+        }
+      }
     }
     for (auto &[read, content] : plan.reads) {
       if (content) {
-        auto ref = flow->lookupState<Lattice<CellRef>>(read.getCell());
+        auto ref = flow->lookupState<Lattice<CellRef>>(read.getMemRef());
         Value value = valueOf(*content, ref->getValue().cell);
         forwarded[read.getResult()] = value;
         read.getResult().replaceAllUsesWith(value);
@@ -465,7 +501,10 @@ struct Resolve : PassWrapper<Resolve, OperationPass<func::FuncOp>> {
     }
     for (auto &entry : plan.conditionals)
       entry.first.erase();
-    getOperation().walk([](SetOp store) { store.erase(); });
+    getOperation().walk([](memref::StoreOp store) {
+      if (isWrite(store))
+        store.erase();
+    });
   }
 
   void runOnOperation() override {
