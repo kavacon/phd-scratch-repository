@@ -223,7 +223,7 @@ OpFoldResult CondOp::fold(FoldAdaptor adaptor) {
 OpFoldResult IsSingleOp::fold(FoldAdaptor adaptor) {
   if (known(adaptor.getInput()))
     return BoolAttr::get(getContext(), true);
-  if (getInput().getDefiningOp<UniformOp>())
+  if (isa_and_nonnull<UnitAttr>(adaptor.getInput()))  // what constant propagation calls a superposition
     return BoolAttr::get(getContext(), false);
   return {};
 }
