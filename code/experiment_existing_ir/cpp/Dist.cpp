@@ -173,33 +173,3 @@ static LogicalResult verifyCell(Operation *op, Type cell, Type value) {
 }
 LogicalResult GetOp::verify() { return verifyCell(*this, getCell().getType(), getResult().getType()); }
 LogicalResult SetOp::verify() { return verifyCell(*this, getCell().getType(), getValue().getType()); }
-
-// A condition that is a lift of an integer is that integer.
-OpFoldResult CondOp::fold(FoldAdaptor) {
-  if (auto lift = getInput().getDefiningOp<LiftOp>())
-    return lift.getInput();
-  return {};
-}
-
-// Whether a value holds one value is read off how it was made; until that is certain the question stays.
-OpFoldResult IsSingleOp::fold(FoldAdaptor) {
-  switch (kindOf(getInput())) {
-  case Kind::Definite:
-    return BoolAttr::get(getContext(), true);
-  case Kind::Superposed:
-    return BoolAttr::get(getContext(), false);
-  default:
-    return {};
-  }
-}
-
-Operation *DistDialect::materializeConstant(OpBuilder &builder, Attribute value, Type type, Location loc) {
-  return arith::ConstantOp::materialize(builder, value, type, loc);
-}
-
-// Neither arm changed the object: it is what it was before. (Two integers that are equal are the same.)
-OpFoldResult MergeOp::fold(FoldAdaptor) {
-  if (same(getWhenTrue(), getBefore()) && same(getWhenFalse(), getBefore()))
-    return getBefore();
-  return {};
-}
