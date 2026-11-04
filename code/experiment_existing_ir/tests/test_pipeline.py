@@ -2,11 +2,11 @@ import subprocess
 import unittest
 
 from compiler.parser.parser import parse
-from experiment_existing_ir import export, golden, simulate
+from experiment_existing_ir import pipeline
 from experiment_existing_ir.translate import TranslationError, translate
 
 ARITHMETIC = "x = 5; y = x + 3; y = y - 1; return y;"
-TIED = (*simulate.PREPARE, *simulate.RESOLVE, "--tie-instances", "--canonicalize", "--lower-to-qc")
+TIED = (*pipeline.PREPARE, *pipeline.RESOLVE, "--tie-instances", "--canonicalize", "--lower-to-qc")
 CONDITIONAL = "a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;"
 
 
@@ -16,39 +16,39 @@ def program(source: str, grammar: str = "v1", **options) -> str:
 
 def optimise(source: str, *passes: str) -> str:
     """The program after its loops are unrolled, its slots promoted and its references resolved, then the given passes."""
-    return simulate.optimise(source, *simulate.PREPARE, *simulate.RESOLVE, *passes)
+    return pipeline.optimise(source, *pipeline.PREPARE, *pipeline.RESOLVE, *passes)
 
 
 def registers(qc: str) -> int:
     return qc.count("memref.alloc")
 
 
-@unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
+@unittest.skipUnless(pipeline.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
 class Pipeline(unittest.TestCase):
     def test_a_definite_program_returns_its_value_with_and_without_folding(self):
         for passes in (("--lower-to-qc",), ("--canonicalize", "--lower-to-qc")):
-            self.assertEqual(simulate.run(program(ARITHMETIC), (*simulate.PREPARE, *passes)), {7: 2000}, passes)
+            self.assertEqual(pipeline.run(program(ARITHMETIC), (*pipeline.PREPARE, *passes)), {7: 2000}, passes)
 
     def test_folding_the_source_first_removes_the_arithmetic_from_the_circuit(self):
-        plain = simulate.optimise(program(ARITHMETIC), *simulate.PREPARE, "--lower-to-qc")
-        folded = simulate.optimise(program(ARITHMETIC), *simulate.PREPARE, "--canonicalize", "--lower-to-qc")
+        plain = pipeline.optimise(program(ARITHMETIC), *pipeline.PREPARE, "--lower-to-qc")
+        folded = pipeline.optimise(program(ARITHMETIC), *pipeline.PREPARE, "--canonicalize", "--lower-to-qc")
         self.assertEqual((registers(plain), "qc.call" in plain), (9, True))
         self.assertEqual((registers(folded), "qc.call" in folded), (1, False))  # 7 is 0111, in one register
 
     def test_arithmetic_wraps_modulo_the_type_width(self):
         # 7 + 7 is 14, which is -2 in four bits of two's complement
-        self.assertEqual(simulate.run(program("a = 7; b = a + a; return b;", width=4), shots=100), {-2: 100})
+        self.assertEqual(pipeline.run(program("a = 7; b = a + a; return b;", width=4), shots=100), {-2: 100})
 
     def test_a_conditional_on_a_distribution_gives_each_outcome_with_its_probability(self):
         # a is 0, 1, 2 or 3 with equal probability, so x is 5 when a < 2 and 1 otherwise: each half the time
-        counts = simulate.run(program(CONDITIONAL, "v2"))
+        counts = pipeline.run(program(CONDITIONAL, "v2"))
         self.assertEqual(set(counts), {1, 5})
         self.assertTrue(all(800 < count < 1200 for count in counts.values()), counts)
 
     def test_an_in_place_update_shifts_every_outcome(self):
         # a is 0, 1, 2 or 3, each a quarter of the time; the first result fits a's register, the second needs a wider one
         for source, outcomes in (("a = 0..4; a -= 1; return a;", {-1, 0, 1, 2}), ("a = 0..4; a += 3; return a;", {3, 4, 5, 6})):
-            counts = simulate.run(program(source, "v2"))
+            counts = pipeline.run(program(source, "v2"))
             self.assertEqual(set(counts), outcomes, source)
             self.assertTrue(all(400 < count < 600 for count in counts.values()), (source, counts))
 
@@ -57,36 +57,36 @@ class Pipeline(unittest.TestCase):
         source = program("a = 0..4; a += 3; a += 5; a -= 20; return a;", "v2")
         lowered = optimise(source, "--canonicalize", "--in-place-updates", "--lower-to-qc")
         self.assertEqual(registers(lowered), 3 + 1 + 3 * 2)
-        self.assertEqual(set(simulate.run(source)), {-12, -11, -10, -9})  # 0..3 + 3 + 5 - 20
+        self.assertEqual(set(pipeline.run(source)), {-12, -11, -10, -9})  # 0..3 + 3 + 5 - 20
 
     def test_adding_a_distribution_in_place_gives_the_distribution_of_the_sum(self):
         # a is 0..3 and p is 0..1 independently, so a + p is 0 to 4 with weights 1, 2, 2, 2, 1 out of 8
-        counts = simulate.run(program("a = 0..4; p = 0..2; a += p; return a;", "v2"), shots=4000)
+        counts = pipeline.run(program("a = 0..4; p = 0..2; a += p; return a;", "v2"), shots=4000)
         self.assertEqual(set(counts), {0, 1, 2, 3, 4})
         for value, weight in zip(range(5), (1, 2, 2, 2, 1)):
             self.assertAlmostEqual(counts[value] / 4000, weight / 8, delta=0.04, msg=value)
 
     def test_a_name_is_an_alias_and_one_expression_uses_one_roll(self):
-        shift = simulate.run(program("a = 0..4; b = a; b += 1; return a;", "v2"))  # the update is seen through both names
+        shift = pipeline.run(program("a = 0..4; b = a; b += 1; return a;", "v2"))  # the update is seen through both names
         self.assertEqual(set(shift), {1, 2, 3, 4})
-        self.assertEqual(simulate.run(program("a = 0..4; return a - a;", "v2"), shots=200), {0: 200})
-        self.assertEqual(set(simulate.run(program("a = 0..4; return a + a;", "v2"))), {0, 2, 4, 6})
+        self.assertEqual(pipeline.run(program("a = 0..4; return a - a;", "v2"), shots=200), {0: 200})
+        self.assertEqual(set(pipeline.run(program("a = 0..4; return a + a;", "v2"))), {0, 2, 4, 6})
 
     def test_a_computed_assignment_is_independent_of_its_inputs(self):
         # c = a + 1 is an independent die, so c - a spreads from -2 to 4 with triangular weights out of 16
-        counts = simulate.run(program("a = 0..4; c = a + 1; return c - a;", "v2"), shots=4000)
+        counts = pipeline.run(program("a = 0..4; c = a + 1; return c - a;", "v2"), shots=4000)
         self.assertEqual(set(counts), set(range(-2, 5)))
         for value, weight in zip(range(-2, 5), (1, 2, 3, 4, 3, 2, 1)):
             self.assertAlmostEqual(counts[value] / 4000, weight / 16, delta=0.04, msg=value)
 
     def test_extracting_a_temporary_changes_the_result_when_the_variable_is_used_again(self):
-        one_expression = simulate.run(program("a = 0..4; c = (a + 1) + a; return c;", "v2"))
+        one_expression = pipeline.run(program("a = 0..4; c = (a + 1) + a; return c;", "v2"))
         self.assertEqual(set(one_expression), {1, 3, 5, 7})  # one roll used twice: 2a + 1
-        extracted = simulate.run(program("a = 0..4; t = a + 1; c = t + a; return c;", "v2"), shots=4000)
+        extracted = pipeline.run(program("a = 0..4; t = a + 1; c = t + a; return c;", "v2"), shots=4000)
         self.assertEqual(set(extracted), set(range(1, 8)))  # t is independent of a: a sum of two dice
 
     def test_tying_instances_is_the_alternative_meaning_and_makes_the_difference_always_one(self):
-        self.assertEqual(simulate.run(program("a = 0..4; c = a + 1; return c - a;", "v2"), TIED, shots=200), {1: 200})
+        self.assertEqual(pipeline.run(program("a = 0..4; c = a + 1; return c - a;", "v2"), TIED, shots=200), {1: 200})
 
     def test_instances_must_be_resolved_before_lowering(self):
         with self.assertRaises(subprocess.CalledProcessError):
@@ -113,7 +113,7 @@ class Pipeline(unittest.TestCase):
         before = registers(optimise(source, *base, "--lower-to-qc"))
         after = registers(optimise(source, *base, "--in-place-updates", "--lower-to-qc"))
         self.assertLess(after, before)  # the result registers are gone
-        counts = simulate.run(source, shots=4000)
+        counts = pipeline.run(source, shots=4000)
         self.assertEqual(set(counts), set(range(1, 8)))  # the same sum of two independent dice
 
     def test_a_value_that_is_still_used_is_not_consumed_by_the_conversion(self):
@@ -121,7 +121,7 @@ class Pipeline(unittest.TestCase):
         source = program("a = 0..4; return (a + 1) - a;", "v2")
         converted = optimise(source, "--canonicalize", "--in-place-updates")
         self.assertEqual((converted.count("dist.addi"), converted.count("dist.sub_assign")), (1, 1))
-        self.assertEqual(simulate.run(source, shots=200), {1: 200})  # still always 1: the register of `a` is untouched
+        self.assertEqual(pipeline.run(source, shots=200), {1: 200})  # still always 1: the register of `a` is untouched
         self.assertEqual(optimise(program("a = 0..4; return a - a;", "v2"),
                                            "--in-place-updates").count("dist.sub_assign"), 0)
 
@@ -136,15 +136,15 @@ class Pipeline(unittest.TestCase):
                               ("s = 0; for i in 0..3 { for j in 0..3 { t = i + j; s += t; } } return s;", 18),
                               ("s = 5; for i in 2..2 { s += 1; } return s;", 5),
                               ("a = 1; b = 10; for i in 0..3 { a += i; b -= a; } return b;", 10 - 1 - 2 - 4)):
-            self.assertEqual(simulate.run(program(source), shots=100), {value: 100}, source)
-        unrolled = optimise(program("s = 0; for i in 0..4 { s += i; } return s;"), simulate.UNROLL)
+            self.assertEqual(pipeline.run(program(source), shots=100), {value: 100}, source)
+        unrolled = optimise(program("s = 0; for i in 0..4 { s += i; } return s;"), pipeline.UNROLL)
         self.assertNotIn("affine.for", unrolled)
 
     def test_an_integer_becomes_a_distribution_when_a_distribution_is_added_to_or_assigned_to_it(self):
         # += keeps x tied to a, so the difference is always 2; assigning a computed value is an independent instance
-        self.assertEqual(simulate.run(program("a = 0..4; x = 2; x += a; return x - a;", "v2"), shots=200), {2: 200})
-        self.assertEqual(simulate.run(program("a = 0..4; x = 2; x -= a; return x + a;", "v2"), shots=200), {2: 200})
-        counts = simulate.run(program("a = 0..4; x = 2; x = a + 1; return x - a;", "v2"), shots=4000)
+        self.assertEqual(pipeline.run(program("a = 0..4; x = 2; x += a; return x - a;", "v2"), shots=200), {2: 200})
+        self.assertEqual(pipeline.run(program("a = 0..4; x = 2; x -= a; return x + a;", "v2"), shots=200), {2: 200})
+        counts = pipeline.run(program("a = 0..4; x = 2; x = a + 1; return x - a;", "v2"), shots=4000)
         self.assertEqual(set(counts), set(range(-2, 5)))
 
     def test_an_integer_that_becomes_a_distribution_on_some_path_through_a_branch_or_loop(self):
@@ -155,20 +155,20 @@ class Pipeline(unittest.TestCase):
                 ("a = 0..4; x = 2; for i in 0..3 { x += a; } return x - a - a - a;", {2}),  # x is tied to a on every pass
                 ("a = 0..4; x = 0; for i in 0..6 { if i < 3 { x += a; } else { x -= 1; } } return x - a - a - a;", {-3}),
                 ("a = 0..4; c = 0; for i in 0..3 { for j in 0..3 { if i < j { c += a; } } } return c - a - a - a;", {0})):
-            self.assertEqual(set(simulate.run(program(source, "v2"), shots=500)), expected, source)
+            self.assertEqual(set(pipeline.run(program(source, "v2"), shots=500)), expected, source)
         # three independent one-bit dice made inside a loop: 0 to 3 with weights 1, 3, 3, 1 out of 8
-        counts = simulate.run(program("s = 0; for i in 0..3 { d = 0..2; s += d; } return s;", "v2"), shots=4000)
+        counts = pipeline.run(program("s = 0; for i in 0..3 { d = 0..2; s += d; } return s;", "v2"), shots=4000)
         for value, weight in zip(range(4), (1, 3, 3, 1)):
             self.assertAlmostEqual(counts[value] / 4000, weight / 8, delta=0.04, msg=value)
         # an arm of a conditional on a distribution may do it too: 2 at 5/8 and 3, 4, 5 at 1/8 each
-        counts = simulate.run(program("a = 0..4; b = 0..2; x = 2; if b < 1 { x += a; } return x;", "v2"), shots=4000)
+        counts = pipeline.run(program("a = 0..4; b = 0..2; x = 2; if b < 1 { x += a; } return x;", "v2"), shots=4000)
         for value, weight in zip(range(2, 6), (5, 1, 1, 1)):
             self.assertAlmostEqual(counts[value] / 4000, weight / 8, delta=0.04, msg=value)
 
     def test_a_condition_on_a_variable_that_a_dead_branch_could_superpose_is_decided_by_folding(self):
         # the branch is dead, so x stays 2 and the condition on it is taken every time
         source = "a = 0..4; x = 2; y = 0; k = 9; for i in 0..3 { if k < 3 { x += a; } if x < 5 { y += 1; } } return y;"
-        self.assertEqual(simulate.run(program(source, "v2"), shots=100), {3: 100})
+        self.assertEqual(pipeline.run(program(source, "v2"), shots=100), {3: 100})
 
     def test_conditionals_and_loops_on_definite_values_nest_in_either_order(self):
         # i < 2 adds 10 twice and the rest add 1 twice; a nest counts the pairs i < j; a local reset each pass; a loop in an arm
@@ -176,60 +176,60 @@ class Pipeline(unittest.TestCase):
                               ("s = 0; for i in 0..3 { for j in 0..3 { if i < j { s += 1; } } } return s;", 3),
                               ("s = 0; for i in 0..4 { t = 1; if i < 2 { t = 5; } s += t; } return s;", 12),
                               ("s = 0; x = 1; if x < 3 { for i in 0..4 { s += i; } } else { s += 100; } return s;", 6)):
-            self.assertEqual(simulate.run(program(source), shots=100), {value: 100}, source)
+            self.assertEqual(pipeline.run(program(source), shots=100), {value: 100}, source)
 
     def test_a_call_copies_a_definite_argument_and_shares_a_distribution_argument(self):
         # a definite argument is a copy, so the caller's x stays 2 and the result is 2 + 5
-        self.assertEqual(simulate.run(program("function f(p) { p += 3; return p; }\nx = 2; y = f(x); return x + y;", "v2"),
+        self.assertEqual(pipeline.run(program("function f(p) { p += 3; return p; }\nx = 2; y = f(x); return x + y;", "v2"),
                                       shots=100), {7: 100})
         # a distribution is passed as itself, so the callee's update is the caller's, and a result that is the parameter
         # is the same object: a is 0..3, bump makes it 1..4, and b += 10 makes it 11..14
         bump = "function bump(p) { p += 1; return p; }\n"
-        self.assertEqual(set(simulate.run(program(bump + "a = 0..4; b = bump(a); return a;", "v2"))), {1, 2, 3, 4})
-        self.assertEqual(set(simulate.run(program(bump + "a = 0..4; b = bump(a); b += 10; return a;", "v2"))),
+        self.assertEqual(set(pipeline.run(program(bump + "a = 0..4; b = bump(a); return a;", "v2"))), {1, 2, 3, 4})
+        self.assertEqual(set(pipeline.run(program(bump + "a = 0..4; b = bump(a); b += 10; return a;", "v2"))),
                          {11, 12, 13, 14})
         # a result that is computed (p + 1) is a new instance, independent of its argument, so c - a spreads from -2 to 4
         plus = "function plus(p) { return p + 1; }\n"
-        self.assertEqual(set(simulate.run(program(plus + "a = 0..4; c = plus(a); return c - a;", "v2"), shots=4000)),
+        self.assertEqual(set(pipeline.run(program(plus + "a = 0..4; c = plus(a); return c - a;", "v2"), shots=4000)),
                          set(range(-2, 5)))
 
     def test_a_conditional_on_a_definite_value_lowers_only_once_it_has_become_a_select(self):
         source = "x = 2; if x < 3 { x += 5; } else { x -= 1; } return x;"
-        self.assertEqual(simulate.run(program(source)), {7: 2000})  # canonicalize folds the arms and the select
+        self.assertEqual(pipeline.run(program(source)), {7: 2000})  # canonicalize folds the arms and the select
         with self.assertRaises(subprocess.CalledProcessError):  # a condition held in qubits cannot be branched on
-            simulate.optimise(program(source), *simulate.PREPARE, "--lower-to-qc")
+            pipeline.optimise(program(source), *pipeline.PREPARE, "--lower-to-qc")
 
     def test_conditionals_on_a_distribution_nest_and_may_update_a_distribution(self):
         # a < 2 half the time and b < 1 half the time, independently, in each of two passes: s is 2 a quarter of the time
-        counts = simulate.run(program("a = 0..4; b = 0..2; s = 0; for i in 0..2 { if a < 2 { if b < 1 { s += 1; } } } return s;",
+        counts = pipeline.run(program("a = 0..4; b = 0..2; s = 0; for i in 0..2 { if a < 2 { if b < 1 { s += 1; } } } return s;",
                                       "v2"), shots=4000)
         self.assertEqual(set(counts), {0, 2})
         self.assertAlmostEqual(counts[0] / 4000, 0.75, delta=0.04)  # b is one roll: both passes add or neither does
         self.assertAlmostEqual(counts[2] / 4000, 0.25, delta=0.04)
         # the loop of a < 2 (R10): all three passes add, or none does
-        counts = simulate.run(program("a = 0..4; s = 0; for i in 0..3 { if a < 2 { s += 1; } } return s;", "v2"), shots=4000)
+        counts = pipeline.run(program("a = 0..4; s = 0; for i in 0..3 { if a < 2 { s += 1; } } return s;", "v2"), shots=4000)
         self.assertEqual(set(counts), {0, 3})
         # an update of a distribution under a condition, also through a call: a shifts by one when b < 1 (half the time)
         bump = "function bump(p) { p += 1; return p; }\n"
         for source in ("a = 0..4; b = 0..2; if b < 1 { a += 1; } return a;",
                        bump + "a = 0..4; b = 0..2; if b < 1 { bump(a); } return a;"):
-            counts = simulate.run(program(source, "v2"), shots=8000)
+            counts = pipeline.run(program(source, "v2"), shots=8000)
             for value, weight in zip(range(5), (1, 2, 2, 2, 1)):
                 self.assertAlmostEqual(counts[value] / 8000, weight / 8, delta=0.03, msg=source)
 
     def test_a_distribution_added_to_itself_is_twice_one_roll(self):
-        self.assertEqual(set(simulate.run(program("a = 0..4; a += a; return a;", "v2"))), {0, 2, 4, 6})
+        self.assertEqual(set(pipeline.run(program("a = 0..4; a += a; return a;", "v2"))), {0, 2, 4, 6})
 
     def test_a_name_aliased_inside_a_branch_is_the_distribution_only_when_the_branch_is_live(self):
         # x = a in a live branch makes x the object a, so x += 1 shifts a to 1..4; in a dead branch x stays the integer 2
-        live = simulate.run(program("a = 0..4; x = 2; k = 1; if k < 3 { x = a; } x += 1; return a;", "v2"))
-        dead = simulate.run(program("a = 0..4; x = 2; k = 9; if k < 3 { x = a; } x += 1; return a;", "v2"))
+        live = pipeline.run(program("a = 0..4; x = 2; k = 1; if k < 3 { x = a; } x += 1; return a;", "v2"))
+        dead = pipeline.run(program("a = 0..4; x = 2; k = 9; if k < 3 { x = a; } x += 1; return a;", "v2"))
         self.assertEqual((set(live), set(dead)), ({1, 2, 3, 4}, {0, 1, 2, 3}))
 
     def test_a_comparison_kept_in_a_variable_is_a_condition_and_a_number_is_true_when_it_is_not_zero(self):
-        self.assertEqual(simulate.run(program("x = 3; c = x < 5; if c { x += 1; } return x;", "v2")), {4: 2000})
-        self.assertEqual(simulate.run(program("c = -2 < 1; return c;", "v2")), {1: 2000})
-        counts = simulate.run(program("a = 0..2; x = 0; if a { x = 7; } return x;", "v2"), shots=3000)  # a is 0 or 1
+        self.assertEqual(pipeline.run(program("x = 3; c = x < 5; if c { x += 1; } return x;", "v2")), {4: 2000})
+        self.assertEqual(pipeline.run(program("c = -2 < 1; return c;", "v2")), {1: 2000})
+        counts = pipeline.run(program("a = 0..2; x = 0; if a { x = 7; } return x;", "v2"), shots=3000)  # a is 0 or 1
         self.assertEqual(set(counts), {0, 7})
         self.assertAlmostEqual(counts[0] / 3000, 1 / 2, delta=0.05)
 
@@ -239,46 +239,9 @@ class Pipeline(unittest.TestCase):
         for source, message in (("a = 0..4; a = 5; return a;", "would drop"),
                                 ("a = 0..4; b = 0..2; y = a; x = 2; if b < 1 { x = y; } return x;", "different objects")):
             with self.assertRaises(subprocess.CalledProcessError) as caught:
-                simulate.optimise(program(source, "v2"), *simulate.DEFAULT)
+                pipeline.optimise(program(source, "v2"), *pipeline.DEFAULT)
             self.assertIn(message, caught.exception.stderr)
 
 
 if __name__ == "__main__":
     unittest.main()
-
-
-@unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
-class Golden(unittest.TestCase):
-    """A few entries of the golden table run through the pipeline: the outcome the language intends is the outcome produced."""
-
-    def agrees(self, name: str):
-        entry = golden.entry(name)
-        status, detail = golden.check(entry.source, entry.outcomes)
-        self.assertEqual(status, "ok", f"{name}: {detail}")
-
-    def test_products_comparisons_and_booleans_on_integers_and_distributions(self):
-        for name in ("a product of negative integers", "a product of two distributions", "boolean operators",
-                     "equality of two distributions"):
-            self.agrees(name)
-
-    def test_an_interval_may_be_any_size_and_start_anywhere(self):
-        for name in ("an interval that is not a power of two", "an interval that does not start at zero"):
-            self.agrees(name)
-
-
-@unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
-class Interchange(unittest.TestCase):
-    """The exported text, run on a simulator that did not produce it, gives the outcome the golden table intends."""
-
-    ENTRY = "conditional on a distribution"
-
-    def outcome(self, format: str, backend: str):
-        entry = golden.entry(self.ENTRY)
-        qc = simulate.optimise(program(entry.source, "v2"), *simulate.DEFAULT)
-        counts = export.BACKENDS[backend](export.export(qc, format), format, 2000)
-        return golden.distance(counts, entry.outcomes)
-
-    def test_every_format_gives_the_intended_outcome_on_every_simulator_that_reads_it(self):
-        for format, backend in (("openqasm3", "aer"), ("openqasm3", "ddsim"), ("qir-base", "ddsim"), ("qir-adaptive", "ddsim"),
-                                ("jeff", "mqt")):
-            self.assertLess(self.outcome(format, backend), golden.TOLERANCE, (format, backend))

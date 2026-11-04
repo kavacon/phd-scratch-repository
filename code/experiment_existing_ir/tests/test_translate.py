@@ -1,7 +1,7 @@
 import unittest
 
 from compiler.parser.parser import parse
-from experiment_existing_ir import simulate
+from experiment_existing_ir import pipeline
 from experiment_existing_ir.translate import TranslationError, translate
 
 
@@ -11,12 +11,12 @@ def translated(source: str, grammar: str = "v1", **options) -> str:
 
 def promoted(source: str, grammar: str = "v1") -> str:
     """The translation with its loops unrolled and its slots promoted to values, without inlining (which also tidies)."""
-    return simulate.optimise(translated(source, grammar), simulate.UNROLL, simulate.PROMOTE).rstrip("\n")
+    return pipeline.optimise(translated(source, grammar), pipeline.UNROLL, pipeline.PROMOTE).rstrip("\n")
 
 
 def resolved(source: str, grammar: str = "v2") -> str:
     """The program once its references are resolved and its sums are done in place where they can be."""
-    return simulate.optimise(translated(source, grammar), *simulate.PREPARE, *simulate.RESOLVE, "--canonicalize",
+    return pipeline.optimise(translated(source, grammar), *pipeline.PREPARE, *pipeline.RESOLVE, "--canonicalize",
                              "--in-place-updates").rstrip("\n")
 
 
@@ -89,7 +89,7 @@ class Translate(unittest.TestCase):
         self.assertNotIn("dist.", translated("x = 2; y = x; y += 1; return y;", "v2"))
 
 
-@unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
+@unittest.skipUnless(pipeline.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
 class Promoted(unittest.TestCase):
     """What the translation means, read after the slots have become values."""
 

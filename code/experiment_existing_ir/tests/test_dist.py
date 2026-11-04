@@ -2,7 +2,7 @@ import subprocess
 import unittest
 
 from compiler.parser.parser import parse
-from experiment_existing_ir import simulate
+from experiment_existing_ir import pipeline
 from experiment_existing_ir.translate import translate
 
 HEADER = """  %0 = dist.uniform 0, 4 : !dist.dist<i32>
@@ -23,15 +23,15 @@ READ_AFTER_UPDATE = "func.func @main() -> i32 {\n" + HEADER + """  %3 = dist.add
 
 
 def status(source: str) -> str:
-    return simulate.optimise(translate(parse(source, "v2")), *simulate.PREPARE, *simulate.RESOLVE, "--dist-status")
+    return pipeline.optimise(translate(parse(source, "v2")), *pipeline.PREPARE, *pipeline.RESOLVE, "--dist-status")
 
 
-@unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
+@unittest.skipUnless(pipeline.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
 class Distributions(unittest.TestCase):
     def test_a_distribution_may_be_read_again_but_not_after_it_was_updated_in_place(self):
-        simulate.optimise(READ_TWICE)
+        pipeline.optimise(READ_TWICE)
         with self.assertRaises(subprocess.CalledProcessError) as caught:
-            simulate.optimise(READ_AFTER_UPDATE)
+            pipeline.optimise(READ_AFTER_UPDATE)
         self.assertIn("uses a distribution after it was updated in place", caught.exception.stderr)
 
     def test_independent_distributions_form_separate_groups_until_an_update_joins_them(self):
