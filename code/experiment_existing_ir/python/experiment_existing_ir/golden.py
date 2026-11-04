@@ -1,0 +1,233 @@
+"""
+The intended result of each program, as the outcome the language promises: the chance of each value the program can return.
+
+This is the language's meaning written down once, program by program, and checked by hand. It is not computed by anything:
+the compiler is the one implementation of the language, and each entry says what a correct compile-and-run has to give. A
+program is run through the whole pipeline and sampled on Aer, and its sampled outcomes must be close to the entry's.
+
+    . ./env.sh && .venv/bin/python -m experiment_existing_ir.golden
+"""
+import sys
+from typing import Dict, NamedTuple, Tuple
+
+from experiment_existing_ir import simulate
+from experiment_existing_ir.translate import translate
+from compiler.parser.parser import parse
+
+SHOTS = 4000
+TOLERANCE = 0.07  # total variation distance allowed between the sampled outcomes and the entry
+
+BUMP = "function bump(p) { p += 1; return p; }\n"
+
+
+class Golden(NamedTuple):
+    name: str  # what the program shows
+    source: str
+    outcomes: Dict[int, float]  # the chance of each value returned
+
+
+GOLDEN: Tuple[Golden, ...] = (
+    Golden("alias: update through the second name",
+           "a = 0..4; b = a; b += 1; return a;",
+           {1: 1/4, 2: 1/4, 3: 1/4, 4: 1/4}),
+    Golden("alias: update through the first name, read the second",
+           "a = 0..4; b = a; a += 1; return b;",
+           {1: 1/4, 2: 1/4, 3: 1/4, 4: 1/4}),
+    Golden("alias chain",
+           "a = 0..4; b = a; c = b; c += 2; return a;",
+           {2: 1/4, 3: 1/4, 4: 1/4, 5: 1/4}),
+    Golden("one roll within an expression",
+           "a = 0..4; return a - a;",
+           {0: 1}),
+    Golden("a computed assignment is independent",
+           "a = 0..4; c = a + 1; return c - a;",
+           {-2: 1/16, -1: 1/8, 0: 3/16, 1: 1/4, 2: 3/16, 3: 1/8, 4: 1/16}),
+    Golden("extracting a temporary",
+           "a = 0..4; t = a + 1; c = t + a; return c;",
+           {1: 1/16, 2: 1/8, 3: 3/16, 4: 1/4, 5: 3/16, 6: 1/8, 7: 1/16}),
+    Golden("two computed assignments are independent",
+           "a = 0..4; c = a + 1; d = a + 1; return c - d;",
+           {-3: 1/16, -2: 1/8, -1: 3/16, 0: 1/4, 1: 3/16, 2: 1/8, 3: 1/16}),
+    Golden("update with another distribution",
+           "a = 0..4; p = 0..2; a += p; return a;",
+           {0: 1/8, 1: 1/4, 2: 1/4, 3: 1/4, 4: 1/8}),
+    Golden("an integer is copied",
+           "x = 5; y = x; y += 1; return x;",
+           {5: 1}),
+    Golden("conditional on a distribution",
+           "a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;",
+           {1: 1/2, 5: 1/2}),
+    Golden("two variables tied to one condition",
+           "a = 0..4; x = 0; y = 10; if a < 2 { x += 1; y -= 1; } return x - y;",
+           {-10: 1/2, -8: 1/2}),
+    Golden("conditional update of a distribution",
+           "a = 0..4; b = 0..2; if b < 1 { a += 1; } return a;",
+           {0: 1/8, 1: 1/4, 2: 1/4, 3: 1/4, 4: 1/8}),
+    Golden("definite conditional, taken",
+           "x = 2; if x < 3 { x += 5; } else { x -= 1; } return x;",
+           {7: 1}),
+    Golden("integer updated by a distribution",
+           "a = 0..4; x = 2; x += a; return x - a;",
+           {2: 1}),
+    Golden("integer overwritten by a computed distribution",
+           "a = 0..4; x = 2; x = a + 1; return x - a;",
+           {-2: 1/16, -1: 1/8, 0: 3/16, 1: 1/4, 2: 3/16, 3: 1/8, 4: 1/16}),
+    Golden("taken branch superposes x",
+           "a = 0..4; x = 2; k = 1; if k < 3 { x += a; } return x;",
+           {2: 1/4, 3: 1/4, 4: 1/4, 5: 1/4}),
+    Golden("dead branch would superpose x",
+           "a = 0..4; x = 2; k = 5; if k < 3 { x += a; } y = x + 1; return y;",
+           {3: 1}),
+    Golden("arm of a distribution conditional superposes x",
+           "a = 0..4; b = 0..2; x = 2; if b < 1 { x += a; } return x;",
+           {2: 5/8, 3: 1/8, 4: 1/8, 5: 1/8}),
+    Golden("a product of a distribution and an integer",
+           "a = 0..4; return a * 3;",
+           {0: 1/4, 3: 1/4, 6: 1/4, 9: 1/4}),
+    Golden("a product of two distributions",
+           "a = 0..4; b = 0..3; return a * b;",
+           {0: 1/2, 1: 1/12, 2: 1/6, 3: 1/12, 4: 1/12, 6: 1/12}),
+    Golden("a product of negative integers",
+           "x = -3; y = 5; return x * y;",
+           {-15: 1}),
+    Golden("every comparison of a distribution",
+           "a = 0..4; s = 0; if a > 0 { s += 1; } if a == 2 { s += 2; } if a != 3 { s += 4; } return s;",
+           {1: 1/4, 4: 1/4, 5: 1/4, 7: 1/4}),
+    Golden("boolean operators",
+           "a = 0..4; b = 0..2; return !(a < 2) || (b == 0 && a > 0);",
+           {0: 3/8, 1: 5/8}),
+    Golden("equality of two distributions",
+           "a = 0..3; b = 0..3; return a == b;",
+           {0: 2/3, 1: 1/3}),
+    Golden("an interval that is not a power of two",
+           "a = 0..6; return a;",
+           {0: 1/6, 1: 1/6, 2: 1/6, 3: 1/6, 4: 1/6, 5: 1/6}),
+    Golden("an interval that does not start at zero",
+           "a = -2..3; return a;",
+           {-2: 1/5, -1: 1/5, 0: 1/5, 1: 1/5, 2: 1/5}),
+    Golden("integer loop",
+           "x = 1; for i in 0..8 { x += x; } return x;",
+           {256: 1}),
+    Golden("a loop superposes x",
+           "a = 0..4; x = 2; for i in 0..3 { x += a; } return x;",
+           {2: 1/4, 5: 1/4, 8: 1/4, 11: 1/4}),
+    Golden("dice made in a loop",
+           "s = 0; for i in 0..4 { d = 0..2; s += d; } return s;",
+           {0: 1/16, 1: 1/4, 2: 3/8, 3: 1/4, 4: 1/16}),
+    Golden("a walk",
+           "a = 0..4; x = 0; for i in 0..6 { if i < 3 { x += a; } else { x -= 1; } } return x;",
+           {-3: 1/4, 0: 1/4, 3: 1/4, 6: 1/4}),
+    Golden("nested loops with a condition",
+           "a = 0..4; c = 0; for i in 0..3 { for j in 0..3 { if i < j { c += a; } } } return c;",
+           {0: 1/4, 3: 1/4, 6: 1/4, 9: 1/4}),
+    Golden("a condition on a distribution in a loop",
+           "a = 0..4; s = 0; for i in 0..3 { if a < 2 { s += 1; } } return s;",
+           {0: 1/2, 3: 1/2}),
+    Golden("a loop variable compared with a distribution",
+           "a = 0..4; s = 0; for i in 0..4 { if a < i { s += 1; } } return s;",
+           {0: 1/4, 1: 1/4, 2: 1/4, 3: 1/4}),
+    Golden("a function copies an integer",
+           'function f(p) { p += 3; return p; }\nx = 2; y = f(x); return x + y;',
+           {7: 1}),
+    Golden("a function shares a distribution",
+           BUMP + "a = 0..4; b = bump(a); return a;",
+           {1: 1/4, 2: 1/4, 3: 1/4, 4: 1/4}),
+    Golden("a returned distribution is an alias",
+           BUMP + "a = 0..4; b = bump(a); b += 10; return a;",
+           {11: 1/4, 12: 1/4, 13: 1/4, 14: 1/4}),
+    Golden("a computed return is independent",
+           'function plus(p) { return p + 1; }\na = 0..4; c = plus(a); return c - a;',
+           {-2: 1/16, -1: 1/8, 0: 3/16, 1: 1/4, 2: 3/16, 3: 1/8, 4: 1/16}),
+    Golden("a returned range is fresh",
+           'function die() { return 0..4; }\nd = die(); return d;',
+           {0: 1/4, 1: 1/4, 2: 1/4, 3: 1/4}),
+    Golden("a function called in a loop",
+           'function shift(p, k) { return p + k; }\na = 0..4; t = 0; for i in 0..4 { t += shift(a, i); } return t;',
+           {6: 1/4, 10: 1/4, 14: 1/4, 18: 1/4}),
+    Golden("a function with a condition on its argument",
+           'function pick(p, n) { if n < 2 { p += 1; } return p; }\na = 0..4; r = pick(a, 1); q = pick(a, 5); return a;',
+           {1: 1/4, 2: 1/4, 3: 1/4, 4: 1/4}),
+    Golden("a call statement called twice",
+           BUMP + "a = 0..4; bump(a); bump(a); return a;",
+           {2: 1/4, 3: 1/4, 4: 1/4, 5: 1/4}),
+    Golden("copy after a dead branch",
+           "a = 0..4; x = 2; k = 9; for i in 0..2 { if k < 3 { x += a; } } y = x; y += 1; return x;",
+           {2: 1}),
+    Golden("alias after a live branch",
+           "a = 0..4; x = 2; k = 1; for i in 0..2 { if k < 3 { x += a; } } y = x; y += 1; return x;",
+           {3: 1/4, 5: 1/4, 7: 1/4, 9: 1/4}),
+    Golden("update the original, read a dead copy",
+           "a = 0..4; x = 2; k = 9; for i in 0..2 { if k < 3 { x += a; } } y = x; x += 1; return y;",
+           {2: 1}),
+    Golden("update the original, read a live alias",
+           "a = 0..4; x = 2; k = 1; for i in 0..2 { if k < 3 { x += a; } } y = x; x += 1; return y;",
+           {3: 1/4, 5: 1/4, 7: 1/4, 9: 1/4}),
+    Golden("a chain of copies after a dead branch",
+           "a = 0..4; x = 2; k = 9; for i in 0..2 { if k < 3 { x += a; } } y = x; z = y; z += 1; return x;",
+           {2: 1}),
+    Golden("a chain of aliases after a live branch",
+           "a = 0..4; x = 2; k = 1; for i in 0..2 { if k < 3 { x += a; } } y = x; z = y; z += 1; return x;",
+           {3: 1/4, 5: 1/4, 7: 1/4, 9: 1/4}),
+    Golden("an assignment leaves the group",
+           "a = 0..4; x = 2; k = 9; for i in 0..2 { if k < 3 { x += a; } } y = x; x = 7; y += 1; return x;",
+           {7: 1}),
+    Golden("a condition on a variable a dead branch could superpose",
+           "a = 0..4; x = 2; y = 0; k = 9; for i in 0..3 { if k < 3 { x += a; } if x < 5 { y += 1; } } return y;",
+           {3: 1}),
+    Golden("a possibly superposed variable passed to a function",
+           BUMP + "a = 0..4; x = 2; k = 9; for i in 0..2 { if k < 3 { x += a; } } y = bump(x); return x;",
+           {2: 1}),
+    Golden("a distribution conditional inside another, in a loop",
+           "a = 0..4; b = 0..2; s = 0; for i in 0..2 { if a < 2 { if b < 1 { s += 1; } } } return s;",
+           {0: 3/4, 2: 1/4}),
+    Golden("a loop inside an arm of a distribution conditional",
+           "a = 0..4; s = 0; if a < 2 { for i in 0..3 { s += 1; } } return s;",
+           {0: 1/2, 3: 1/2}),
+    Golden("a distribution added to itself",
+           "a = 0..4; a += a; return a;",
+           {0: 1/4, 2: 1/4, 4: 1/4, 6: 1/4}),
+    Golden("an outer name aliased inside a live branch",
+           "a = 0..4; x = 2; k = 1; if k < 3 { x = a; } x += 1; return a;",
+           {1: 1/4, 2: 1/4, 3: 1/4, 4: 1/4}),
+    Golden("an outer name aliased inside a dead branch",
+           "a = 0..4; x = 2; k = 9; if k < 3 { x = a; } x += 1; return a;",
+           {0: 1/4, 1: 1/4, 2: 1/4, 3: 1/4}),
+)
+
+
+def distance(counts: Dict[int, int], expected: Dict[int, float]) -> float:
+    """Total variation distance between sampled outcomes and an entry."""
+    total = sum(counts.values())
+    return 0.5 * sum(abs(counts.get(value, 0) / total - expected.get(value, 0)) for value in set(counts) | set(expected))
+
+
+def entry(name: str) -> Golden:
+    return next(golden for golden in GOLDEN if golden.name == name)
+
+
+def check(source: str, expected: Dict[int, float]) -> Tuple[str, str]:
+    """("ok" or "WRONG" or "refused", detail) for one program run through the pipeline and sampled on Aer."""
+    try:
+        counts = simulate.run(translate(parse(source, "v2")), shots=SHOTS)
+    except Exception as error:  # the translation or the tool refused it
+        message = (getattr(error, "stderr", "") or str(error)).strip().splitlines()
+        return "refused", (message[0] if message else type(error).__name__)[:100]
+    gap = distance(counts, expected)
+    return ("ok" if gap < TOLERANCE else "WRONG"), f"distance {gap:.2f}, got {dict(sorted(counts.items()))}"
+
+
+def main() -> None:
+    wrong = []
+    print(f"{'program':<60}{'result':<10}")
+    for golden in GOLDEN:
+        status, detail = check(golden.source, golden.outcomes)
+        print(f"{golden.name:<60}{status:<10}")
+        if status != "ok":
+            wrong.append(golden.name)
+            print(f"{'':<60}{detail}")
+    print(f"\nnot matching the golden table: {len(wrong)}" + ("" if not wrong else "  -> " + "; ".join(wrong)))
+    sys.exit(1 if wrong else 0)
+
+
+if __name__ == "__main__":
+    main()

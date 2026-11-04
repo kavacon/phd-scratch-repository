@@ -1,8 +1,8 @@
 """
-Each program of the semantics oracle through every export format and simulator, against the reference outcome law.
+Each program of the golden table through every export format and simulator, against the outcome the table says it should give.
 
 For a program and a format this reports whether the exporter accepted it (and the reason when it did not), whether the exported
-text, run on a simulator that did not produce it, gives the outcome the reference works out from the source, and the size of
+text, run on a simulator that did not produce it, gives the outcome the golden table intends, and the size of
 the exported text. A format that cannot hold a program is reported as refused, never as a failure; a mismatch is a wrong answer.
 
     . ./env.sh && .venv/bin/python -m experiment_existing_ir.interchange
@@ -11,9 +11,8 @@ from typing import Dict, List, NamedTuple
 
 from compiler.parser.parser import parse
 from experiment_existing_ir import export, simulate
-from experiment_existing_ir.reference import ReferenceError_, law
-from experiment_existing_ir.semantics import PROGRAMS, TOLERANCE, distance
-from experiment_existing_ir.translate import TranslationError, translate
+from experiment_existing_ir.golden import GOLDEN, TOLERANCE, distance
+from experiment_existing_ir.translate import translate
 
 SHOTS = 2000
 # (format, simulator) pairs: OpenQASM 3 runs on Aer and DDSIM; QIR only on DDSIM, the one simulator here that reads it; Jeff on MQT.
@@ -46,11 +45,10 @@ def main() -> None:
     wrong: List[str] = []
     sizes: Dict[str, List[int]] = {c: [] for c in columns}
     reasons: Dict[str, str] = {}
-    for name, source in PROGRAMS:
+    for name, source, expected in GOLDEN:
         try:
-            expected = law(parse(source, "v2"))
             qc = simulate.optimise(translate(parse(source, "v2")), *simulate.DEFAULT)
-        except (ReferenceError_, TranslationError, Exception):
+        except Exception:  # the program is refused before there is anything to export
             continue
         outcomes = [check(qc, expected, format, backend) for format, backend in RUNS]
         print(f"{name:<56}" + "".join(f"{o.status:<22}" for o in outcomes))
