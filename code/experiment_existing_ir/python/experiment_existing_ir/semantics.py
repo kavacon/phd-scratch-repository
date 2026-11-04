@@ -2,7 +2,7 @@
 Do the compiled programs mean what the source says?
 
 Each program is given to the reference (`reference.py`, which computes its intended outcome law exactly from the source
-alone) and compiled both ways (`comparison.py`: A leaves the folding to MLIR, B folds as it translates). The circuit is run on
+alone) and compiled. The circuit is run on
 Aer, and its sampled outcomes are compared with the reference law by total variation distance. A program a way of compiling
 refuses is reported as refused, never as a failure, since refusing is how an unsupported construct is meant to behave; a
 mismatch is a wrong answer and is the thing this is looking for.
@@ -45,6 +45,15 @@ PROGRAMS: Tuple[Tuple[str, str], ...] = (
     ("taken branch superposes x", "a = 0..4; x = 2; k = 1; if k < 3 { x += a; } return x;"),
     ("dead branch would superpose x", "a = 0..4; x = 2; k = 5; if k < 3 { x += a; } y = x + 1; return y;"),
     ("arm of a distribution conditional superposes x", "a = 0..4; b = 0..2; x = 2; if b < 1 { x += a; } return x;"),
+    # operators and intervals
+    ("a product of a distribution and an integer", "a = 0..4; return a * 3;"),
+    ("a product of two distributions", "a = 0..4; b = 0..3; return a * b;"),
+    ("a product of negative integers", "x = -3; y = 5; return x * y;"),
+    ("every comparison of a distribution", "a = 0..4; s = 0; if a > 0 { s += 1; } if a == 2 { s += 2; } if a != 3 { s += 4; } return s;"),
+    ("boolean operators", "a = 0..4; b = 0..2; return !(a < 2) || (b == 0 && a > 0);"),
+    ("equality of two distributions", "a = 0..3; b = 0..3; return a == b;"),
+    ("an interval that is not a power of two", "a = 0..6; return a;"),
+    ("an interval that does not start at zero", "a = -2..3; return a;"),
     # loops
     ("integer loop", "x = 1; for i in 0..8 { x += x; } return x;"),
     ("a loop superposes x", "a = 0..4; x = 2; for i in 0..3 { x += a; } return x;"),
@@ -102,9 +111,9 @@ def distance(counts: Dict[int, int], expected: Dict[int, float]) -> float:
     return 0.5 * sum(abs(counts.get(value, 0) / total - expected.get(value, 0)) for value in set(counts) | set(expected))
 
 
-def check(source: str, expected: Dict[int, float], fold: bool) -> Outcome:
+def check(source: str, expected: Dict[int, float]) -> Outcome:
     try:
-        text = translate(parse(source, "v2"), fold=fold)
+        text = translate(parse(source, "v2"))
     except TranslationError as error:
         return Outcome("refused", str(error))
     try:
@@ -190,33 +199,67 @@ def random_rich_program(rng: random.Random) -> str:
     return RICH_FUNCTIONS + " ".join(lines)
 
 
-def fuzz(count: int, seed: int, rich: bool = False) -> None:
-    """Random programs, each compiled both ways and compared with the reference; `rich` uses the larger generator and only A."""
+def random_operator_program(rng: random.Random) -> str:
+    """
+    Expressions over every operator and over integers and distributions on intervals of any size (powers of two or not, and
+    negative), used as values, as conditions of conditionals and as the result. Arithmetic and boolean expressions are kept
+    apart, since a variable holds one or the other.
+    """
+    def interval() -> str:
+        low = rng.choice([0, 0, 0, 1, 2, -2, -3])
+        return f"{low}..{low + rng.choice([2, 3, 3, 4, 5, 6, 7])}"
+
+    def arithmetic(depth: int) -> str:
+        if depth == 0 or rng.random() < 0.25:
+            return rng.choice(["a", "b", "x", str(rng.randint(-3, 4)), str(rng.randint(-3, 4))])
+        return f"({arithmetic(depth - 1)} {rng.choice(['+', '-', '*', '+', '*'])} {arithmetic(depth - 1)})"
+
+    def boolean(depth: int) -> str:
+        if depth == 0 or rng.random() < 0.3:
+            return f"({arithmetic(1)} {rng.choice(['<', '>', '==', '!='])} {arithmetic(1)})"
+        if rng.random() < 0.2:
+            return f"!{boolean(depth - 1)}"
+        return f"({boolean(depth - 1)} {rng.choice(['&&', '||'])} {boolean(depth - 1)})"
+
+    lines = [f"a = {interval()};", f"b = {interval()};", "x = 1;"]
+    for _ in range(rng.randint(1, 3)):
+        kind = rng.choice(["set", "update", "if"])
+        if kind == "set":
+            lines.append(f"x = {arithmetic(2)};")
+        elif kind == "update":
+            lines.append(f"x {rng.choice(['+=', '-='])} {arithmetic(2)};")
+        else:
+            test = boolean(2) if rng.random() < 0.7 else arithmetic(1)
+            lines.append(f"if {test} {{ x += {arithmetic(1)}; }}" + (f" else {{ x -= {arithmetic(1)}; }}" if rng.random() < 0.4 else ""))
+    lines.append(f"return {rng.choice([arithmetic(2), arithmetic(2), boolean(2)])};")
+    return " ".join(lines)
+
+
+def fuzz(count: int, seed: int, rich: bool = False, operators: bool = False) -> None:
+    """Random programs, each compiled and compared with the reference; `rich` and `operators` use the other generators and only A."""
+    rich = rich or operators
     rng = random.Random(seed)
-    tally: Dict[Tuple[str, str], int] = {}
-    reasons: Dict[Tuple[str, str], int] = {}
+    tally: Dict[str, int] = {}
+    reasons: Dict[str, int] = {}
     wrong: List[str] = []
     checked = 0
     while checked < count:
-        source = random_rich_program(rng) if rich else random_program(rng)
+        source = random_operator_program(rng) if operators else random_rich_program(rng) if rich else random_program(rng)
         try:
             expected = law(parse(source, "v2"))
         except ReferenceError_:
             continue
         checked += 1
-        for label, fold in (("A", False),) if rich else (("A", False), ("B", True)):
-            outcome = check(source, expected, fold)
-            tally[(label, outcome.status)] = tally.get((label, outcome.status), 0) + 1
-            if outcome.status == "refused":
-                key = (label, outcome.detail[:90])
-                reasons[key] = reasons.get(key, 0) + 1
-            if outcome.status == "WRONG":
-                wrong.append(f"{label}: {source}\n     {outcome.detail}  expected {expected}")
+        outcome = check(source, expected)
+        tally[outcome.status] = tally.get(outcome.status, 0) + 1
+        if outcome.status == "refused":
+            reasons[outcome.detail[:90]] = reasons.get(outcome.detail[:90], 0) + 1
+        if outcome.status == "WRONG":
+            wrong.append(f"{source}\n     {outcome.detail}  expected {expected}")
     print(f"{checked} random programs valid under the semantics (seed {seed})")
-    for label in ("A",) if rich else ("A", "B"):
-        print(f"  {label}: " + ", ".join(f"{status} {tally.get((label, status), 0)}" for status in ("ok", "refused", "WRONG")))
-    for (label, reason), times in sorted(reasons.items(), key=lambda item: -item[1])[:8]:
-        print(f"    refused by {label} x{times}: {reason}")
+    print("  " + ", ".join(f"{status} {tally.get(status, 0)}" for status in ("ok", "refused", "WRONG")))
+    for reason, times in sorted(reasons.items(), key=lambda item: -item[1])[:8]:
+        print(f"    refused x{times}: {reason}")
     for text in wrong[:10]:
         print(text)
 
@@ -224,10 +267,10 @@ def fuzz(count: int, seed: int, rich: bool = False) -> None:
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "fuzz":
         fuzz(int(sys.argv[2]) if len(sys.argv) > 2 else 200, int(sys.argv[3]) if len(sys.argv) > 3 else 1,
-             rich=sys.argv[4:] == ["rich"])
+             rich=sys.argv[4:] == ["rich"], operators=sys.argv[4:] == ["ops"])
         return
     wrong: List[str] = []
-    print(f"{'program':<56}{'reference':<22}{'A':<10}{'B':<10}")
+    print(f"{'program':<56}{'reference':<22}{'compiled':<10}")
     for name, source in PROGRAMS:
         try:
             expected = law(parse(source, "v2"))
@@ -235,12 +278,11 @@ def main() -> None:
             print(f"{name:<56}not modelled: {error}")
             continue
         shown = ", ".join(f"{value}:{chance:.2f}" for value, chance in sorted(expected.items()))
-        a, b = check(source, expected, False), check(source, expected, True)
-        print(f"{name:<56}{(shown if len(shown) < 21 else shown[:19] + '…'):<22}{a.status:<10}{b.status:<10}")
-        for label, outcome in (("A", a), ("B", b)):
-            if outcome.status == "WRONG":
-                wrong.append(f"{name} ({label})")
-                print(f"{'':<56}  {label}: {outcome.detail}  expected {shown}")
+        outcome = check(source, expected)
+        print(f"{name:<56}{(shown if len(shown) < 21 else shown[:19] + '…'):<22}{outcome.status:<10}")
+        if outcome.status == "WRONG":
+            wrong.append(name)
+            print(f"{'':<56}  {outcome.detail}  expected {shown}")
     print(f"\nwrong answers: {len(wrong)}" + ("" if not wrong else "  -> " + "; ".join(wrong)))
 
 

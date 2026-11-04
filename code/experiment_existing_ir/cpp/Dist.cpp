@@ -50,7 +50,7 @@ static Type elementOf(Type type) {
 }
 
 LogicalResult UniformOp::verify() {
-  if (getStop() <= getStart())
+  if (int32_t(getStop()) <= int32_t(getStart()))
     return emitOpError("needs stop greater than start");
   if (!elementOf(getResult().getType()).isSignlessInteger())
     return emitOpError("needs an integer element type");
@@ -70,7 +70,12 @@ template <typename Op> static LogicalResult verifyBinary(Op op, bool comparison)
 }
 LogicalResult AddIOp::verify() { return verifyBinary(*this, false); }
 LogicalResult SubIOp::verify() { return verifyBinary(*this, false); }
+LogicalResult MulIOp::verify() { return verifyBinary(*this, false); }
 LogicalResult SltOp::verify() { return verifyBinary(*this, true); }
+LogicalResult EqOp::verify() { return verifyBinary(*this, true); }
+LogicalResult AndIOp::verify() { return verifyBinary(*this, false); }
+LogicalResult OrIOp::verify() { return verifyBinary(*this, false); }
+LogicalResult XOrIOp::verify() { return verifyBinary(*this, false); }
 
 LogicalResult LiftOp::verify() {
   if (elementOf(getResult().getType()) != getInput().getType())
@@ -130,13 +135,28 @@ static unsigned widthOf(Type type) { return elementOf(type).getIntOrFloatBitWidt
 
 void UniformOp::inferResultRanges(ArrayRef<ConstantIntRanges>, SetIntRangeFn setResultRange) {
   unsigned width = widthOf(getResult().getType());
-  setResultRange(getResult(), ConstantIntRanges::fromSigned(APInt(width, getStart(), true), APInt(width, getStop() - 1, true)));
+  setResultRange(getResult(), ConstantIntRanges::fromSigned(APInt(width, int32_t(getStart()), true), APInt(width, int32_t(getStop()) - 1, true)));
 }
 void AddIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   setResultRange(getResult(), intrange::inferAdd(ranges));
 }
 void SubIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   setResultRange(getResult(), intrange::inferSub(ranges));
+}
+void MulIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), intrange::inferMul(ranges));
+}
+void AndIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), intrange::inferAnd(ranges));
+}
+void OrIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), intrange::inferOr(ranges));
+}
+void XOrIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), intrange::inferXor(ranges));
+}
+void EqOp::inferResultRanges(ArrayRef<ConstantIntRanges>, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), ConstantIntRanges::fromUnsigned(APInt(1, 0), APInt(1, 1)));
 }
 void LiftOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   setResultRange(getResult(), ranges[0]);
@@ -226,10 +246,34 @@ template <typename Op> static OpFoldResult foldBinary(Op op, typename Op::FoldAd
 }
 static APInt plus(const APInt &a, const APInt &b) { return a + b; }
 static APInt minus(const APInt &a, const APInt &b) { return a - b; }
+static APInt times(const APInt &a, const APInt &b) { return a * b; }
+static APInt equal(const APInt &a, const APInt &b) { return APInt(1, a == b); }
+static APInt both(const APInt &a, const APInt &b) { return a & b; }
+static APInt either(const APInt &a, const APInt &b) { return a | b; }
+static APInt differ(const APInt &a, const APInt &b) { return a ^ b; }
 static APInt less(const APInt &a, const APInt &b) { return APInt(1, a.slt(b)); }
 OpFoldResult AddIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, plus); }
 OpFoldResult SubIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, minus); }
-OpFoldResult SltOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, less); }
+OpFoldResult SltOp::fold(FoldAdaptor adaptor) {
+  if (getLhs() == getRhs())
+    return pointOf(getType(), APInt(1, 0));
+  return foldBinary(*this, adaptor, less);
+}
+OpFoldResult MulIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, times); }
+// An operation on a value and itself is one roll used twice, so it is known without knowing the value: x && x and x || x are x,
+// x ^ x and x < x are 0, x == x is 1.
+OpFoldResult EqOp::fold(FoldAdaptor adaptor) {
+  if (getLhs() == getRhs())
+    return pointOf(getType(), APInt(1, 1));
+  return foldBinary(*this, adaptor, equal);
+}
+OpFoldResult AndIOp::fold(FoldAdaptor adaptor) { return getLhs() == getRhs() ? OpFoldResult(getLhs()) : foldBinary(*this, adaptor, both); }
+OpFoldResult OrIOp::fold(FoldAdaptor adaptor) { return getLhs() == getRhs() ? OpFoldResult(getLhs()) : foldBinary(*this, adaptor, either); }
+OpFoldResult XOrIOp::fold(FoldAdaptor adaptor) {
+  if (getLhs() == getRhs())
+    return pointOf(getType(), APInt(elementOf(getType()).getIntOrFloatBitWidth(), 0));
+  return foldBinary(*this, adaptor, differ);
+}
 OpFoldResult AddAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, plus); }
 OpFoldResult SubAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, minus); }
 OpFoldResult ConstantOp::fold(FoldAdaptor) { return getValue(); }

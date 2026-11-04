@@ -29,8 +29,8 @@ a function that returns a variable returns it the same way.
 import itertools
 from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Set, Tuple
 
-from compiler.parser.grammar import (Assign, BinOp, Call, Distribution, ExprStmt, ForLoop, FunctionDef, If, Node, Number,
-                                     Return, Variable)
+from compiler.parser.grammar import (Assign, BinOp, Boolean, Call, Distribution, Equals, ExprStmt, ForLoop, FunctionDef, If,
+                                     Node, Not, Number, Return, Variable)
 
 WIDTH = 32
 MAX_DEPTH = 8  # loops nested in one another
@@ -65,6 +65,10 @@ def _mentions(node: Node, names: Set[str], functions: Dict[str, FunctionDef]) ->
         return node.name in names
     if isinstance(node, BinOp):
         return _mentions(node.left, names, functions) or _mentions(node.right, names, functions)
+    if isinstance(node, Not):
+        return _mentions(node.operand, names, functions)
+    if isinstance(node, Equals):
+        return any(_mentions(operand, names, functions) for operand in node.operands)
     if isinstance(node, Call):
         return any(_mentions(argument, names, functions) for argument in node.args) or _makes_range(node.name, functions, [])
     return False
@@ -102,6 +106,11 @@ def _expressions(node: Node) -> Iterator[Node]:
     if isinstance(node, BinOp):
         yield from _expressions(node.left)
         yield from _expressions(node.right)
+    elif isinstance(node, Not):
+        yield from _expressions(node.operand)
+    elif isinstance(node, Equals):
+        for operand in node.operands:
+            yield from _expressions(operand)
     elif isinstance(node, Call):
         for argument in node.args:
             yield from _expressions(argument)
@@ -197,8 +206,6 @@ class _Translator:
         self.module = module
         self.width = width
         self.type = f"i{width}"
-        self.dist = f"!dist.dist<{self.type}>"
-        self.ref = f"memref<{self.dist}>"  # a reference: the cell of an object
         self.names = itertools.count()
         self.lines: List[str] = []
         self.level = 0
@@ -224,7 +231,9 @@ class _Translator:
         return self.emit(f"arith.constant {value} : {self.type}", self.type)
 
     def lift(self, value: _Value) -> _Value:
-        return value if value.dist else self.emit(f"dist.lift {value.ssa} : {value.type} -> {self.dist}", self.dist)
+        if value.dist:
+            return value
+        return self.emit(f"dist.lift {value.ssa} : {value.type} -> !dist.dist<{value.type}>", f"!dist.dist<{value.type}>")
 
     # -- variables -------------------------------------------------------------------------------------------------
 
@@ -240,18 +249,18 @@ class _Translator:
     def slot(self, name: str, type: str) -> _Var:
         ssa = f"%{next(self.names)}"
         self.out(f"{ssa} = memref.alloca() : memref<{type}>")
-        self.scopes[-1][name] = _Var(ssa, type == self.ref, type)
+        self.scopes[-1][name] = _Var(ssa, type.startswith("memref<"), type)
         return self.scopes[-1][name]
 
     def store(self, var: _Var, value: _Value) -> None:
         self.out(f"memref.store {value.ssa}, {var.slot}[] : memref<{value.type}>")
 
     def reference(self, var: _Var) -> _Value:
-        return self.emit(f"memref.load {var.slot}[] : memref<{self.ref}>", self.ref)
+        return self.emit(f"memref.load {var.slot}[] : memref<{var.type}>", var.type)
 
     def declare(self, name: str, reference: _Value) -> None:
         """Bind a name to a reference."""
-        self.store(self.slot(name, self.ref), reference)
+        self.store(self.slot(name, reference.type), reference)
 
     def bind(self, name: str, value: _Value) -> None:
         """A new name for a value: an integer in a slot of its own, or a new object when the name may hold a distribution."""
@@ -269,12 +278,13 @@ class _Translator:
         return self.emit(f"memref.load {var.slot}[] : memref<{var.type}>", var.type)
 
     def get(self, reference: _Value) -> _Value:
-        return self.emit(f"memref.load {reference.ssa}[] : {self.ref}", self.dist)
+        return self.emit(f"memref.load {reference.ssa}[] : {reference.type}", reference.type[len("memref<"):-1])
 
     def new(self, value: _Value) -> _Value:
         """A new object holding a distribution."""
-        cell = self.emit(f"memref.alloc() : {self.ref}", self.ref)  # (alloc, not alloca: stock mem2reg must not promote a cell before the conditionals on a superposition are resolved)
-        self.out(f"memref.store {value.ssa}, {cell.ssa}[] : {self.ref}")
+        ref = f"memref<{value.type}>"
+        cell = self.emit(f"memref.alloc() : {ref}", ref)  # (alloc, not alloca: stock mem2reg must not promote a cell before the conditionals on a superposition are resolved)
+        self.out(f"memref.store {value.ssa}, {cell.ssa}[] : {cell.type}")
         return cell
 
     def single(self, value: _Value) -> _Value:
@@ -285,7 +295,7 @@ class _Translator:
         held = self.get(source)
         copy = self.new(held)
         single = self.single(held)
-        return self.emit(f"arith.select {single.ssa}, {copy.ssa}, {source.ssa} : {self.ref}", self.ref)
+        return self.emit(f"arith.select {single.ssa}, {copy.ssa}, {source.ssa} : {source.type}", source.type)
 
     def check_single(self, reference: _Value, message: str) -> _Value:
         """The distribution an object holds, which must be one value (or the program is refused with `message`)."""
@@ -299,20 +309,48 @@ class _Translator:
 
     # -- expressions -----------------------------------------------------------------------------------------------
 
+    def operation(self, name: str, left: _Value, right: _Value, boolean: bool = False) -> _Value:
+        """`name` (arith or dist, by whether an operand is a distribution) on two values of one type. A comparison, or a
+        boolean operation, gives one-bit integers."""
+        one = "i1" if boolean else self.type
+        if left.dist or right.dist:
+            result = f"!dist.dist<{one}>"
+            return self.emit(f"dist.{name} {left.ssa}, {right.ssa} : {left.type}, {right.type} -> {result}", result)
+        if name in ("slt", "eq"):
+            return self.emit(f"arith.cmpi {name}, {left.ssa}, {right.ssa} : {self.type}", "i1")
+        return self.emit(f"arith.{name} {left.ssa}, {right.ssa} : {left.type}", left.type)
+
+    def flag(self, value: _Value) -> _Value:
+        """A value as a boolean: a one-bit integer already is one, and any other is true when it is not zero."""
+        if value.type in ("i1", "!dist.dist<i1>"):
+            return value
+        return self.negate(self.operation("eq", value, self.constant(0), True))
+
+    def negate(self, flag: _Value) -> _Value:
+        return self.operation("xori", flag, self.emit("arith.constant true", "i1"), True)
+
     def binary(self, node: BinOp) -> _Value:
         left, right = self.expression(node.left), self.expression(node.right)
-        if left.dist or right.dist:
-            name = {"+": "dist.addi", "-": "dist.subi", "<": "dist.slt"}.get(node.op)
-            if name is None:
-                raise TranslationError(f"operator {node.op!r} is not supported on a distribution yet")
-            result = f"!dist.dist<{'i1' if node.op == '<' else self.type}>"
-            return self.emit(f"{name} {left.ssa}, {right.ssa} : {left.type}, {right.type} -> {result}", result)
+        arithmetic = {"+": "addi", "-": "subi", "*": "muli"}
+        if node.op in arithmetic:
+            return self.operation(arithmetic[node.op], left, right)
         if node.op == "<":
-            return self.emit(f"arith.cmpi slt, {left.ssa}, {right.ssa} : {self.type}", "i1")
-        name = {"+": "arith.addi", "-": "arith.subi"}.get(node.op)
-        if name is None:
-            raise TranslationError(f"operator {node.op!r} is not supported yet")
-        return self.emit(f"{name} {left.ssa}, {right.ssa} : {self.type}", self.type)
+            return self.operation("slt", left, right, True)
+        if node.op == ">":
+            return self.operation("slt", right, left, True)
+        if node.op == "!=":
+            return self.negate(self.operation("eq", left, right, True))
+        if node.op in ("&&", "||"):
+            return self.operation("andi" if node.op == "&&" else "ori", self.flag(left), self.flag(right), True)
+        raise TranslationError(f"operator {node.op!r} is not supported yet")
+
+    def equals(self, node: Equals) -> _Value:
+        """`a == b == c` holds when every neighbouring pair is equal."""
+        values = [self.expression(operand) for operand in node.operands]
+        result = self.operation("eq", values[0], values[1], True)
+        for left, right in zip(values[1:], values[2:]):
+            result = self.operation("andi", result, self.operation("eq", left, right, True), True)
+        return result
 
     def expression(self, node: Node) -> _Value:
         if isinstance(node, Number):
@@ -323,16 +361,22 @@ class _Translator:
             return self.read(node.name)
         if isinstance(node, BinOp):
             return self.binary(node)
+        if isinstance(node, Equals):
+            return self.equals(node)
+        if isinstance(node, Not):
+            return self.negate(self.flag(self.expression(node.operand)))
+        if isinstance(node, Boolean):
+            return self.emit(f"arith.constant {'true' if node.value else 'false'}", "i1")
         if isinstance(node, Call):
             value, _ = self.call(node)
-            return self.get(value) if value.type == self.ref else value
+            return self.get(value) if value.type.startswith("memref<") else value
         if isinstance(node, Distribution):
             start, stop = node.start.value, node.stop.value
             if stop <= start:
                 raise TranslationError(f"the range {start}..{stop} is empty")
             if stop - start == 1:  # a range one value wide is an ordinary definite value
                 return self.constant(start)
-            return self.emit(f"dist.uniform {start}, {stop} : {self.dist}", self.dist)
+            return self.emit(f"dist.uniform {start}, {stop} : !dist.dist<{self.type}>", f"!dist.dist<{self.type}>")
         raise TranslationError(f"{type(node).__name__} is not supported yet")
 
     def object_of(self, node: Node) -> Optional[_Value]:
@@ -396,21 +440,8 @@ class _Translator:
         self.level -= 1
         self.scopes.pop()
 
-    def truth(self, value: _Value) -> _Value:
-        """A condition as a boolean: a comparison already is one, and any other integer is true when it is not zero (for a
-        distribution, below zero or above it, which cannot both hold, so their sum is their disjunction)."""
-        if value.type in ("i1", "!dist.dist<i1>"):
-            return value
-        zero = self.constant(0)
-        if not value.dist:
-            return self.emit(f"arith.cmpi ne, {value.ssa}, {zero.ssa} : {self.type}", "i1")
-        flag = "!dist.dist<i1>"
-        below = self.emit(f"dist.slt {value.ssa}, {zero.ssa} : {value.type}, {self.type} -> {flag}", flag)
-        above = self.emit(f"dist.slt {zero.ssa}, {value.ssa} : {self.type}, {value.type} -> {flag}", flag)
-        return self.emit(f"dist.addi {below.ssa}, {above.ssa} : {flag}, {flag} -> {flag}", flag)
-
     def conditional(self, node: If) -> None:
-        condition = self.truth(self.expression(node.condition))
+        condition = self.flag(self.expression(node.condition))
         if condition.dist:  # an integer if the distribution turns out to be a lifted one: the folding decides
             condition = self.emit(f"dist.cond {condition.ssa} : {condition.type} -> i1", "i1")
         self.out(f"scf.if {condition.ssa} {{")
@@ -456,8 +487,8 @@ class _Translator:
             reference = self.reference(var)
             held = self.get(reference)
             amount = self.expression(node.value.right)
-            result = self.emit(f"dist.{name}i {held.ssa}, {amount.ssa} : {held.type}, {amount.type} -> {self.dist}", self.dist)
-            self.out(f"memref.store {result.ssa}, {reference.ssa}[] : {self.ref}")
+            result = self.emit(f"dist.{name}i {held.ssa}, {amount.ssa} : {held.type}, {amount.type} -> {held.type}", held.type)
+            self.out(f"memref.store {result.ssa}, {reference.ssa}[] : {reference.type}")
             return
         target = self.read(node.name)
         amount = self.expression(node.value.right)
@@ -473,7 +504,7 @@ class _Translator:
         fresh = isinstance(node.value, Distribution)
         if source is None and isinstance(node.value, Call):
             result, instance = self.call(node.value)
-            if result.type == self.ref:
+            if result.type.startswith("memref<"):
                 source = result
             else:
                 value, fresh = result, instance.kind == "fresh"
@@ -490,9 +521,9 @@ class _Translator:
             held = self.check_single(target, DROP)
             incoming = self.get(source)
             single = self.single(incoming)
-            copied = self.emit(f"arith.select {single.ssa}, {incoming.ssa}, {held.ssa} : {self.dist}", self.dist)
-            self.out(f"memref.store {copied.ssa}, {target.ssa}[] : {self.ref}")
-            self.store(var, self.emit(f"arith.select {single.ssa}, {target.ssa}, {source.ssa} : {self.ref}", self.ref))
+            copied = self.emit(f"arith.select {single.ssa}, {incoming.ssa}, {held.ssa} : {held.type}", held.type)
+            self.out(f"memref.store {copied.ssa}, {target.ssa}[] : {target.type}")
+            self.store(var, self.emit(f"arith.select {single.ssa}, {target.ssa}, {source.ssa} : {target.type}", target.type))
             return
         if value.dist and not fresh:
             value = self.instance_of(node.value, value)
@@ -503,7 +534,7 @@ class _Translator:
         if var.ref:
             target = self.reference(var)
             self.check_single(target, DROP)
-            self.out(f"memref.store {self.lift(value).ssa}, {target.ssa}[] : {self.ref}")
+            self.out(f"memref.store {self.lift(value).ssa}, {target.ssa}[] : {target.type}")
         elif value.dist:
             raise TranslationError(f"{node.name} takes a distribution but is not known to hold one")
         else:
@@ -532,19 +563,16 @@ class _Translator:
                 self.statement(statement)
         if returned is None:
             raise TranslationError("a program must end with a return")
-        if returned.type == "i1":  # the result of a comparison
-            returned = self.emit(f"arith.extui {returned.ssa} : i1 to {self.type}", self.type)
         if returned.dist:  # using a distribution as the result measures it
-            returned = self.emit(f"dist.measure {returned.ssa} : {returned.type} -> {self.type}", self.type)
+            element = returned.type[len("!dist.dist<"):-1]
+            returned = self.emit(f"dist.measure {returned.ssa} : {returned.type} -> {element}", element)
+        if returned.type == "i1":  # the result of a comparison or a boolean
+            returned = self.emit(f"arith.extui {returned.ssa} : i1 to {self.type}", self.type)
         body = ["  " + line for line in [*self.lines, f"func.return {returned.ssa} : {self.type}"]]
         return "\n".join([f"func.func @main() -> {self.type} {{", *body, "}"])
 
 
-def translate(program: Sequence[Node], width: int = WIDTH, fold: bool = False) -> str:
-    """`fold` selects approach B (`translate_folding.py`), which evaluates what it can while translating."""
-    if fold:
-        from experiment_existing_ir.translate_folding import translate as folding
-        return folding(program, width, True)
+def translate(program: Sequence[Node], width: int = WIDTH) -> str:
     module = _Module(program, width)
     statements = [node for node in program if not isinstance(node, FunctionDef)]
     main = _Translator(width, module, _may_hold_distribution(statements, set(), module.functions))

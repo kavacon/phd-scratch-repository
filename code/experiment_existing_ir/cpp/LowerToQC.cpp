@@ -15,6 +15,8 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "llvm/Support/MathExtras.h"
+#include <cmath>
 
 using namespace mlir;
 using mlir::qc::QubitType;
@@ -98,6 +100,16 @@ void copy(OpBuilder &b, Location loc, ArrayRef<Value> source, ArrayRef<Value> ta
     controlledX(b, loc, {source[std::min<size_t>(i, source.size() - 1)]}, target[i]);
 }
 
+// The second operand of an operation whose gates control on bits of both: when it is the first operand again (`a * a`,
+// `x && x`) a copy is made, since one qubit cannot control a gate twice.
+Value distinctFrom(OpBuilder &rw, Location loc, Value lhs, Value rhs) {
+  if (lhs != rhs)
+    return rhs;
+  Value duplicate = allocate(rw, loc, cast<MemRefType>(rhs.getType()).getDimSize(0));
+  copy(rw, loc, load(rw, loc, rhs), load(rw, loc, duplicate));
+  return duplicate;
+}
+
 // A fresh register of `width` qubits holding lhs + rhs (or lhs - rhs): the first operand is copied in, the second is
 // copied into a temporary, and the adder (or its inverse) adds the temporary into the result.
 Value sum(OpBuilder &rw, Location loc, Value lhs, Value rhs, unsigned width, bool inverse) {
@@ -143,12 +155,127 @@ Value lessThan(OpBuilder &rw, Location loc, Value lhs, Value rhs) {
   return result;
 }
 
-struct LessThan : OpRewritePattern<arith::CmpIOp> {
+// lhs == rhs: the operands' bitwise difference is all zeros. It is computed in a temporary (the first operand copied in,
+// the second added with CNOTs, both sign-extended to the wider), every bit is flipped so that equality is all ones, and one
+// multi-controlled X sets the result.
+Value equal(OpBuilder &rw, Location loc, Value lhs, Value rhs) {
+  unsigned width = std::max(registerWidth(lhs), registerWidth(rhs));
+  Value difference = allocate(rw, loc, width), result = allocate(rw, loc, 1);
+  SmallVector<Value> d = load(rw, loc, difference), l = load(rw, loc, lhs), r = load(rw, loc, rhs);
+  copy(rw, loc, l, d);
+  copy(rw, loc, r, d);
+  for (Value bit : d)
+    mlir::qc::XOp::create(rw, loc, bit);
+  controlledX(rw, loc, d, load(rw, loc, result)[0]);
+  return result;
+}
+
+// The result register of a comparison, flipped when the comparison is the negation of the one computed.
+Value negate(OpBuilder &rw, Location loc, Value flag) {
+  mlir::qc::XOp::create(rw, loc, load(rw, loc, flag)[0]);
+  return flag;
+}
+
+// Every signed comparison is `<` or `==`, with the operands swapped or the result negated.
+std::optional<Value> compare(OpBuilder &rw, Location loc, arith::CmpIPredicate predicate, Value lhs, Value rhs) {
+  using P = arith::CmpIPredicate;
+  switch (predicate) {
+  case P::slt: return lessThan(rw, loc, lhs, rhs);
+  case P::sgt: return lessThan(rw, loc, rhs, lhs);
+  case P::sge: return negate(rw, loc, lessThan(rw, loc, lhs, rhs));
+  case P::sle: return negate(rw, loc, lessThan(rw, loc, rhs, lhs));
+  case P::eq: return equal(rw, loc, lhs, rhs);
+  case P::ne: return negate(rw, loc, equal(rw, loc, lhs, rhs));
+  default: return std::nullopt;
+  }
+}
+
+struct Compare : OpRewritePattern<arith::CmpIOp> {
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(arith::CmpIOp op, PatternRewriter &rw) const override {
-    if (op.getPredicate() != arith::CmpIPredicate::slt || !isRegister(op.getLhs()) || !isRegister(op.getRhs()))
+    if (!isRegister(op.getLhs()) || !isRegister(op.getRhs()))
       return failure();
-    rw.replaceOp(op, lessThan(rw, op.getLoc(), op.getLhs(), op.getRhs()));
+    std::optional<Value> result = compare(rw, op.getLoc(), op.getPredicate(), op.getLhs(), op.getRhs());
+    if (!result)
+      return rw.notifyMatchFailure(op, "only signed comparisons are supported");
+    rw.replaceOp(op, *result);
+    return success();
+  }
+};
+
+// The product, modulo the result's width, by shift and add: for each bit of the first operand, the second operand shifted
+// left by that bit's place is copied into a temporary by Toffolis on that bit, added into the result, and the temporary is
+// cleared by the same Toffolis. Operands are sign-extended, which is right modulo the width.
+Value product(OpBuilder &rw, Location loc, Value lhs, Value rhs, unsigned width) {
+  rhs = distinctFrom(rw, loc, lhs, rhs);
+  Value result = allocate(rw, loc, width), partial = allocate(rw, loc, width), carry = allocate(rw, loc, 1);
+  SmallVector<Value> l = load(rw, loc, lhs), r = load(rw, loc, rhs), p = load(rw, loc, partial), c = load(rw, loc, carry);
+  SmallVector<Value> args(p), res = load(rw, loc, result);
+  args.append(res.begin(), res.end());
+  args.push_back(c[0]);
+  auto callee = FlatSymbolRefAttr::get(rw.getContext(), adderName(width));
+  for (unsigned i = 0; i < width; ++i) {
+    Value bit = l[std::min<size_t>(i, l.size() - 1)];
+    auto toffolis = [&] {
+      for (unsigned k = i; k < width; ++k)
+        controlledX(rw, loc, {bit, r[std::min<size_t>(k - i, r.size() - 1)]}, p[k]);
+    };
+    toffolis();
+    mlir::qc::CallOp::create(rw, loc, callee, args);
+    toffolis();
+  }
+  return result;
+}
+
+template <typename Op> struct Product : OpRewritePattern<Op> {
+  Product(MLIRContext *c, const Widths &w) : OpRewritePattern<Op>(c), widths(w) {}
+  const Widths &widths;
+  LogicalResult matchAndRewrite(Op op, PatternRewriter &rw) const override {
+    auto it = widths.find(op.getResult());
+    if (it == widths.end() || !isRegister(op.getLhs()) || !isRegister(op.getRhs()))
+      return failure();
+    rw.replaceOp(op, product(rw, op.getLoc(), op.getLhs(), op.getRhs(), it->second));
+    return success();
+  }
+};
+
+// Bitwise and, or and xor, bit by bit on operands sign-extended to the result's width. xor is CNOTs; and is a Toffoli per
+// bit; or is a xor b xor (a and b).
+enum class Bitwise { And, Or, Xor };
+
+template <typename Op, Bitwise Kind> struct BitwiseOp : OpRewritePattern<Op> {
+  BitwiseOp(MLIRContext *c, const Widths &w) : OpRewritePattern<Op>(c), widths(w) {}
+  const Widths &widths;
+  LogicalResult matchAndRewrite(Op op, PatternRewriter &rw) const override {
+    auto it = widths.find(op.getResult());
+    if (it == widths.end() || !isRegister(op.getLhs()) || !isRegister(op.getRhs()))
+      return failure();
+    Location loc = op.getLoc();
+    Value result = allocate(rw, loc, it->second), rhs = distinctFrom(rw, loc, op.getLhs(), op.getRhs());
+    SmallVector<Value> l = load(rw, loc, op.getLhs()), r = load(rw, loc, rhs), res = load(rw, loc, result);
+    auto at = [](ArrayRef<Value> bits, unsigned i) { return bits[std::min<size_t>(i, bits.size() - 1)]; };
+    for (unsigned i = 0; i < res.size(); ++i) {
+      if (Kind == Bitwise::And) {
+        controlledX(rw, loc, {at(l, i), at(r, i)}, res[i]);
+        continue;
+      }
+      controlledX(rw, loc, {at(l, i)}, res[i]);
+      controlledX(rw, loc, {at(r, i)}, res[i]);
+      if (Kind == Bitwise::Or)
+        controlledX(rw, loc, {at(l, i), at(r, i)}, res[i]);
+    }
+    rw.replaceOp(op, result);
+    return success();
+  }
+};
+
+template <typename Op> struct DistCompare : OpRewritePattern<Op> {
+  using OpRewritePattern<Op>::OpRewritePattern;
+  LogicalResult matchAndRewrite(Op op, PatternRewriter &rw) const override {
+    if (!isRegister(op.getLhs()) || !isRegister(op.getRhs()))
+      return failure();
+    auto predicate = std::is_same_v<Op, existing_ir::dist::EqOp> ? arith::CmpIPredicate::eq : arith::CmpIPredicate::slt;
+    rw.replaceOp(op, *compare(rw, op.getLoc(), predicate, op.getLhs(), op.getRhs()));
     return success();
   }
 };
@@ -191,6 +318,24 @@ struct Update : OpRewritePattern<Op> {
   }
 };
 
+// A one-bit flag read as an integer: the bits are copied in with zeros above.
+struct ZeroExtend : OpRewritePattern<arith::ExtUIOp> {
+  ZeroExtend(MLIRContext *c, const Widths &w) : OpRewritePattern(c), widths(w) {}
+  const Widths &widths;
+  LogicalResult matchAndRewrite(arith::ExtUIOp op, PatternRewriter &rw) const override {
+    auto it = widths.find(op.getResult());
+    if (it == widths.end() || !isRegister(op.getIn()))
+      return failure();
+    Location loc = op.getLoc();
+    Value result = allocate(rw, loc, it->second);
+    SmallVector<Value> in = load(rw, loc, op.getIn()), out = load(rw, loc, result);
+    for (unsigned i = 0; i < std::min(in.size(), out.size()); ++i)
+      controlledX(rw, loc, {in[i]}, out[i]);
+    rw.replaceOp(op, result);
+    return success();
+  }
+};
+
 // A lifted integer is the same register: a distribution and an integer are both qubits, and only the state differs. If
 // something else still uses the integer, the register is copied first, since the distribution may be updated in place.
 struct Lift : OpRewritePattern<existing_ir::dist::LiftOp> {
@@ -209,16 +354,6 @@ struct Lift : OpRewritePattern<existing_ir::dist::LiftOp> {
     Value result = allocate(rw, op.getLoc(), it->second);
     copy(rw, op.getLoc(), load(rw, op.getLoc(), input), load(rw, op.getLoc(), result));
     rw.replaceOp(op, result);
-    return success();
-  }
-};
-
-struct DistLessThan : OpRewritePattern<existing_ir::dist::SltOp> {
-  using OpRewritePattern::OpRewritePattern;
-  LogicalResult matchAndRewrite(existing_ir::dist::SltOp op, PatternRewriter &rw) const override {
-    if (!isRegister(op.getLhs()) || !isRegister(op.getRhs()))
-      return failure();
-    rw.replaceOp(op, lessThan(rw, op.getLoc(), op.getLhs(), op.getRhs()));
     return success();
   }
 };
@@ -277,21 +412,72 @@ struct DistMeasure : OpRewritePattern<existing_ir::dist::MeasureOp> {
   }
 };
 
-// An equal superposition of start .. stop - 1: Hadamards on the low bits when it spans a power of two from zero.
-// Other intervals need state preparation, which is a later milestone.
+// An equal superposition of 0 .. n - 1 on the low qubits of a register that starts at zero. It is prepared bit by bit from the
+// top. Under a prefix whose subtree lies wholly inside 0 .. n - 1 the next bit is an even coin, which is what a rotation by pi / 2
+// from zero makes; under a prefix whose subtree lies wholly outside the amplitude is zero, so whatever is done there is
+// harmless. Only the one prefix per level whose subtree straddles n needs another angle, and that rotation is controlled on the
+// prefix (a negative control where its bit is zero). A power of two straddles nowhere, so it is Hadamards alone.
+void prepareUniform(OpBuilder &rw, Location loc, ArrayRef<Value> qubits, uint64_t n) {
+  unsigned k = llvm::Log2_64_Ceil(n);
+  if (llvm::isPowerOf2_64(n)) {
+    for (unsigned j = 0; j < k; ++j)
+      mlir::qc::HOp::create(rw, loc, qubits[j]);
+    return;
+  }
+  for (unsigned j = k; j-- > 0;) {
+    mlir::qc::RYOp::create(rw, loc, qubits[j], llvm::numbers::pi / 2);
+    uint64_t inside = n & ((uint64_t(2) << j) - 1);  // how much of the straddling subtree (2^(j+1) values) lies below n
+    if (inside == 0)
+      continue;
+    uint64_t upper = inside > (uint64_t(1) << j) ? inside - (uint64_t(1) << j) : 0;  // values in the upper half
+    double angle = 2 * std::asin(std::sqrt(double(upper) / double(inside)));
+    if (angle == llvm::numbers::pi / 2)
+      continue;
+    SmallVector<Value> controls, flipped;
+    for (unsigned i = j + 1; i < k; ++i) {
+      controls.push_back(qubits[i]);
+      if (!((n >> i) & 1))
+        flipped.push_back(qubits[i]);
+    }
+    for (Value q : flipped)
+      mlir::qc::XOp::create(rw, loc, q);
+    double correction = angle - llvm::numbers::pi / 2;
+    if (controls.empty())
+      mlir::qc::RYOp::create(rw, loc, qubits[j], correction);
+    else
+      mlir::qc::CtrlOp::create(rw, loc, controls, qubits[j], [&](Value t) { mlir::qc::RYOp::create(rw, loc, t, correction); });
+    for (Value q : flipped)
+      mlir::qc::XOp::create(rw, loc, q);
+  }
+}
+
+// An equal superposition of start .. stop - 1: 0 .. stop - start - 1 prepared on the low qubits, then `start` added when it is
+// not zero (the prepared register has a zero bit above its values so that it reads as non-negative).
 struct Uniform : OpRewritePattern<existing_ir::dist::UniformOp> {
   Uniform(MLIRContext *c, const Widths &w) : OpRewritePattern(c), widths(w) {}
   const Widths &widths;
   LogicalResult matchAndRewrite(existing_ir::dist::UniformOp op, PatternRewriter &rw) const override {
     auto it = widths.find(op.getResult());
-    uint32_t span = op.getStop() - op.getStart();
-    if (it == widths.end() || op.getStart() != 0 || span == 0 || (span & (span - 1)) != 0)
-      return rw.notifyMatchFailure(op, "only 0..2^k is supported");
-    Value reg = allocate(rw, op.getLoc(), it->second);
-    SmallVector<Value> qubits = load(rw, op.getLoc(), reg);
-    for (unsigned k = 0; k < llvm::Log2_32(span); ++k)
-      mlir::qc::HOp::create(rw, op.getLoc(), qubits[k]);
-    rw.replaceOp(op, reg);
+    if (it == widths.end())
+      return failure();
+    Location loc = op.getLoc();
+    int64_t start = int32_t(op.getStart());
+    uint64_t n = uint64_t(int64_t(int32_t(op.getStop())) - start);
+    unsigned values = std::max(llvm::Log2_64_Ceil(n), 1u) + 1;  // bits for 0 .. n - 1 as a non-negative signed value
+    Value prepared = allocate(rw, loc, start == 0 ? it->second : std::max(values, 1u));
+    SmallVector<Value> qubits = load(rw, loc, prepared);
+    prepareUniform(rw, loc, qubits, n);
+    if (start == 0) {
+      rw.replaceOp(op, prepared);
+      return success();
+    }
+    Value offset = allocate(rw, loc, it->second);
+    SmallVector<Value> bits = load(rw, loc, offset);
+    APInt pattern = APInt(64, start, true).sextOrTrunc(it->second);
+    for (unsigned k = 0; k < bits.size(); ++k)
+      if (pattern[k])
+        mlir::qc::XOp::create(rw, loc, bits[k]);
+    rw.replaceOp(op, sum(rw, loc, prepared, offset, it->second, false));
     return success();
   }
 };
@@ -405,12 +591,15 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     // 3. The adders needed, at the widths the registers now have.
     std::set<unsigned> adders;
     module.walk([&](Operation *op) {
-      if (isa<arith::AddIOp, arith::SubIOp, existing_ir::dist::AddIOp, existing_ir::dist::SubIOp,
-              existing_ir::dist::AddAssignOp, existing_ir::dist::SubAssignOp>(op))
+      if (isa<arith::AddIOp, arith::SubIOp, arith::MulIOp, existing_ir::dist::AddIOp, existing_ir::dist::SubIOp,
+              existing_ir::dist::MulIOp, existing_ir::dist::AddAssignOp, existing_ir::dist::SubAssignOp>(op))
         adders.insert(widths.lookup(op->getResult(0)));
-      // A comparison subtracts in one bit more than its wider operand.
-      if (auto cmp = dyn_cast<arith::CmpIOp>(op))
+      // An order comparison subtracts in one bit more than its wider operand; an equality needs no adder.
+      if (auto cmp = dyn_cast<arith::CmpIOp>(op); cmp && cmp.getPredicate() != arith::CmpIPredicate::eq &&
+                                                    cmp.getPredicate() != arith::CmpIPredicate::ne)
         adders.insert(std::max(widths.lookup(cmp.getLhs()), widths.lookup(cmp.getRhs())) + 1);
+      if (auto uniform = dyn_cast<existing_ir::dist::UniformOp>(op); uniform && int32_t(uniform.getStart()) != 0)
+        adders.insert(widths.lookup(uniform.getResult()));
       if (auto slt = dyn_cast<existing_ir::dist::SltOp>(op))
         adders.insert(std::max(widths.lookup(slt.getLhs()), widths.lookup(slt.getRhs())) + 1);
     });
@@ -422,7 +611,12 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     patterns.add<Sum<arith::AddIOp, false>>(&getContext(), widths);
     patterns.add<Sum<arith::SubIOp, true>>(&getContext(), widths);
     patterns.add<Sum<existing_ir::dist::AddIOp, false>, Sum<existing_ir::dist::SubIOp, true>>(&getContext(), widths);
-    patterns.add<LessThan, DistLessThan, DistMeasure>(&getContext());
+    patterns.add<Compare, DistCompare<existing_ir::dist::SltOp>, DistCompare<existing_ir::dist::EqOp>, DistMeasure>(&getContext());
+    patterns.add<ZeroExtend>(&getContext(), widths);
+    patterns.add<Product<arith::MulIOp>, Product<existing_ir::dist::MulIOp>>(&getContext(), widths);
+    patterns.add<BitwiseOp<arith::AndIOp, Bitwise::And>, BitwiseOp<arith::OrIOp, Bitwise::Or>, BitwiseOp<arith::XOrIOp, Bitwise::Xor>,
+                 BitwiseOp<existing_ir::dist::AndIOp, Bitwise::And>, BitwiseOp<existing_ir::dist::OrIOp, Bitwise::Or>,
+                 BitwiseOp<existing_ir::dist::XOrIOp, Bitwise::Xor>>(&getContext(), widths);
     patterns.add<Select, DistSelect, Uniform>(&getContext(), widths);
     patterns.add<Lift>(&getContext(), widths, reuse);
     patterns.add<Update<existing_ir::dist::AddAssignOp, false>, Update<existing_ir::dist::SubAssignOp, true>>(
