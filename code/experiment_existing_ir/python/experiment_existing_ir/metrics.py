@@ -3,7 +3,7 @@ Measurements of what a pipeline or a simulation produced. Nothing here compiles 
 (QC text, an OpenQASM 3 artifact, the stages of a build, or the counts of a run) and describes it, so the same measurements apply to
 the output of any pipeline.
 
-    . ./env.sh && .venv/bin/python -m experiment_existing_ir.metrics "a = 0..4; return a * 3;"
+    . ./env.sh && .venv/bin/python -m experiment_existing_ir.metrics "a = 0..4; return a * 3;" [qubits in the system]
 
 The T cost counts the T gates a Clifford+T circuit needs for what is exact in it: a Toffoli is seven T gates (the standard
 construction, without ancillas) and a T or its adjoint is one. A rotation (the preparation of an interval that is not a power of two)
@@ -15,6 +15,7 @@ from collections import Counter
 from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 from checking import qiskit_tools
+from compiler.system import System
 from experiment_existing_ir import pipeline
 from experiment_existing_ir.pipeline import Export
 from experiment_existing_ir.translate import translate
@@ -33,6 +34,15 @@ class Circuit(NamedTuple):
     t_count: int  # exact T gates: T and its adjoint, and seven per Toffoli
     rotations: int  # gates with an angle, which have no exact T cost
     wide: int  # gates with three or more controls, which have no T cost counted here
+
+
+class Fit(NamedTuple):
+    """Whether a circuit fits a system's qubits, and when it does not, by how much and which registers make it up."""
+    fits: bool
+    needed: int  # qubits the circuit touches
+    available: int  # the system's qubits
+    over: int  # qubits beyond the budget (0 when it fits)
+    registers: List[int]  # sizes of the QC program's registers, largest first
 
 
 class Run(NamedTuple):
@@ -79,6 +89,14 @@ def of_stages(program: str, stages: Sequence[str]) -> List[Tuple[str, Dict[str, 
     return rows
 
 
+def fit(qc: str, system: System) -> Fit:
+    """The QC program a pipeline ends in against a system: its qubits at most the system's. The system's other field, a register
+    width, is the older compiler's fixed width; here widths are inferred from ranges, so only the qubit count is used."""
+    needed = of_qc(qc).qubits
+    sizes = sorted((int(n) for n in re.findall(r"memref\.alloc\(\) : memref<(\d+)x!qc\.qubit>", qc)), reverse=True)
+    return Fit(needed <= system.qubits, needed, system.qubits, max(needed - system.qubits, 0), sizes)
+
+
 def of_run(counts: Dict[int, int]) -> Run:
     """The counts of a simulation, as `pipeline.execute` gives them."""
     shots = sum(counts.values())
@@ -87,11 +105,14 @@ def of_run(counts: Dict[int, int]) -> Run:
 
 def main() -> None:
     source = sys.argv[1] if len(sys.argv) > 1 else "a = 0..4; b = 0..3; return a * b;"
+    qubits = int(sys.argv[2]) if len(sys.argv) > 2 else None  # the system's qubits, when a budget is to be assessed
     program = translate(parse(source, "v2"))
     print(f"{'stage':<46}{'ops':>6}{'qubits':>8}{'gates':>7}{'depth':>7}{'T':>6}{'rot':>5}{'wide':>6}")
     for stage, ops, circuit in of_stages(program, pipeline.DEFAULT):
         cells = (circuit.qubits, circuit.gates, circuit.depth, circuit.t_count, circuit.rotations, circuit.wide) if circuit else ("",) * 6
         print(f"{stage[:45]:<46}{sum(ops.values()):>6}" + "".join(f"{c:>{w}}" for c, w in zip(cells, (8, 7, 7, 6, 5, 6))))
+    if qubits is not None:
+        print(f"\n{fit(pipeline.build(program, *pipeline.DEFAULT), System(qubits=qubits))}")
     print(f"\nrun: {of_run(pipeline.run(program))}")
 
 
