@@ -1,6 +1,7 @@
 import unittest
 
 from compiler.parser.parser import parse
+from compiler.system import System
 from experiment_existing_ir import metrics, pipeline
 from experiment_existing_ir.translate import translate
 
@@ -28,6 +29,15 @@ class Metrics(unittest.TestCase):
         circuits = [circuit for _, _, circuit in rows]
         self.assertIsNone(circuits[0])
         self.assertIsNotNone(circuits[-1])
+
+    def test_a_circuit_fits_a_system_with_enough_qubits_and_otherwise_says_by_how_much_and_what_it_is_made_of(self):
+        qc = build("a = 0..4; b = 0..3; return a * b;")
+        needed = metrics.of_qc(qc).qubits
+        self.assertTrue(metrics.fit(qc, System(qubits=needed)).fits)
+        short = metrics.fit(qc, System(qubits=needed - 3))
+        self.assertEqual((short.fits, short.over, short.needed), (False, 3, needed))
+        self.assertEqual(short.registers, sorted(short.registers, reverse=True))
+        self.assertEqual(sum(short.registers), needed)  # every qubit belongs to a register, and the registers are what was allocated
 
     def test_a_run_is_described_by_the_chance_of_each_outcome(self):
         run = metrics.of_run({0: 300, 3: 100})
