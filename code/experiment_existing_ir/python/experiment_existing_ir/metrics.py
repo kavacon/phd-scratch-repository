@@ -39,7 +39,7 @@ class Circuit(NamedTuple):
 class Fit(NamedTuple):
     """Whether a circuit fits a system's qubits, and when it does not, by how much and which registers make it up."""
     fits: bool
-    needed: int  # qubits the circuit touches
+    needed: int  # the most qubits live at once
     available: int  # the system's qubits
     over: int  # qubits beyond the budget (0 when it fits)
     registers: List[int]  # sizes of the QC program's registers, largest first
@@ -90,9 +90,10 @@ def of_stages(program: str, stages: Sequence[str]) -> List[Tuple[str, Dict[str, 
 
 
 def fit(qc: str, system: System) -> Fit:
-    """The QC program a pipeline ends in against a system: its qubits at most the system's. The system's other field, a register
-    width, is the older compiler's fixed width; here widths are inferred from ranges, so only the qubit count is used."""
-    needed = of_qc(qc).qubits
+    """The QC program a pipeline ends in against a system: the most qubits it holds at once, which `lower-to-qc` records on `main`,
+    at most the system's qubits. (Given the system up front, the tool refuses instead; this assesses a program that was built
+    without one.)"""
+    needed = int(re.search(r"existing_ir\.peak_qubits = (\d+)", qc).group(1))
     sizes = sorted((int(n) for n in re.findall(r"memref\.alloc\(\) : memref<(\d+)x!qc\.qubit>", qc)), reverse=True)
     return Fit(needed <= system.qubits, needed, system.qubits, max(needed - system.qubits, 0), sizes)
 

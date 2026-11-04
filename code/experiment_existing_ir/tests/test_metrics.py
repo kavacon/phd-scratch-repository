@@ -1,3 +1,4 @@
+import subprocess
 import unittest
 
 from compiler.parser.parser import parse
@@ -32,12 +33,21 @@ class Metrics(unittest.TestCase):
 
     def test_a_circuit_fits_a_system_with_enough_qubits_and_otherwise_says_by_how_much_and_what_it_is_made_of(self):
         qc = build("a = 0..4; b = 0..3; return a * b;")
-        needed = metrics.of_qc(qc).qubits
+        needed = metrics.fit(qc, System(qubits=1000)).needed
+        self.assertEqual(needed, metrics.of_qc(qc).qubits)  # nothing is released early yet, so the peak is the circuit's qubits
         self.assertTrue(metrics.fit(qc, System(qubits=needed)).fits)
         short = metrics.fit(qc, System(qubits=needed - 3))
         self.assertEqual((short.fits, short.over, short.needed), (False, 3, needed))
         self.assertEqual(short.registers, sorted(short.registers, reverse=True))
         self.assertEqual(sum(short.registers), needed)  # every qubit belongs to a register, and the registers are what was allocated
+
+    def test_the_tool_refuses_a_program_that_needs_more_qubits_than_the_system_describes(self):
+        source = translate(parse("a = 0..4; b = 0..3; return a * b;", "v2"))
+        needed = metrics.fit(pipeline.build(source, *pipeline.DEFAULT), System(qubits=1000)).needed
+        pipeline.build(source, *pipeline.DEFAULT, system=System(qubits=needed))  # exactly enough: built
+        with self.assertRaises(subprocess.CalledProcessError) as raised:
+            pipeline.build(source, *pipeline.DEFAULT, system=System(qubits=needed - 1))
+        self.assertIn(f"needs {needed} qubits at once but the system has {needed - 1}", raised.exception.stderr)
 
     def test_a_run_is_described_by_the_chance_of_each_outcome(self):
         run = metrics.of_run({0: 300, 3: 100})
