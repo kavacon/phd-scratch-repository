@@ -10,8 +10,9 @@ and give back the measured register as integers.
 
 import subprocess
 from pathlib import Path
-from typing import Callable, Dict, NamedTuple, Sequence, Tuple, Union
+from typing import Callable, Dict, NamedTuple, Optional, Sequence, Tuple, Union
 
+from compiler.system import System
 from mqt.core import qdmi
 from mqt.core.mlir import JeffProgram, OutputFormat, QCProgram, QIRProfile, compile_program, sample
 
@@ -81,10 +82,20 @@ class Export(NamedTuple):
 FORMATS: Tuple[str, ...] = ("openqasm3", "qir-base", "qir-adaptive", "jeff")
 
 
-def build(program: str, *stages: Union[str, Export]) -> Union[str, bytes]:
-    """The program after its stages: QC text, or the exported artifact when the last stage is an `Export`."""
+def with_system(program: str, system: System) -> str:
+    """The program inside a module that describes the system with MLIR's own target information (the `dlti` dialect): the
+    qubits it has. `lower-to-qc` reads it and refuses a program that needs more at once. (The system's register width belongs to
+    the older fixed-width compiler; here widths come from ranges, so only the qubits are described.)"""
+    spec = f'#dlti.target_system_spec<"quantum" = #dlti.target_device_spec<"qubits" = {system.qubits} : i32>>'
+    return f"module attributes {{dlti.target_system_spec = {spec}}} {{\n{program}\n}}"
+
+
+def build(program: str, *stages: Union[str, Export], system: Optional[System] = None) -> Union[str, bytes]:
+    """The program after its stages: QC text, or the exported artifact when the last stage is an `Export`. Given a system, the
+    tool refuses a program that needs more qubits than the system has (`subprocess.CalledProcessError`, whose `stderr` says by how
+    much and which registers)."""
     *passes, last = stages if stages and isinstance(stages[-1], Export) else (*stages, None)
-    qc = optimise(program, *passes)
+    qc = optimise(program if system is None else with_system(program, system), *passes)
     return qc if last is None else export(qc, last.format)
 
 

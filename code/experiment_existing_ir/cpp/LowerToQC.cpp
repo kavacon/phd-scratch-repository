@@ -12,6 +12,7 @@
 #include "mlir/Analysis/DataFlow/ConstantPropagationAnalysis.h"
 #include "mlir/Analysis/DataFlowFramework.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
@@ -629,6 +630,45 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     config.setRegionSimplificationLevel(GreedySimplifyRegionLevel::Disabled);
     if (failed(applyPatternsGreedily(module, std::move(patterns), config)))
       return signalPassFailure();
+    if (failed(checkQubitBudget(module)))
+      return signalPassFailure();
+  }
+
+  // The most qubits live at once in `main`, in program order: a register is live from its allocation to its deallocation. It is
+  // recorded on `main` as `existing_ir.peak_qubits`, and checked against the system's qubits when the module describes one with
+  // MLIR's own target information (`dlti.target_system_spec`, device "quantum", property "qubits").
+  LogicalResult checkQubitBudget(ModuleOp module) {
+    auto main = module.lookupSymbol<func::FuncOp>("main");
+    if (!main)
+      return success();
+    int64_t live = 0, peak = 0;
+    SmallVector<int64_t> sizes;
+    auto size = [](Value reg) -> int64_t {
+      auto type = dyn_cast<MemRefType>(reg.getType());
+      return type && isa<QubitType>(type.getElementType()) ? type.getDimSize(0) : 0;
+    };
+    main.walk<WalkOrder::PreOrder>([&](Operation *op) {
+      if (auto alloc = dyn_cast<memref::AllocOp>(op)) {
+        live += size(alloc);
+        peak = std::max(peak, live);
+        if (size(alloc))
+          sizes.push_back(size(alloc));
+      } else if (auto dealloc = dyn_cast<memref::DeallocOp>(op)) {
+        live -= size(dealloc.getMemref());
+      }
+    });
+    main->setAttr("existing_ir.peak_qubits", IntegerAttr::get(IntegerType::get(&getContext(), 64), peak));
+    FailureOr<Attribute> budget = dlti::query(module, ArrayRef<StringRef>{"quantum", "qubits"});
+    auto available = succeeded(budget) ? dyn_cast<IntegerAttr>(*budget) : IntegerAttr();
+    if (!available || peak <= available.getInt())
+      return success();
+    llvm::sort(sizes, std::greater<int64_t>());
+    InFlightDiagnostic error = module.emitError() << "the program needs " << peak << " qubits at once but the system has "
+                                                  << available.getInt() << " (over by " << peak - available.getInt()
+                                                  << "); registers, largest first:";
+    for (int64_t n : sizes)
+      error << " " << n;
+    return failure();
   }
 };
 
