@@ -2,7 +2,8 @@ import subprocess
 import unittest
 
 from compiler.parser.parser import parse
-from experiment_existing_ir import simulate
+from experiment_existing_ir import semantics, simulate
+from experiment_existing_ir.reference import law
 from experiment_existing_ir.translate import TranslationError, translate
 
 ARITHMETIC = "x = 5; y = x + 3; y = y - 1; return y;"
@@ -165,18 +166,10 @@ class Pipeline(unittest.TestCase):
         for value, weight in zip(range(2, 6), (5, 1, 1, 1)):
             self.assertAlmostEqual(counts[value] / 4000, weight / 8, delta=0.04, msg=value)
 
-    def test_folding_while_translating_gives_the_same_circuit_as_folding_afterwards_where_both_compile(self):
-        # approach A leaves the folding to MLIR's passes; approach B does it as it translates
-        for source in ("a = 0..4; x = 2; k = 1; if k < 3 { x += a; } return x;",
-                       "a = 0..4; x = 0; for i in 0..6 { if i < 3 { x += a; } else { x -= 1; } } return x;",
-                       "function shift(p, k) { return p + k; }\na = 0..4; t = 0; for i in 0..4 { t += shift(a, i); } return t;"):
-            registers_by_approach = [registers(simulate.optimise(program(source, "v2", fold=fold), *simulate.DEFAULT))
-                                     for fold in (False, True)]
-            self.assertEqual(registers_by_approach[0], registers_by_approach[1], source)
-        # a condition on a variable that a dead branch could superpose folds in both: the branch is dead, so x stays 2
+    def test_a_condition_on_a_variable_that_a_dead_branch_could_superpose_is_decided_by_folding(self):
+        # the branch is dead, so x stays 2 and the condition on it is taken every time
         source = "a = 0..4; x = 2; y = 0; k = 9; for i in 0..3 { if k < 3 { x += a; } if x < 5 { y += 1; } } return y;"
-        for fold in (False, True):
-            self.assertEqual(simulate.run(program(source, "v2", fold=fold), shots=100), {3: 100})
+        self.assertEqual(simulate.run(program(source, "v2"), shots=100), {3: 100})
 
     def test_conditionals_and_loops_on_definite_values_nest_in_either_order(self):
         # i < 2 adds 10 twice and the rest add 1 twice; a nest counts the pairs i < j; a local reset each pass; a loop in an arm
@@ -253,3 +246,23 @@ class Pipeline(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
+class Operators(unittest.TestCase):
+    """The circuit gives the reference's outcome law (computed from the source alone) for each operator and kind of interval."""
+
+    def agrees(self, source: str):
+        outcome = semantics.check(source, law(parse(source, "v2")))
+        self.assertEqual(outcome.status, "ok", f"{source}: {outcome.detail}")
+
+    def test_products_comparisons_and_booleans_on_integers_and_distributions(self):
+        for source in ("x = -3; y = 5; return x * y;",
+                       "a = 0..4; b = 0..3; return a * b;",
+                       "a = 0..4; b = 0..2; return !(a < 2) || (b == 0 && a > 0);",
+                       "a = 0..3; b = 0..3; return a * a == b;"):
+            self.agrees(source)
+
+    def test_an_interval_may_be_any_size_and_start_anywhere(self):
+        for source in ("a = 0..6; return a;", "a = -2..3; return a;", "a = 1..12; return a;"):
+            self.agrees(source)

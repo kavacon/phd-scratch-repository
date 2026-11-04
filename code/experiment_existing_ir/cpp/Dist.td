@@ -91,8 +91,16 @@ class Dist_BinaryOp<string mnemonic> : Dist_PureOp<mnemonic> {
 // Sum and difference computed out of place: a new distribution, correlated with its operands, which are only used.
 def Dist_AddIOp : Dist_BinaryOp<"addi">;
 def Dist_SubIOp : Dist_BinaryOp<"subi">;
-// Signed less-than; the result is a distribution of one-bit integers.
+// Product, modulo the width of the type.
+def Dist_MulIOp : Dist_BinaryOp<"muli">;
+// Signed less-than and equality; the result is a distribution of one-bit integers. Every other comparison is one of these
+// with the operands swapped or the result negated.
 def Dist_SltOp : Dist_BinaryOp<"slt">;
+def Dist_EqOp : Dist_BinaryOp<"eq">;
+// Bitwise operations, used on one-bit integers as the booleans `&&`, `||` and `!` (not is xor with one).
+def Dist_AndIOp : Dist_BinaryOp<"andi">;
+def Dist_OrIOp : Dist_BinaryOp<"ori">;
+def Dist_XOrIOp : Dist_BinaryOp<"xori">;
 
 // The value of a computed expression assigned to a new variable: an independent instance with the law of its input.
 // It marks the assignment and says nothing about how the instance is made. `resolve-instances` replays the history of

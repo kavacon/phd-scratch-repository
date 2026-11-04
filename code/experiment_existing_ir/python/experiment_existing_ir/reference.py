@@ -18,8 +18,8 @@ combination of the dice it depends on. Programs here are small, so that is cheap
 import itertools
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
-from compiler.parser.grammar import (Assign, BinOp, Call, Distribution, ExprStmt, ForLoop, FunctionDef, If, Node, Number,
-                                     Return, Variable)
+from compiler.parser.grammar import (Assign, BinOp, Boolean, Call, Distribution, Equals, ExprStmt, ForLoop, FunctionDef, If,
+                                     Node, Not, Number, Return, Variable)
 
 WIDTH = 32
 MAX_COMBINATIONS = 300_000
@@ -46,15 +46,19 @@ def as_tree(value: Value) -> Tree:
     return value if is_dist(value) else ("const", value)
 
 
+OPERATORS = {
+    "+": lambda a, b: wrap(a + b), "-": lambda a, b: wrap(a - b), "*": lambda a, b: wrap(a * b),
+    "<": lambda a, b: int(a < b), ">": lambda a, b: int(a > b), "==": lambda a, b: int(a == b), "!=": lambda a, b: int(a != b),
+    "&&": lambda a, b: int(bool(a) and bool(b)), "||": lambda a, b: int(bool(a) or bool(b)),
+}
+
+
 def binary(op: str, left: Value, right: Value) -> Value:
+    """Both operands of `&&` and `||` are always evaluated, as in the circuit; each counts as true when it is not zero."""
+    if op not in OPERATORS:
+        raise ReferenceError_(f"operator {op!r} is not modelled")
     if not is_dist(left) and not is_dist(right):
-        if op == "<":
-            return int(left < right)
-        if op in ("+", "-"):
-            return wrap(left + right if op == "+" else left - right)
-        raise ReferenceError_(f"operator {op!r} is not modelled")
-    if op not in ("+", "-", "<"):
-        raise ReferenceError_(f"operator {op!r} is not modelled")
+        return OPERATORS[op](left, right)
     return ("op", op, as_tree(left), as_tree(right))
 
 
@@ -123,6 +127,16 @@ class Interpreter:
             return scope[node.name].value
         if isinstance(node, BinOp):
             return binary(node.op, self.expression(node.left, scope), self.expression(node.right, scope))
+        if isinstance(node, Boolean):
+            return int(node.value)
+        if isinstance(node, Not):
+            return binary("==", self.expression(node.operand, scope), 0)
+        if isinstance(node, Equals):
+            values = [self.expression(operand, scope) for operand in node.operands]
+            result = binary("==", values[0], values[1])
+            for left, right in zip(values[1:], values[2:]):
+                result = binary("&&", result, binary("==", left, right))
+            return result
         if isinstance(node, Distribution):
             start, stop = node.start.value, node.stop.value
             return start if stop - start == 1 else self.fresh(start, stop)

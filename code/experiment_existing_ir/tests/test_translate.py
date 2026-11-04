@@ -61,8 +61,8 @@ class Translate(unittest.TestCase):
 }""")
 
     def test_constructs_not_yet_supported_are_refused(self):
-        with self.assertRaisesRegex(TranslationError, "'\\*'"):
-            translated("x = 2 * 3; return x;")
+        with self.assertRaisesRegex(TranslationError, "'/'"):
+            translated("x = 6 / 3; return x;")
         with self.assertRaisesRegex(TranslationError, "does not fit in i8"):
             translated("x = 300; return x;", width=8)
 

@@ -80,7 +80,7 @@ def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
 # which cell each reference names) and rewrites once from what it found; it refuses what the analysis could not decide.
 # Stock `canonicalize` then folds the constant selects and removes what is dead.
 RESOLVE = ("--resolve-dist", "--sccp", "--canonicalize")
-DEFAULT = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--in-place-updates", "--lower-to-qc")
+DEFAULT = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--cse", "--in-place-updates", "--lower-to-qc")
 
 
 def run(program: str, passes: Sequence[str] = DEFAULT, shots: int = 2000) -> Dict[int, int]:
