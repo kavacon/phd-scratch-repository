@@ -2,8 +2,7 @@ import subprocess
 import unittest
 
 from compiler.parser.parser import parse
-from experiment_existing_ir import export, semantics, simulate
-from experiment_existing_ir.reference import law
+from experiment_existing_ir import export, golden, simulate
 from experiment_existing_ir.translate import TranslationError, translate
 
 ARITHMETIC = "x = 5; y = x + 3; y = y - 1; return y;"
@@ -249,38 +248,37 @@ if __name__ == "__main__":
 
 
 @unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
-class Operators(unittest.TestCase):
-    """The circuit gives the reference's outcome law (computed from the source alone) for each operator and kind of interval."""
+class Golden(unittest.TestCase):
+    """A few entries of the golden table run through the pipeline: the outcome the language intends is the outcome produced."""
 
-    def agrees(self, source: str):
-        outcome = semantics.check(source, law(parse(source, "v2")))
-        self.assertEqual(outcome.status, "ok", f"{source}: {outcome.detail}")
+    def agrees(self, name: str):
+        entry = golden.entry(name)
+        status, detail = golden.check(entry.source, entry.outcomes)
+        self.assertEqual(status, "ok", f"{name}: {detail}")
 
     def test_products_comparisons_and_booleans_on_integers_and_distributions(self):
-        for source in ("x = -3; y = 5; return x * y;",
-                       "a = 0..4; b = 0..3; return a * b;",
-                       "a = 0..4; b = 0..2; return !(a < 2) || (b == 0 && a > 0);",
-                       "a = 0..3; b = 0..3; return a * a == b;"):
-            self.agrees(source)
+        for name in ("a product of negative integers", "a product of two distributions", "boolean operators",
+                     "equality of two distributions"):
+            self.agrees(name)
 
     def test_an_interval_may_be_any_size_and_start_anywhere(self):
-        for source in ("a = 0..6; return a;", "a = -2..3; return a;", "a = 1..12; return a;"):
-            self.agrees(source)
+        for name in ("an interval that is not a power of two", "an interval that does not start at zero"):
+            self.agrees(name)
 
 
 @unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
 class Interchange(unittest.TestCase):
-    """The exported text, run on a simulator that did not produce it, gives the outcome the reference works out."""
+    """The exported text, run on a simulator that did not produce it, gives the outcome the golden table intends."""
 
-    SOURCE = "a = 0..4; x = 2; if a < 2 { x += 3; } return x;"
+    ENTRY = "conditional on a distribution"
 
     def outcome(self, format: str, backend: str):
-        qc = simulate.optimise(program(self.SOURCE, "v2"), *simulate.DEFAULT)
+        entry = golden.entry(self.ENTRY)
+        qc = simulate.optimise(program(entry.source, "v2"), *simulate.DEFAULT)
         counts = export.BACKENDS[backend](export.export(qc, format), format, 2000)
-        return semantics.distance(counts, law(parse(self.SOURCE, "v2")))
+        return golden.distance(counts, entry.outcomes)
 
-    def test_every_format_agrees_with_the_reference_on_every_simulator_that_reads_it(self):
-        # the comparison subtracts, which is a gate of its own (not an inverted call) so that every reader accepts it
+    def test_every_format_gives_the_intended_outcome_on_every_simulator_that_reads_it(self):
         for format, backend in (("openqasm3", "aer"), ("openqasm3", "ddsim"), ("qir-base", "ddsim"), ("qir-adaptive", "ddsim"),
                                 ("jeff", "mqt")):
-            self.assertLess(self.outcome(format, backend), semantics.TOLERANCE, (format, backend))
+            self.assertLess(self.outcome(format, backend), golden.TOLERANCE, (format, backend))
