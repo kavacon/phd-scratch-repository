@@ -16,8 +16,9 @@ from experiment_existing_ir.semantics import PROGRAMS, TOLERANCE, distance
 from experiment_existing_ir.translate import TranslationError, translate
 
 SHOTS = 2000
-# (format, simulator) pairs: OpenQASM 3 runs on both; QIR only on DDSIM, the one simulator here that reads it.
-RUNS = (("openqasm3", "aer"), ("openqasm3", "ddsim"), ("qir-base", "ddsim"), ("qir-adaptive", "ddsim"))
+# (format, simulator) pairs: OpenQASM 3 runs on Aer and DDSIM; QIR only on DDSIM, the one simulator here that reads it; Jeff on MQT.
+RUNS = (("openqasm3", "aer"), ("openqasm3", "ddsim"), ("qir-base", "ddsim"), ("qir-adaptive", "ddsim"),
+        ("jeff", "mqt"))
 
 
 class Outcome(NamedTuple):
