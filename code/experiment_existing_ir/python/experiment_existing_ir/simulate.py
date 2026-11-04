@@ -80,7 +80,12 @@ def execute(qc: str, shots: int = 2000) -> Dict[int, int]:
 # which cell each reference names) and rewrites once from what it found; it refuses what the analysis could not decide.
 # Stock `canonicalize` then folds the constant selects and removes what is dead.
 RESOLVE = ("--resolve-dist", "--sccp", "--canonicalize")
-DEFAULT = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--cse", "--in-place-updates", "--lower-to-qc")
+# MQT's own pass that turns an inverse of several gates (or of a call) into the inverted gates in reverse order, and `canonicalize`
+# then folds each single-gate inverse (a self-adjoint gate is itself). The lowering writes a subtraction as the adder inside `qc.inv`,
+# which the exporters (DDSIM's OpenQASM reader, Jeff) do not take; after this the circuit has no modifier on a call.
+UNROLL_MODIFIERS = ("--unroll-modifiers", "--canonicalize")
+BEFORE_LOWERING = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--cse", "--in-place-updates")
+DEFAULT = (*BEFORE_LOWERING, "--lower-to-qc", *UNROLL_MODIFIERS)
 
 
 def run(program: str, passes: Sequence[str] = DEFAULT, shots: int = 2000) -> Dict[int, int]:
