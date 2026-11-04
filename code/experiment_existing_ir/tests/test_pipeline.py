@@ -2,7 +2,7 @@ import subprocess
 import unittest
 
 from compiler.parser.parser import parse
-from experiment_existing_ir import semantics, simulate
+from experiment_existing_ir import export, semantics, simulate
 from experiment_existing_ir.reference import law
 from experiment_existing_ir.translate import TranslationError, translate
 
@@ -266,3 +266,24 @@ class Operators(unittest.TestCase):
     def test_an_interval_may_be_any_size_and_start_anywhere(self):
         for source in ("a = 0..6; return a;", "a = -2..3; return a;", "a = 1..12; return a;"):
             self.agrees(source)
+
+
+@unittest.skipUnless(simulate.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
+class Interchange(unittest.TestCase):
+    """The exported text, run on a simulator that did not produce it, gives the outcome the reference works out."""
+
+    SOURCE = "a = 0..4; x = 2; if a < 2 { x += 3; } return x;"
+
+    def outcome(self, format: str, backend: str):
+        qc = simulate.optimise(program(self.SOURCE, "v2"), *simulate.DEFAULT)
+        counts = export.BACKENDS[backend](export.export(qc, format), format, 2000)
+        return semantics.distance(counts, law(parse(self.SOURCE, "v2")))
+
+    def test_qir_and_openqasm_agree_with_the_reference(self):
+        for format, backend in (("openqasm3", "aer"), ("qir-base", "ddsim"), ("qir-adaptive", "ddsim")):
+            self.assertLess(self.outcome(format, backend), semantics.TOLERANCE, (format, backend))
+
+    def test_a_format_that_cannot_hold_a_subroutine_inverted_is_refused_not_wrong(self):
+        # DDSIM's OpenQASM reader does not take `inv @` of a gate defined in the file, which a comparison uses
+        with self.assertRaises(Exception):
+            self.outcome("openqasm3", "ddsim")
