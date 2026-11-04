@@ -10,7 +10,7 @@ program is run through the whole pipeline and sampled on Aer, and its sampled ou
 import sys
 from typing import Dict, NamedTuple, Tuple
 
-from experiment_existing_ir import simulate
+from experiment_existing_ir import pipeline
 from experiment_existing_ir.translate import translate
 from compiler.parser.parser import parse
 
@@ -203,31 +203,3 @@ def distance(counts: Dict[int, int], expected: Dict[int, float]) -> float:
 
 def entry(name: str) -> Golden:
     return next(golden for golden in GOLDEN if golden.name == name)
-
-
-def check(source: str, expected: Dict[int, float]) -> Tuple[str, str]:
-    """("ok" or "WRONG" or "refused", detail) for one program run through the pipeline and sampled on Aer."""
-    try:
-        counts = simulate.run(translate(parse(source, "v2")), shots=SHOTS)
-    except Exception as error:  # the translation or the tool refused it
-        message = (getattr(error, "stderr", "") or str(error)).strip().splitlines()
-        return "refused", (message[0] if message else type(error).__name__)[:100]
-    gap = distance(counts, expected)
-    return ("ok" if gap < TOLERANCE else "WRONG"), f"distance {gap:.2f}, got {dict(sorted(counts.items()))}"
-
-
-def main() -> None:
-    wrong = []
-    print(f"{'program':<60}{'result':<10}")
-    for golden in GOLDEN:
-        status, detail = check(golden.source, golden.outcomes)
-        print(f"{golden.name:<60}{status:<10}")
-        if status != "ok":
-            wrong.append(golden.name)
-            print(f"{'':<60}{detail}")
-    print(f"\nnot matching the golden table: {len(wrong)}" + ("" if not wrong else "  -> " + "; ".join(wrong)))
-    sys.exit(1 if wrong else 0)
-
-
-if __name__ == "__main__":
-    main()

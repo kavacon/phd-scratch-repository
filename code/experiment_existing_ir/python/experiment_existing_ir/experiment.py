@@ -10,10 +10,10 @@ Needs the tool built first: `helper/cpp/setup.sh`, then `experiment_existing_ir/
 import subprocess
 
 from compiler.parser.parser import parse
-from experiment_existing_ir import simulate
+from experiment_existing_ir import pipeline
 from experiment_existing_ir.translate import translate
 
-PASSES = (*simulate.BEFORE_LOWERING, "--dist-status", "--lower-to-qc", *simulate.UNROLL_MODIFIERS)
+PASSES = (*pipeline.BEFORE_LOWERING, "--dist-status", "--lower-to-qc", *pipeline.UNROLL_MODIFIERS)
 PROGRAMS = {
     "arithmetic": ("x = 5; y = x + 3; y = y - 1; return y;", "v1"),
     "conditional on a distribution": ("a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;", "v2"),
@@ -27,10 +27,10 @@ def main() -> None:
     for title, (source, grammar) in PROGRAMS.items():
         program = translate(parse(source, grammar))
         print(f"\n==== {title}\n{source}\n\ntranslated:\n{program}")
-        stages = subprocess.run(simulate.command(*PASSES, "--mlir-print-ir-after-all"), input=program, capture_output=True,
+        stages = subprocess.run(pipeline.command(*PASSES, "--mlir-print-ir-after-all"), input=program, capture_output=True,
                                 text=True, check=True).stderr
         print(f"\nafter each pass:\n{stages}")
-        print(f"run on Qiskit Aer via OpenQASM 3: {simulate.run(program, PASSES)}")
+        print(f"run on Qiskit Aer via OpenQASM 3: {pipeline.run(program, PASSES)}")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,6 @@ MLIR's own passes and ours, and handed to MQT's compiler for the quantum side, w
 the experiment page in Notion for the aim, the strategies and the work plan.
 
 The Python side translates source programs to MLIR text (`translate`) and runs the result through the C++ tool and MQT
-(`simulate`). The tool, `cpp/`, holds the experiment's own pieces: the `dist` dialect, `resolve-dist` (one dataflow analysis and one rewrite that
+(`pipeline`). The tool, `cpp/`, holds the experiment's own pieces: the `dist` dialect, `resolve-dist` (one dataflow analysis and one rewrite that
 resolve references, kinds and conditionals) and the `lower-to-qc` pass. Everything else is MLIR's.
 """
