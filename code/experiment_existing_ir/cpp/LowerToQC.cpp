@@ -45,25 +45,15 @@ void controlledX(OpBuilder &b, Location loc, ValueRange controls, Value target) 
 }
 
 std::string adderName(unsigned width) { return "add" + std::to_string(width); }
-// The inverse of an adder is its gates in the opposite order (every one is its own inverse), so a subtraction calls a gate of its
-// own; wrapping a call in `qc.inv` would be the same circuit, but the exporters (Jeff, DDSIM's OpenQASM reader) do not take it.
-std::string subtractorName(unsigned width) { return "sub" + std::to_string(width); }
-
-// Call the adder (or, for `inverse`, the subtractor) of this width on the given qubits.
-void callAdder(OpBuilder &b, Location loc, unsigned width, bool inverse, ValueRange args) {
-  auto callee = FlatSymbolRefAttr::get(b.getContext(), inverse ? subtractorName(width) : adderName(width));
-  mlir::qc::CallOp::create(b, loc, callee, args);
-}
 
 // The ripple-carry adder of Cuccaro et al. on parameters a = 0..w-1, b = w..2w-1 and carry = 2w: b becomes (a + b)
-// modulo 2^w, and a and the carry are unchanged. Two's complement needs nothing more. Its inverse, b - a, is the same gates
-// in the opposite order.
-void defineAdder(ModuleOp module, unsigned width, bool inverse) {
+// modulo 2^w, and a and the carry are unchanged. Two's complement needs nothing more.
+void defineAdder(ModuleOp module, unsigned width) {
   OpBuilder b(module.getBodyRegion());
   b.setInsertionPointToEnd(module.getBody());
   Location loc = module.getLoc();
   SmallVector<Type> params(2 * width + 1, qubit(b.getContext()));
-  auto fn = func::FuncOp::create(b, loc, inverse ? subtractorName(width) : adderName(width), b.getFunctionType(params, {}));
+  auto fn = func::FuncOp::create(b, loc, adderName(width), b.getFunctionType(params, {}));
   fn.setPrivate();
   fn->setAttr("mqt.unitary", b.getUnitAttr());
   Block *block = fn.addEntryBlock();
@@ -71,21 +61,16 @@ void defineAdder(ModuleOp module, unsigned width, bool inverse) {
   auto a = [&](unsigned i) { return block->getArgument(i); };
   auto bb = [&](unsigned i) { return block->getArgument(width + i); };
   auto carry = [&](unsigned i) { return i == 0 ? block->getArgument(2 * width) : a(i - 1); };
-  SmallVector<std::pair<SmallVector<Value>, Value>> gates;  // (controls, target) in the order of the adder
   for (unsigned i = 0; i < width; ++i) {  // majority
-    gates.push_back({{a(i)}, bb(i)});
-    gates.push_back({{a(i)}, carry(i)});
-    gates.push_back({{carry(i), bb(i)}, a(i)});
+    controlledX(b, loc, {a(i)}, bb(i));
+    controlledX(b, loc, {a(i)}, carry(i));
+    controlledX(b, loc, {carry(i), bb(i)}, a(i));
   }
   for (unsigned i = width; i-- > 0;) {  // unmajority and add
-    gates.push_back({{carry(i), bb(i)}, a(i)});
-    gates.push_back({{a(i)}, carry(i)});
-    gates.push_back({{carry(i)}, bb(i)});
+    controlledX(b, loc, {carry(i), bb(i)}, a(i));
+    controlledX(b, loc, {a(i)}, carry(i));
+    controlledX(b, loc, {carry(i)}, bb(i));
   }
-  if (inverse)
-    std::reverse(gates.begin(), gates.end());
-  for (auto &[controls, target] : gates)
-    controlledX(b, loc, controls, target);
   func::ReturnOp::create(b, loc);
 }
 
@@ -136,7 +121,12 @@ Value sum(OpBuilder &rw, Location loc, Value lhs, Value rhs, unsigned width, boo
   SmallVector<Value> args(tmp);
   args.append(res.begin(), res.end());
   args.push_back(c[0]);
-  callAdder(rw, loc, width, inverse, args);
+  auto callee = FlatSymbolRefAttr::get(rw.getContext(), adderName(width));
+  if (!inverse) {
+    mlir::qc::CallOp::create(rw, loc, callee, args);
+  } else {
+    mlir::qc::InvOp::create(rw, loc, args, [&](ValueRange inner) { mlir::qc::CallOp::create(rw, loc, callee, inner); });
+  }
   return result;
 }
 
@@ -223,6 +213,7 @@ Value product(OpBuilder &rw, Location loc, Value lhs, Value rhs, unsigned width)
   SmallVector<Value> args(p), res = load(rw, loc, result);
   args.append(res.begin(), res.end());
   args.push_back(c[0]);
+  auto callee = FlatSymbolRefAttr::get(rw.getContext(), adderName(width));
   for (unsigned i = 0; i < width; ++i) {
     Value bit = l[std::min<size_t>(i, l.size() - 1)];
     auto toffolis = [&] {
@@ -230,7 +221,7 @@ Value product(OpBuilder &rw, Location loc, Value lhs, Value rhs, unsigned width)
         controlledX(rw, loc, {bit, r[std::min<size_t>(k - i, r.size() - 1)]}, p[k]);
     };
     toffolis();
-    callAdder(rw, loc, width, false, args);
+    mlir::qc::CallOp::create(rw, loc, callee, args);
     toffolis();
   }
   return result;
@@ -317,7 +308,11 @@ struct Update : OpRewritePattern<Op> {
     SmallVector<Value> args(temporary);
     args.append(targetQubits.begin(), targetQubits.end());
     args.push_back(c[0]);
-    callAdder(rw, loc, width, Inverse, args);
+    auto callee = FlatSymbolRefAttr::get(rw.getContext(), adderName(width));
+    if (!Inverse)
+      mlir::qc::CallOp::create(rw, loc, callee, args);
+    else
+      mlir::qc::InvOp::create(rw, loc, args, [&](ValueRange inner) { mlir::qc::CallOp::create(rw, loc, callee, inner); });
     rw.replaceOp(op, target);
     return success();
   }
@@ -593,26 +588,23 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     for (auto &member : parent)
       widths[member.first] = registerWidths[find(member.first)];
 
-    // 3. The adders and subtractors needed, at the widths the registers now have.
-    std::set<unsigned> adders, subtractors;
+    // 3. The adders needed, at the widths the registers now have.
+    std::set<unsigned> adders;
     module.walk([&](Operation *op) {
-      if (isa<arith::AddIOp, arith::MulIOp, existing_ir::dist::AddIOp, existing_ir::dist::MulIOp, existing_ir::dist::AddAssignOp>(op))
+      if (isa<arith::AddIOp, arith::SubIOp, arith::MulIOp, existing_ir::dist::AddIOp, existing_ir::dist::SubIOp,
+              existing_ir::dist::MulIOp, existing_ir::dist::AddAssignOp, existing_ir::dist::SubAssignOp>(op))
         adders.insert(widths.lookup(op->getResult(0)));
-      if (isa<arith::SubIOp, existing_ir::dist::SubIOp, existing_ir::dist::SubAssignOp>(op))
-        subtractors.insert(widths.lookup(op->getResult(0)));
-      // An order comparison subtracts in one bit more than its wider operand; an equality needs neither.
+      // An order comparison subtracts in one bit more than its wider operand; an equality needs no adder.
       if (auto cmp = dyn_cast<arith::CmpIOp>(op); cmp && cmp.getPredicate() != arith::CmpIPredicate::eq &&
                                                     cmp.getPredicate() != arith::CmpIPredicate::ne)
-        subtractors.insert(std::max(widths.lookup(cmp.getLhs()), widths.lookup(cmp.getRhs())) + 1);
+        adders.insert(std::max(widths.lookup(cmp.getLhs()), widths.lookup(cmp.getRhs())) + 1);
       if (auto uniform = dyn_cast<existing_ir::dist::UniformOp>(op); uniform && int32_t(uniform.getStart()) != 0)
         adders.insert(widths.lookup(uniform.getResult()));
       if (auto slt = dyn_cast<existing_ir::dist::SltOp>(op))
-        subtractors.insert(std::max(widths.lookup(slt.getLhs()), widths.lookup(slt.getRhs())) + 1);
+        adders.insert(std::max(widths.lookup(slt.getLhs()), widths.lookup(slt.getRhs())) + 1);
     });
     for (unsigned width : adders)
-      defineAdder(module, width, false);
-    for (unsigned width : subtractors)
-      defineAdder(module, width, true);
+      defineAdder(module, width);
 
     RewritePatternSet patterns(&getContext());
     patterns.add<Constant>(&getContext(), widths);
