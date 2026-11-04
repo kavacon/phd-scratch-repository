@@ -44,7 +44,9 @@ class Metrics(unittest.TestCase):
     def test_the_tool_refuses_a_program_that_needs_more_qubits_than_the_system_describes(self):
         source = translate(parse("a = 0..4; b = 0..3; return a * b;", "v2"))
         needed = metrics.fit(pipeline.build(source, *pipeline.DEFAULT), System(qubits=1000)).needed
-        pipeline.build(source, *pipeline.DEFAULT, system=System(qubits=needed))  # exactly enough: built
+        # exactly enough: built, and the target information, used up by the lowering, does not stop MQT reading the result
+        built = pipeline.build(source, *pipeline.DEFAULT, pipeline.Export("openqasm3"), system=System(qubits=needed))
+        self.assertIn("OPENQASM", built)
         with self.assertRaises(subprocess.CalledProcessError) as raised:
             pipeline.build(source, *pipeline.DEFAULT, system=System(qubits=needed - 1))
         self.assertIn(f"needs {needed} qubits at once but the system has {needed - 1}", raised.exception.stderr)

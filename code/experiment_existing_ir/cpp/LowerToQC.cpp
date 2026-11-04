@@ -632,6 +632,8 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
       return signalPassFailure();
     if (failed(checkQubitBudget(module)))
       return signalPassFailure();
+    // The target information has been used; the QC program is MQT's, and its parser does not know the dialect.
+    module->removeAttr(DLTIDialect::kTargetSystemDescAttrName);
   }
 
   // The most qubits live at once in `main`, in program order: a register is live from its allocation to its deallocation. It is
