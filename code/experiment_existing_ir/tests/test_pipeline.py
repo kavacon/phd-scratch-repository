@@ -279,11 +279,8 @@ class Interchange(unittest.TestCase):
         counts = export.BACKENDS[backend](export.export(qc, format), format, 2000)
         return semantics.distance(counts, law(parse(self.SOURCE, "v2")))
 
-    def test_qir_and_openqasm_agree_with_the_reference(self):
-        for format, backend in (("openqasm3", "aer"), ("qir-base", "ddsim"), ("qir-adaptive", "ddsim")):
+    def test_every_format_agrees_with_the_reference_on_every_simulator_that_reads_it(self):
+        # the comparison subtracts, which is a gate of its own (not an inverted call) so that every reader accepts it
+        for format, backend in (("openqasm3", "aer"), ("openqasm3", "ddsim"), ("qir-base", "ddsim"), ("qir-adaptive", "ddsim"),
+                                ("jeff", "mqt")):
             self.assertLess(self.outcome(format, backend), semantics.TOLERANCE, (format, backend))
-
-    def test_a_format_that_cannot_hold_a_subroutine_inverted_is_refused_not_wrong(self):
-        # DDSIM's OpenQASM reader does not take `inv @` of a gate defined in the file, which a comparison uses
-        with self.assertRaises(Exception):
-            self.outcome("openqasm3", "ddsim")
