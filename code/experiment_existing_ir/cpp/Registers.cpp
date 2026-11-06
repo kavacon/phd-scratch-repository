@@ -12,6 +12,9 @@
 //   `existing_ir.register`: for each result, the number of its register (counted from 0 in order of first appearance), or -1 if
 //                           the result is not held in a register;
 //   `existing_ir.qubits`:   for each result, the qubits of its register, or 0;
+//   `existing_ir.scratch`:  on an operation that needs temporaries while it runs, how many qubits it allocates for them (an operand
+//                           copy and a carry for a sum, the difference register of a comparison, ...). They are not values; the
+//                           lowering allocates exactly these, and nothing releases them yet;
 //   `existing_ir.in_place`: on an update done in its target's register; `existing_ir.reuse`: on a lift that is its integer's register.
 // (Reading a distribution, `dist.measure`, is its register too: the measurement is the program's return.)
 #include "Dialects.h"
@@ -21,6 +24,7 @@
 #include "mlir/Analysis/DataFlowFramework.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Pass/Pass.h"
+#include "llvm/Support/MathExtras.h"
 
 using namespace mlir;
 using namespace existing_ir::dist;
@@ -94,6 +98,52 @@ void existing_ir::planRegisters(ModuleOp module) {
   for (auto &member : parent)
     registerWidths[find(member.first)] = std::max(registerWidths[find(member.first)], widths.lookup(member.first));
 
+  // The qubits of the register that holds a value, once the values that share one are as wide as the widest of them.
+  auto qubitsOf = [&](Value value) -> int64_t {
+    auto it = widths.find(value);
+    if (it == widths.end())
+      return 0;
+    return parent.contains(value) ? registerWidths[find(value)] : it->second;
+  };
+  // The temporaries each operation allocates, as the lowering's patterns do (see LowerToQC.cpp). `sum` is a result register, an
+  // operand copy and a carry; a comparison takes the difference of its operands one bit wider; a product takes a partial product
+  // and a carry; an operation with the same value for both operands copies it first, since one qubit cannot control a gate twice.
+  auto scratchOf = [&](Operation *op) -> int64_t {
+    auto sum = [&](Value result) { return qubitsOf(result) + 1; };
+    auto order = [&](Value lhs, Value rhs) { return 2 * (std::max(qubitsOf(lhs), qubitsOf(rhs)) + 1) + 1; };
+    auto equality = [&](Value lhs, Value rhs) { return std::max(qubitsOf(lhs), qubitsOf(rhs)); };
+    auto copy = [&](Value lhs, Value rhs) { return lhs == rhs ? qubitsOf(rhs) : int64_t(0); };
+    if (isa<arith::AddIOp, arith::SubIOp, AddIOp, SubIOp, AddAssignOp, SubAssignOp>(op))
+      return sum(op->getResult(0));
+    if (isa<arith::MulIOp, MulIOp>(op))
+      return sum(op->getResult(0)) + copy(op->getOperand(0), op->getOperand(1));
+    if (isa<arith::AndIOp, arith::OrIOp, AndIOp, OrIOp, XOrIOp>(op) || isa<arith::XOrIOp>(op))
+      return copy(op->getOperand(0), op->getOperand(1));
+    if (auto cmp = dyn_cast<arith::CmpIOp>(op))
+      return cmp.getPredicate() == arith::CmpIPredicate::eq || cmp.getPredicate() == arith::CmpIPredicate::ne
+                 ? equality(cmp.getLhs(), cmp.getRhs())
+                 : order(cmp.getLhs(), cmp.getRhs());
+    if (auto slt = dyn_cast<SltOp>(op))
+      return order(slt.getLhs(), slt.getRhs());
+    if (auto eq = dyn_cast<EqOp>(op))
+      return equality(eq.getLhs(), eq.getRhs());
+    if (isa<arith::SelectOp>(op))
+      return qubitsOf(op->getResult(0));
+    if (isa<SelectOp>(op)) {  // a difference register for each variable the conditional changes
+      int64_t total = 0;
+      for (Value result : op->getResults())
+        total += qubitsOf(result);
+      return total;
+    }
+    if (auto uniform = dyn_cast<UniformOp>(op); uniform && int32_t(uniform.getStart()) != 0) {
+      // prepared on its own register, an offset register, then the sum of the two
+      int64_t n = int64_t(int32_t(uniform.getStop())) - int32_t(uniform.getStart());
+      int64_t prepared = std::max<int64_t>(llvm::Log2_64_Ceil(n), 1) + 1;
+      return prepared + qubitsOf(uniform.getResult()) + sum(uniform.getResult());
+    }
+    return 0;
+  };
+
   // Write the plan, numbering the registers in order of first appearance.
   DenseMap<Value, int64_t> number;
   Builder builder(context);
@@ -117,6 +167,8 @@ void existing_ir::planRegisters(ModuleOp module) {
       op->setAttr("existing_ir.register", builder.getDenseI64ArrayAttr(registers));
       op->setAttr("existing_ir.qubits", builder.getDenseI64ArrayAttr(qubits));
     }
+    if (int64_t scratch = scratchOf(op))
+      op->setAttr("existing_ir.scratch", builder.getI64IntegerAttr(scratch));
     if (inPlace.contains(op))
       op->setAttr("existing_ir.in_place", builder.getUnitAttr());
     if (reuse.contains(op))
