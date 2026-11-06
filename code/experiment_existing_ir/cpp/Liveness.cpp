@@ -20,6 +20,44 @@
 
 using namespace mlir;
 
+// The register intervals, the qubits live while each operation runs, and each operation's scratch, for a function that is one block.
+bool existing_ir::computeTimeline(func::FuncOp function, QubitTimeline &timeline) {
+  if (!function.getBody().hasOneBlock())
+    return false;  // the program has been resolved to straight-line code; anything else is not measured
+  Liveness liveness(function);
+  DenseMap<Operation *, int64_t> index;
+  function.walk([&](Operation *op) {
+    index[op] = timeline.order.size();
+    timeline.order.push_back(op);
+  });
+  for (Operation *op : timeline.order) {
+    auto numbers = op->getAttrOfType<DenseI64ArrayAttr>("existing_ir.register");
+    auto qubits = op->getAttrOfType<DenseI64ArrayAttr>("existing_ir.qubits");
+    if (!numbers)
+      continue;
+    for (auto [result, number, n] : llvm::zip(op->getResults(), numbers.asArrayRef(), qubits.asArrayRef())) {
+      if (number < 0)
+        continue;
+      Operation *end = liveness.getLiveness(op->getBlock())->getEndOperation(result, op);
+      auto [it, fresh] = timeline.registers.try_emplace(number, existing_ir::QubitTimeline::Register{index[op], index[end], n});
+      if (!fresh) {
+        it->second.first = std::min(it->second.first, index[op]);
+        it->second.last = std::max(it->second.last, index[end]);
+      }
+    }
+  }
+  for (Operation *op : timeline.order) {
+    int64_t live = 0, here = index[op];
+    for (auto &entry : timeline.registers)
+      if (entry.second.first <= here && here <= entry.second.last)
+        live += entry.second.qubits;
+    auto scratch = op->getAttrOfType<IntegerAttr>("existing_ir.scratch");
+    timeline.live.push_back(live);
+    timeline.scratch.push_back(scratch ? scratch.getInt() : 0);
+  }
+  return true;
+}
+
 namespace {
 struct QubitLiveness : PassWrapper<QubitLiveness, OperationPass<func::FuncOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(QubitLiveness)
@@ -28,56 +66,21 @@ struct QubitLiveness : PassWrapper<QubitLiveness, OperationPass<func::FuncOp>> {
 
   void runOnOperation() override {
     func::FuncOp function = getOperation();
-    if (!function.getBody().hasOneBlock())
-      return;  // the program has been resolved to straight-line code; anything else is not measured
-    Liveness liveness(function);
-    SmallVector<Operation *> order;
-    DenseMap<Operation *, int64_t> index;
-    function.walk([&](Operation *op) {
-      index[op] = order.size();
-      order.push_back(op);
-    });
-    // The interval of operations in which each register is live, and its qubits.
-    struct Interval { int64_t first, last, qubits; };
-    DenseMap<int64_t, Interval> registers;
-    for (Operation *op : order) {
-      auto numbers = op->getAttrOfType<DenseI64ArrayAttr>("existing_ir.register");
-      auto qubits = op->getAttrOfType<DenseI64ArrayAttr>("existing_ir.qubits");
-      if (!numbers)
-        continue;
-      for (auto [result, number, n] : llvm::zip(op->getResults(), numbers.asArrayRef(), qubits.asArrayRef())) {
-        if (number < 0)
-          continue;
-        Operation *end = liveness.getLiveness(op->getBlock())->getEndOperation(result, op);
-        auto [it, fresh] = registers.try_emplace(number, Interval{index[op], index[end], n});
-        if (!fresh) {
-          it->second.first = std::min(it->second.first, index[op]);
-          it->second.last = std::max(it->second.last, index[end]);
-        }
-      }
-    }
+    existing_ir::QubitTimeline timeline;
+    if (!computeTimeline(function, timeline))
+      return;
     Builder builder(&getContext());
-    int64_t total = 0, peak = 0;
-    for (auto &entry : registers)
+    int64_t total = 0, scratchTotal = 0, scratchMax = 0, peak = 0, pool = 0;
+    for (auto &entry : timeline.registers)
       total += entry.second.qubits;
-    for (Operation *op : order) {
-      int64_t live = 0, here = index[op];
-      for (auto &entry : registers)
-        if (entry.second.first <= here && here <= entry.second.last)
-          live += entry.second.qubits;
+    for (size_t i = 0; i < timeline.order.size(); ++i) {
+      int64_t live = timeline.live[i], n = timeline.scratch[i];
       peak = std::max(peak, live);
-      if (live)
-        op->setAttr("existing_ir.live_qubits", builder.getI64IntegerAttr(live));
-    }
-    int64_t scratchTotal = 0, scratchMax = 0, pool = 0;
-    for (Operation *op : order) {
-      auto scratch = op->getAttrOfType<IntegerAttr>("existing_ir.scratch");
-      int64_t n = scratch ? scratch.getInt() : 0, live = 0;
-      if (auto attr = op->getAttrOfType<IntegerAttr>("existing_ir.live_qubits"))
-        live = attr.getInt();
       scratchTotal += n;
       scratchMax = std::max(scratchMax, n);
       pool = std::max(pool, live + n);
+      if (live)
+        timeline.order[i]->setAttr("existing_ir.live_qubits", builder.getI64IntegerAttr(live));
     }
     function->setAttr("existing_ir.qubits_held", builder.getI64IntegerAttr(total + scratchTotal));
     function->setAttr("existing_ir.qubits_dedicated", builder.getI64IntegerAttr(total + scratchMax));

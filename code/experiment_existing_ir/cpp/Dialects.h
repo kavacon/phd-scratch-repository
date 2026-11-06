@@ -2,6 +2,7 @@
 // MQT's own QC and cbit dialects (built from source under code/build), plus our `dist` dialect.
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
@@ -23,6 +24,16 @@
 #include "DistOps.h.inc"
 
 namespace existing_ir {
+// When each register is live, from the plan (see Liveness.cpp). Indexes are positions in `order`.
+struct QubitTimeline {
+  struct Register { int64_t first, last, qubits; };
+  llvm::SmallVector<mlir::Operation *> order;
+  llvm::DenseMap<int64_t, Register> registers;  // by register number
+  llvm::SmallVector<int64_t> live;              // qubits live while each operation runs, operands and results included
+  llvm::SmallVector<int64_t> scratch;           // the temporaries each operation allocates
+};
+bool computeTimeline(mlir::func::FuncOp function, QubitTimeline &timeline);
+
 // Registers the passes of this project.
 void registerLowerToQC();
 void registerDistStatus();
@@ -31,6 +42,7 @@ void registerInPlaceUpdates();
 void registerResolveDist();
 void registerPlanRegisters();
 void registerQubitLiveness();
+void registerClassifyRelease();
 // The plan of `plan-registers`, written on the operations of the module (see Registers.cpp).
 void planRegisters(mlir::ModuleOp module);
 } // namespace existing_ir
