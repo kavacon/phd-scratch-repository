@@ -2,6 +2,7 @@
 // MQT's own QC and cbit dialects (built from source under code/build), plus our `dist` dialect.
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/DialectImplementation.h"
@@ -28,4 +29,8 @@ void registerDistStatus();
 void registerInstances();
 void registerInPlaceUpdates();
 void registerResolveDist();
+void registerPlanRegisters();
+void registerQubitLiveness();
+// The plan of `plan-registers`, written on the operations of the module (see Registers.cpp).
+void planRegisters(mlir::ModuleOp module);
 } // namespace existing_ir

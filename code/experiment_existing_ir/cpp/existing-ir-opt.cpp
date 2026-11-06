@@ -27,6 +27,8 @@ int main(int argc, char **argv) {
   existing_ir::registerInstances();
   existing_ir::registerInPlaceUpdates();
   existing_ir::registerResolveDist();
+  existing_ir::registerPlanRegisters();
+  existing_ir::registerQubitLiveness();
   mlir::DialectRegistry registry;
   mlir::registerAllDialects(registry);
   mlir::func::registerInlinerExtension(registry);

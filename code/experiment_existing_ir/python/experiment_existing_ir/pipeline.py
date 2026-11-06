@@ -42,7 +42,7 @@ def built() -> bool:
 
 
 # The tool's own passes that are anchored on a function. Flags nest them by themselves; in a pipeline they are nested here.
-FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "resolve-dist"}
+FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "resolve-dist", "qubit-liveness"}
 
 
 def command(*passes: str) -> list:
@@ -71,7 +71,7 @@ RESOLVE = ("--resolve-dist", "--sccp", "--canonicalize")
 # which the exporters (DDSIM's OpenQASM reader, Jeff) do not take; after this the circuit has no modifier on a call.
 UNROLL_MODIFIERS = ("--unroll-modifiers", "--canonicalize")
 BEFORE_LOWERING = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--cse", "--in-place-updates")
-DEFAULT = (*BEFORE_LOWERING, "--lower-to-qc", *UNROLL_MODIFIERS)
+DEFAULT = (*BEFORE_LOWERING, "--plan-registers", "--lower-to-qc", *UNROLL_MODIFIERS)
 
 
 class Export(NamedTuple):
