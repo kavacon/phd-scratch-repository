@@ -6,8 +6,13 @@
 //   on the function: `existing_ir.logical_qubits`: the qubits of all the registers, which is what holding every register costs;
 //                    `existing_ir.peak_logical_qubits`: the most qubits live at once if each register is released at its last use;
 //   on each operation: `existing_ir.live_qubits`: the qubits live while it runs (its operands and results included).
-// These are the qubits of the values themselves. The temporaries an operation uses while it runs (an operand copy, a carry) are
-// not values and are not counted here.
+// The first two count the values themselves. The temporaries an operation uses while it runs (an operand copy, a carry) are the
+// plan's `existing_ir.scratch`, and three ways of providing them are counted on the function:
+//   `existing_ir.qubits_held`:      every register and every operation's temporaries held to the return (what the lowering does now);
+//   `existing_ir.qubits_dedicated`: every register held, and one scratch region shared by all operations, as large as the
+//                                   largest any operation needs (each operation leaves it clean);
+//   `existing_ir.qubits_pool`:      registers released at their last use and temporaries freed when their operation ends, so the
+//                                   most live at once is the worst operation's live registers plus its temporaries.
 #include "Dialects.h"
 #include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -64,6 +69,19 @@ struct QubitLiveness : PassWrapper<QubitLiveness, OperationPass<func::FuncOp>> {
       if (live)
         op->setAttr("existing_ir.live_qubits", builder.getI64IntegerAttr(live));
     }
+    int64_t scratchTotal = 0, scratchMax = 0, pool = 0;
+    for (Operation *op : order) {
+      auto scratch = op->getAttrOfType<IntegerAttr>("existing_ir.scratch");
+      int64_t n = scratch ? scratch.getInt() : 0, live = 0;
+      if (auto attr = op->getAttrOfType<IntegerAttr>("existing_ir.live_qubits"))
+        live = attr.getInt();
+      scratchTotal += n;
+      scratchMax = std::max(scratchMax, n);
+      pool = std::max(pool, live + n);
+    }
+    function->setAttr("existing_ir.qubits_held", builder.getI64IntegerAttr(total + scratchTotal));
+    function->setAttr("existing_ir.qubits_dedicated", builder.getI64IntegerAttr(total + scratchMax));
+    function->setAttr("existing_ir.qubits_pool", builder.getI64IntegerAttr(pool));
     function->setAttr("existing_ir.logical_qubits", builder.getI64IntegerAttr(total));
     function->setAttr("existing_ir.peak_logical_qubits", builder.getI64IntegerAttr(peak));
   }

@@ -4,6 +4,7 @@ import unittest
 from compiler.parser.parser import parse
 from experiment_existing_ir import pipeline
 from experiment_existing_ir.translate import translate
+from tests.golden import GOLDEN
 
 
 def planned(source: str, *passes: str) -> str:
@@ -28,6 +29,17 @@ class Registers(unittest.TestCase):
         # the lowering holds every register to the return and adds the temporaries of each operation, so it needs more than either
         built = pipeline.build(translate(parse("a = 0..4; b = a + 1; c = b - a; d = c + c; return d;", "v2")), *pipeline.DEFAULT)
         self.assertGreater(int(re.search(r"existing_ir\.peak_qubits = (\d+)", built).group(1)), held)
+
+    def test_the_planned_qubits_are_exactly_what_the_lowering_allocates_and_each_way_of_providing_scratch_needs_no_more_than_the_last(self):
+        for golden in GOLDEN:
+            program = translate(parse(golden.source, "v2"))
+            plan = pipeline.optimise(program, *pipeline.BEFORE_LOWERING, "--plan-registers", "--qubit-liveness")
+            held, dedicated, pool = (int(re.search(rf"existing_ir\.{key} = (\d+)", plan).group(1))
+                                     for key in ("qubits_held", "qubits_dedicated", "qubits_pool"))
+            lowered = int(re.search(r"existing_ir\.peak_qubits = (\d+)", pipeline.build(program, *pipeline.DEFAULT)).group(1))
+            self.assertEqual(held, lowered, golden.name)
+            self.assertLessEqual(pool, dedicated, golden.name)
+            self.assertLessEqual(dedicated, held, golden.name)
 
 
 if __name__ == "__main__":
