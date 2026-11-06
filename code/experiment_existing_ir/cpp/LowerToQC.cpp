@@ -521,73 +521,23 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
 
   void runOnOperation() override {
     ModuleOp module = getOperation();
-    // A constant distribution is a lift of an integer constant again, which is what becomes a register.
-    module.walk([&](existing_ir::dist::ConstantOp constant) {
-      OpBuilder builder(constant);
-      Value integer = arith::ConstantOp::create(builder, constant.getLoc(), constant.getValue().getValue());
-      constant.replaceAllUsesWith(existing_ir::dist::LiftOp::create(builder, constant.getLoc(), constant.getType(), integer).getResult());
-      constant.erase();
-    });
-    // MLIR's own range analysis sizes each register; no analysis of ours.
-    DataFlowSolver solver;
-    solver.load<dataflow::DeadCodeAnalysis>();
-    solver.load<dataflow::SparseConstantPropagation>();
-    solver.load<dataflow::IntegerRangeAnalysis>();
-    if (failed(solver.initializeAndRun(module)))
-      return signalPassFailure();
-    // 1. The width each value needs, from the range analysis. A distribution's width is its element's: the analysis
-    //    follows it through the interface on our operations.
+    // The registers are the plan of `plan-registers` (Registers.cpp): made here when no pass has made it yet.
+    bool planned = false;
+    module.walk([&](Operation *op) { planned |= op->hasAttr("existing_ir.qubits"); });
+    if (!planned)
+      existing_ir::planRegisters(module);
     Widths widths;
-    module.walk([&](Operation *op) {
-      for (Value result : op->getResults()) {
-        Type resultType = result.getType();
-        if (auto dist = dyn_cast<existing_ir::dist::DistType>(resultType))
-          resultType = dist.getElement();
-        auto type = dyn_cast<IntegerType>(resultType);
-        auto *lattice = solver.lookupState<dataflow::IntegerValueRangeLattice>(result);
-        if (!type || !lattice || lattice->getValue().isUninitialized())
-          continue;
-        const ConstantIntRanges &range = lattice->getValue().getValue();
-        unsigned width = std::max(range.smin().getSignificantBits(), range.smax().getSignificantBits());
-        widths[result] = std::min(width, type.getWidth());
-      }
-    });
-
-    // 2. An update may work in its target's register when no other use of the target comes after it. The values of such
-    //    a chain of updates share one register, so it is made as wide as the widest of them and no update needs a wider
-    //    one than its target has.
     DenseSet<Operation *> inPlace, reuse;
-    DenseMap<Value, Value> parent;  // union-find over the values that share a register
-    auto find = [&](Value value) {
-      while (parent.contains(value) && parent[value] != value)
-        value = parent[value];
-      return value;
-    };
     module.walk([&](Operation *op) {
-      // A lift that reuses its integer's register shares it with the distribution, so they are one register.
-      if (auto lift = dyn_cast<existing_ir::dist::LiftOp>(op); lift && lift.getInput().hasOneUse()) {
+      if (auto qubits = op->getAttrOfType<DenseI64ArrayAttr>("existing_ir.qubits"))
+        for (auto [result, n] : llvm::zip(op->getResults(), qubits.asArrayRef()))
+          if (n > 0)
+            widths[result] = n;
+      if (op->hasAttr("existing_ir.in_place"))
+        inPlace.insert(op);
+      if (op->hasAttr("existing_ir.reuse"))
         reuse.insert(op);
-        parent.try_emplace(lift.getInput(), lift.getInput());
-        parent.try_emplace(lift.getResult(), lift.getResult());
-        parent[find(lift.getResult())] = find(lift.getInput());
-      }
-      if (!isa<existing_ir::dist::AddAssignOp, existing_ir::dist::SubAssignOp>(op))
-        return;
-      bool laterUse = llvm::any_of(op->getOperand(0).getUsers(), [&](Operation *user) {
-        return user != op && (user->getBlock() != op->getBlock() || !user->isBeforeInBlock(op));
-      });
-      if (laterUse)
-        return;
-      inPlace.insert(op);
-      parent.try_emplace(op->getOperand(0), op->getOperand(0));
-      parent.try_emplace(op->getResult(0), op->getResult(0));
-      parent[find(op->getResult(0))] = find(op->getOperand(0));
     });
-    DenseMap<Value, unsigned> registerWidths;
-    for (auto &member : parent)
-      registerWidths[find(member.first)] = std::max(registerWidths[find(member.first)], widths.lookup(member.first));
-    for (auto &member : parent)
-      widths[member.first] = registerWidths[find(member.first)];
 
     // 3. The adders needed, at the widths the registers now have.
     std::set<unsigned> adders;
