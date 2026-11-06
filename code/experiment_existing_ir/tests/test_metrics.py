@@ -49,7 +49,7 @@ class Metrics(unittest.TestCase):
         self.assertIn("OPENQASM", built)
         with self.assertRaises(subprocess.CalledProcessError) as raised:
             pipeline.build(source, *pipeline.DEFAULT, system=System(qubits=needed - 1))
-        self.assertIn(f"needs {needed} qubits at once but the system has {needed - 1}", raised.exception.stderr)
+        self.assertIn(f"but the system has {needed - 1}", raised.exception.stderr)  # said by the first analysis that finds it cannot fit
 
     def test_a_run_is_described_by_the_chance_of_each_outcome(self):
         run = metrics.of_run({0: 300, 3: 100})
