@@ -1,7 +1,10 @@
 // Which registers must be released, from the plan, the liveness and the system's qubits.
 //
 // A register is dead from the operation after its last use. Holding a dead register costs its qubits at every later operation; releasing
-// it frees them. A release costs gates (the register has to be returned to zero), so the rule is to release only what must be
+// it frees them. This takes every dead register to be releasable, which is an upper bound on what release can do: a register can only be
+// returned to zero when its value is definite or can be recomputed from registers still live, and one entangled with live data that does
+// not determine it stays held. That, and the earliest point at which each register may be reclaimed (never before its last use), is the
+// work of release (M7); until then the last use stands in for it. A release costs gates (the register has to be returned to zero), so the rule is to release only what must be
 // released: a dead register is released when the qubits live at some later operation, with its temporaries and every dead register
 // still held, would pass the system's qubits. When no system is described nothing needs releasing and every register stays held.
 //
