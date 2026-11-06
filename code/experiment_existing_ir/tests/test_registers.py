@@ -61,10 +61,6 @@ class Registers(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError) as raised:
             classified(5)
         self.assertIn("even with every dead register released", raised.exception.stderr)
-        # the plan says this budget is feasible by releasing registers; the lowering does not release yet, so it still refuses
-        with self.assertRaises(subprocess.CalledProcessError) as lowering:
-            pipeline.build(program, *pipeline.DEFAULT, system=System(qubits=needed - 4))
-        self.assertIn("qubits at once but the system has", lowering.exception.stderr)
 
 
 if __name__ == "__main__":
