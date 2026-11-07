@@ -155,8 +155,14 @@ void OrIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn 
 void XOrIOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   setResultRange(getResult(), intrange::inferXor(ranges));
 }
-void EqOp::inferResultRanges(ArrayRef<ConstantIntRanges>, SetIntRangeFn setResultRange) {
-  setResultRange(getResult(), ConstantIntRanges::fromUnsigned(APInt(1, 0), APInt(1, 1)));
+// A comparison is known when the operands' ranges decide it, as for arith.cmpi: `a < 10` of a value in 0..3 is always true.
+static ConstantIntRanges rangeOfComparison(intrange::CmpPredicate predicate, ArrayRef<ConstantIntRanges> ranges) {
+  if (std::optional<bool> decided = intrange::evaluatePred(predicate, ranges[0], ranges[1]))
+    return ConstantIntRanges::constant(APInt(1, *decided));
+  return ConstantIntRanges::fromUnsigned(APInt(1, 0), APInt(1, 1));
+}
+void EqOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), rangeOfComparison(intrange::CmpPredicate::eq, ranges));
 }
 void LiftOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   setResultRange(getResult(), ranges[0]);
@@ -170,8 +176,8 @@ void AddAssignOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRa
 void SubAssignOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   setResultRange(getResult(), intrange::inferSub(ranges));
 }
-void SltOp::inferResultRanges(ArrayRef<ConstantIntRanges>, SetIntRangeFn setResultRange) {
-  setResultRange(getResult(), ConstantIntRanges::fromUnsigned(APInt(1, 0), APInt(1, 1)));
+void SltOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), rangeOfComparison(intrange::CmpPredicate::slt, ranges));
 }
 void SelectOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   size_t n = getResults().size();  // the operands are the condition, then the n true values, then the n false values
