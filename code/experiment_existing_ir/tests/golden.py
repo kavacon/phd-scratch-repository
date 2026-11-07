@@ -192,6 +192,13 @@ GOLDEN: Tuple[Golden, ...] = (
     Golden("an outer name aliased inside a dead branch",
            "a = 0..4; x = 2; k = 9; if k < 3 { x = a; } x += 1; return a;",
            {0: 1/4, 1: 1/4, 2: 1/4, 3: 1/4}),
+    # the same work in both arms of a conditional is shared, but only between the arms, never within one
+    Golden("the same product in both arms of a conditional",
+           "a = 0..4; b = 0..3; x = 0; if a < 2 { x = b * b + 1; } else { x = b * b + 2; } return x;",
+           {1: 1/6, 2: 1/3, 3: 1/6, 5: 1/6, 6: 1/6}),
+    Golden("two variables in one arm stay independent when the arms share work",
+           "a = 0..4; b = 0..2; x = 0; y = 0; if a < 2 { x = b * b + 1; y = b * b + 2; } else { x = b * b + 3; y = b * b + 4; } return x - y;",
+           {-2: 1/4, -1: 1/2, 0: 1/4}),
     # independent computations joined at the end: regions that could run side by side
     Golden("two independent sums joined by a product",
            'a = 0..4; b = 0..4; c = 0..4; d = 0..4; return (a + b) * (c + d);',
