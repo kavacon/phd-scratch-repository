@@ -52,6 +52,11 @@ class Distributions(unittest.TestCase):
         ir = pipeline.optimise(translate(parse("a = 0..4; x = 0; if a < 10 { x = 1; } return x;", "v2")), *pipeline.BEFORE_LOWERING)
         self.assertNotIn("dist.", ir)
 
+    def test_a_chain_of_constant_steps_on_one_value_is_one_step(self):
+        ir = pipeline.optimise(translate(parse("a = 0..4; y = a + 1; z = y + 1; w = z - 3; return w;", "v2")), *pipeline.BEFORE_LOWERING)
+        self.assertEqual(ir.count("dist.sub_assign"), 1)  # a + 1 + 1 - 3 is a - 1
+        self.assertNotIn("dist.add_assign", ir)
+
 
 if __name__ == "__main__":
     unittest.main()

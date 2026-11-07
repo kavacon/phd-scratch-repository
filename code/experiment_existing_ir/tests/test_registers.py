@@ -14,12 +14,12 @@ def planned(source: str, *passes: str) -> str:
 @unittest.skipUnless(pipeline.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
 class Registers(unittest.TestCase):
     def test_updates_done_in_place_share_the_register_of_their_target_and_its_width_is_what_the_ranges_need(self):
-        text = planned("a = 0..4; b = a + 3; b += 1; return b;")
+        text = planned("a = 0..4; p = 0..2; b = a + 3; b += p; return b;")
         updates = [line for line in text.splitlines() if "add_assign" in line]
         self.assertEqual(len(updates), 2)
         registers = {re.search(r"existing_ir\.register = array<i64: (\d+)>", line).group(1) for line in updates}
         self.assertEqual(len(registers), 1)  # the range and both updates are one register
-        self.assertTrue(all("existing_ir.in_place" in line and "existing_ir.qubits = array<i64: 4>" in line for line in updates))  # 0..3 + 4 is 4..7
+        self.assertTrue(all("existing_ir.in_place" in line and "existing_ir.qubits = array<i64: 4>" in line for line in updates))  # 3..6 and 3..7 both need 4 bits
 
     def test_a_register_is_definite_unless_a_value_in_it_depends_on_a_distribution_and_a_constant_used_only_as_an_operand_has_none(self):
         text = pipeline.optimise(translate(parse("a = 0..4; b = 3; c = a + b; return c;", "v2")), *pipeline.PLANNED)

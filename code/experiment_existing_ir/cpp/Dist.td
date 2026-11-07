@@ -89,8 +89,12 @@ class Dist_BinaryOp<string mnemonic> : Dist_PureOp<mnemonic> {
   let hasVerifier = 1;
 }
 // Sum and difference computed out of place: a new distribution, correlated with its operands, which are only used.
-def Dist_AddIOp : Dist_BinaryOp<"addi">;
-def Dist_SubIOp : Dist_BinaryOp<"subi">;
+def Dist_AddIOp : Dist_BinaryOp<"addi"> {
+  let hasCanonicalizer = 1;
+}
+def Dist_SubIOp : Dist_BinaryOp<"subi"> {
+  let hasCanonicalizer = 1;
+}
 // Product, modulo the width of the type.
 def Dist_MulIOp : Dist_BinaryOp<"muli">;
 // Signed less-than and equality; the result is a distribution of one-bit integers. Every other comparison is one of these
@@ -122,8 +126,12 @@ class Dist_UpdateOp<string mnemonic> : Dist_PureOp<mnemonic> {
   let assemblyFormat = "$target `,` $amount attr-dict `:` type($target) `,` type($amount) `->` type($result)";
   let hasVerifier = 1;
 }
-def Dist_AddAssignOp : Dist_UpdateOp<"add_assign">;
-def Dist_SubAssignOp : Dist_UpdateOp<"sub_assign">;
+def Dist_AddAssignOp : Dist_UpdateOp<"add_assign"> {
+  let hasCanonicalizer = 1;
+}
+def Dist_SubAssignOp : Dist_UpdateOp<"sub_assign"> {
+  let hasCanonicalizer = 1;
+}
 
 // For each pair, the true value where the condition holds and the false value where it does not. One operation takes
 // all the pairs so the condition, a distribution, is used once however many variables the conditional changes.
