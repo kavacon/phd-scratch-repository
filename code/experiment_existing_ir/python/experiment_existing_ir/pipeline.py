@@ -42,7 +42,7 @@ def built() -> bool:
 
 
 # The tool's own passes that are anchored on a function. Flags nest them by themselves; in a pipeline they are nested here.
-FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "resolve-dist", "qubit-liveness", "sink-to-use", "reorder-ops"}
+FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-rewrites", "dist-status", "resolve-dist", "qubit-liveness", "sink-to-use", "reorder-ops"}
 
 
 def command(*passes: str) -> list:
@@ -70,13 +70,27 @@ RESOLVE = ("--resolve-dist", "--sccp", "--canonicalize")
 # then folds each single-gate inverse (a self-adjoint gate is itself). The lowering writes a subtraction as the adder inside `qc.inv`,
 # which the exporters (DDSIM's OpenQASM reader, Jeff) do not take; after this the circuit has no modifier on a call.
 UNROLL_MODIFIERS = ("--unroll-modifiers", "--canonicalize")
-BEFORE_LOWERING = (*PREPARE, *RESOLVE, "--cse", "--resolve-instances", "--canonicalize", "--fold-by-range", "--canonicalize", "--cse", "--in-place-updates")
+BEFORE_LOWERING = (*PREPARE, *RESOLVE, "--cse", "--resolve-instances", "--dist-rewrites", "--canonicalize", "--fold-by-range", "--canonicalize", "--cse", "--in-place-updates")
 # The order of the operations decides which registers are alive together and who gets a free qubit first, so it is chosen once the plan says how
 # wide each is: critical-path first, within the qubits the system has (or the program as written would use). The plan is made again for the new order.
 PLANNED = (*BEFORE_LOWERING, "--dist-status", "--plan-registers", "--reorder-ops{policy=pressure}", "--plan-registers")
 DEFAULT = (*PLANNED,
            "--schedule-release{strategy=lazy}", "--lower-to-qc", "--release-registers", *UNROLL_MODIFIERS,
            "--assign-qubits")
+
+
+def without_source_rewrites(stages: Sequence[str]) -> Tuple[str, ...]:
+    """
+    The stages with the source-level rewrites left out, so that a circuit can be compared with and without them under the
+    same gate-level passes: the constant steps and nested conditionals are not combined, the arms of a conditional do not share work,
+    and the comparisons the ranges decide are not folded. Folds that arith has for its own operations (and that dist operations
+    share, such as x - x) are not rewrites of this kind and stay.
+    """
+    return tuple("--resolve-instances{share-arms=false}" if stage == "--resolve-instances" else stage
+                 for stage in stages if stage not in ("--dist-rewrites", "--fold-by-range"))
+
+
+UNREWRITTEN = without_source_rewrites(DEFAULT)
 
 
 class Export(NamedTuple):
