@@ -4,7 +4,7 @@ import unittest
 
 from compiler.parser.parser import parse
 from compiler.system import System
-from experiment_existing_ir import pipeline
+from experiment_existing_ir import metrics, pipeline
 from experiment_existing_ir.translate import translate
 from tests.golden import GOLDEN, TOLERANCE, distance, entry
 
@@ -18,11 +18,12 @@ TIGHT = {"a function called in a loop": 20, "a loop variable compared with a dis
 SENSITIVE = tuple(TIGHT)
 
 
-def compile_with(name: str, qubits=None, strategy="lazy", uncompute=True) -> str:
+def compile_with(name: str, qubits=None, strategy="lazy", uncompute=True, policy="spread") -> str:
     program = translate(parse(entry(name).source, "v2"))
     if qubits is not None:
         program = pipeline.with_system(program, System(qubits=qubits))
     passes = tuple(p.replace("strategy=lazy", f"strategy={strategy}").replace("--release-registers", f"--release-registers{{uncompute={str(uncompute).lower()}}}")
+                   .replace("--assign-qubits", f"--assign-qubits{{policy={policy}}}")
                    for p in pipeline.DEFAULT)
     return pipeline.optimise(program, *passes)
 
@@ -60,8 +61,18 @@ class Release(unittest.TestCase):
     def test_the_outcome_depends_on_returning_a_register_to_zero_before_its_qubits_are_reused(self):
         for name in SENSITIVE:
             with self.subTest(name):
-                broken = compile_with(name, TIGHT[name], uncompute=False)
+                broken = compile_with(name, TIGHT[name], uncompute=False, policy="lowest")  # reuse as hard as possible
                 self.assertGreater(outcome(name, broken), 0.2)  # the same qubits, reused dirty: not the intended outcome
+
+    def test_given_more_qubits_than_it_needs_a_program_uses_them_to_wait_less_and_never_more_than_it_is_given(self):
+        name = "a loop variable compared with a distribution"
+        needed = pool(compile_with(name))
+        tight, roomy = compile_with(name, needed), compile_with(name, 2 * needed)
+        self.assertEqual(pool(tight), needed)  # exactly enough: every qubit is shared as it must be
+        self.assertLessEqual(pool(roomy), 2 * needed)
+        self.assertGreater(pool(roomy), needed)  # the spare qubits are used
+        self.assertLess(metrics.of_qc(roomy).depth, metrics.of_qc(tight).depth)  # and so less waits for a qubit that is being cleared
+        self.assertLess(outcome(name, roomy), TOLERANCE)
 
 
 if __name__ == "__main__":
