@@ -14,6 +14,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "llvm/Support/MathExtras.h"
@@ -122,24 +123,81 @@ void copy(OpBuilder &b, Location loc, ArrayRef<Value> source, ArrayRef<Value> ta
     controlledX(b, loc, {source[std::min<size_t>(i, source.size() - 1)]}, target[i]);
 }
 
+// An operation's temporaries, and how each is returned to zero so that it can be freed at once: a bitwise copy of an operand is
+// copied again (the operand has not changed), and a register computed from the operands is cleared by running the gates that
+// computed it backwards (`uncompute`). A register that is freed is dead to this operation and to all that follow.
+struct Scratch {
+  SmallVector<Value> registers;                         // to free
+  SmallVector<std::pair<Value, Value>> copies;          // (source, target): target is a bitwise copy of source
+
+  Value add(Value reg) {
+    registers.push_back(reg);
+    return reg;
+  }
+  Value copyOf(OpBuilder &b, Location loc, Value source, unsigned width) {
+    Value target = add(allocate(b, loc, width));
+    copy(b, loc, load(b, loc, source), load(b, loc, target));
+    copies.push_back({source, target});
+    return target;
+  }
+  void free(OpBuilder &b, Location loc) {
+    for (auto &[source, target] : llvm::reverse(copies))
+      copy(b, loc, load(b, loc, source), load(b, loc, target));
+    for (Value reg : registers)
+      memref::DeallocOp::create(b, loc, reg);
+  }
+};
+
+// The gates emitted between two points. Run backwards, they undo what they did: `qc.inv` of the same gates, which MQT's own
+// `unroll-modifiers` turns into the inverted gates in reverse order.
+struct Span {
+  Block *block;
+  Operation *before, *last = nullptr;  // the operation before the first of the span (none: the block's start), and the last of it
+  explicit Span(OpBuilder &b) : block(b.getInsertionBlock()) {
+    auto point = b.getInsertionPoint();
+    before = point == block->begin() ? nullptr : &*std::prev(point);
+  }
+  void close(OpBuilder &b) {
+    auto point = b.getInsertionPoint();
+    last = point == block->begin() ? nullptr : &*std::prev(point);
+  }
+};
+
+void uncompute(OpBuilder &b, Location loc, const Span &span) {
+  SmallVector<Operation *> gates;
+  auto it = span.before ? std::next(span.before->getIterator()) : span.block->begin();
+  auto end = span.last ? std::next(span.last->getIterator()) : span.block->begin();
+  for (; it != end; ++it)
+    if (isa<mlir::qc::QCDialect>(it->getDialect()))
+      gates.push_back(&*it);
+  SmallVector<Value> qubits;
+  for (Operation *gate : gates)
+    for (Value operand : gate->getOperands())
+      if (isa<QubitType>(operand.getType()) && !llvm::is_contained(qubits, operand))
+        qubits.push_back(operand);
+  mlir::qc::InvOp::create(b, loc, qubits, [&](ValueRange inner) {
+    IRMapping mapping;
+    for (auto [outer, local] : llvm::zip(qubits, inner))
+      mapping.map(outer, local);
+    for (Operation *gate : gates)
+      b.clone(*gate, mapping);
+  });
+}
+
 // The second operand of an operation whose gates control on bits of both: when it is the first operand again (`a * a`,
 // `x && x`) a copy is made, since one qubit cannot control a gate twice.
-Value distinctFrom(OpBuilder &rw, Location loc, Value lhs, Value rhs) {
+Value distinctFrom(OpBuilder &rw, Location loc, Value lhs, Value rhs, Scratch &scratch) {
   if (lhs != rhs)
     return rhs;
-  Value duplicate = allocate(rw, loc, cast<MemRefType>(rhs.getType()).getDimSize(0));
-  copy(rw, loc, load(rw, loc, rhs), load(rw, loc, duplicate));
-  return duplicate;
+  return scratch.copyOf(rw, loc, rhs, cast<MemRefType>(rhs.getType()).getDimSize(0));
 }
 
 // A fresh register of `width` qubits holding lhs + rhs (or lhs - rhs): the first operand is copied in, the second is
 // copied into a temporary, and the adder (or its inverse) adds the temporary into the result.
-Value sum(OpBuilder &rw, Location loc, Value lhs, Value rhs, unsigned width, bool inverse) {
-  Value result = allocate(rw, loc, width), operand = allocate(rw, loc, width), carry = allocate(rw, loc, 1);
-  SmallVector<Value> left = load(rw, loc, lhs), right = load(rw, loc, rhs), res = load(rw, loc, result),
-                     tmp = load(rw, loc, operand), c = load(rw, loc, carry);
+Value sum(OpBuilder &rw, Location loc, Value lhs, Value rhs, unsigned width, bool inverse, Scratch &scratch) {
+  Value result = allocate(rw, loc, width), operand = scratch.copyOf(rw, loc, rhs, width), carry = scratch.add(allocate(rw, loc, 1));
+  SmallVector<Value> left = load(rw, loc, lhs), res = load(rw, loc, result), tmp = load(rw, loc, operand), c = load(rw, loc, carry);
   copy(rw, loc, left, res);
-  copy(rw, loc, right, tmp);
   SmallVector<Value> args(tmp);
   args.append(res.begin(), res.end());
   args.push_back(c[0]);
@@ -163,32 +221,41 @@ struct Sum : OpRewritePattern<Op> {
     auto it = widths.find(op.getResult());
     if (it == widths.end() || !isRegister(op.getLhs()) || !isRegister(op.getRhs()))
       return failure();
-    replaceWithRegisters(rw, op, sum(rw, op.getLoc(), op.getLhs(), op.getRhs(), it->second, Inverse));
+    Scratch scratch;
+    Value result = sum(rw, op.getLoc(), op.getLhs(), op.getRhs(), it->second, Inverse, scratch);
+    scratch.free(rw, op.getLoc());
+    replaceWithRegisters(rw, op, result);
     return success();
   }
 };
 
 // lhs < rhs is the sign of lhs - rhs, taken one bit wider than either operand so the difference cannot wrap.
-Value lessThan(OpBuilder &rw, Location loc, Value lhs, Value rhs) {
+Value lessThan(OpBuilder &rw, Location loc, Value lhs, Value rhs, Scratch &scratch) {
   unsigned width = std::max(registerWidth(lhs), registerWidth(rhs)) + 1;
-  Value difference = sum(rw, loc, lhs, rhs, width, true);
+  Span span(rw);
+  Value difference = scratch.add(sum(rw, loc, lhs, rhs, width, true, scratch));
+  span.close(rw);
   Value result = allocate(rw, loc, 1);
   controlledX(rw, loc, {load(rw, loc, difference).back()}, load(rw, loc, result)[0]);
+  uncompute(rw, loc, span);  // the difference has served; run it backwards so that its register is zero again
   return result;
 }
 
 // lhs == rhs: the operands' bitwise difference is all zeros. It is computed in a temporary (the first operand copied in,
 // the second added with CNOTs, both sign-extended to the wider), every bit is flipped so that equality is all ones, and one
 // multi-controlled X sets the result.
-Value equal(OpBuilder &rw, Location loc, Value lhs, Value rhs) {
+Value equal(OpBuilder &rw, Location loc, Value lhs, Value rhs, Scratch &scratch) {
   unsigned width = std::max(registerWidth(lhs), registerWidth(rhs));
-  Value difference = allocate(rw, loc, width), result = allocate(rw, loc, 1);
+  Value difference = scratch.add(allocate(rw, loc, width)), result = allocate(rw, loc, 1);
   SmallVector<Value> d = load(rw, loc, difference), l = load(rw, loc, lhs), r = load(rw, loc, rhs);
+  Span span(rw);
   copy(rw, loc, l, d);
   copy(rw, loc, r, d);
   for (Value bit : d)
     mlir::qc::XOp::create(rw, loc, bit);
+  span.close(rw);
   controlledX(rw, loc, d, load(rw, loc, result)[0]);
+  uncompute(rw, loc, span);
   return result;
 }
 
@@ -199,15 +266,15 @@ Value negate(OpBuilder &rw, Location loc, Value flag) {
 }
 
 // Every signed comparison is `<` or `==`, with the operands swapped or the result negated.
-std::optional<Value> compare(OpBuilder &rw, Location loc, arith::CmpIPredicate predicate, Value lhs, Value rhs) {
+std::optional<Value> compare(OpBuilder &rw, Location loc, arith::CmpIPredicate predicate, Value lhs, Value rhs, Scratch &scratch) {
   using P = arith::CmpIPredicate;
   switch (predicate) {
-  case P::slt: return lessThan(rw, loc, lhs, rhs);
-  case P::sgt: return lessThan(rw, loc, rhs, lhs);
-  case P::sge: return negate(rw, loc, lessThan(rw, loc, lhs, rhs));
-  case P::sle: return negate(rw, loc, lessThan(rw, loc, rhs, lhs));
-  case P::eq: return equal(rw, loc, lhs, rhs);
-  case P::ne: return negate(rw, loc, equal(rw, loc, lhs, rhs));
+  case P::slt: return lessThan(rw, loc, lhs, rhs, scratch);
+  case P::sgt: return lessThan(rw, loc, rhs, lhs, scratch);
+  case P::sge: return negate(rw, loc, lessThan(rw, loc, lhs, rhs, scratch));
+  case P::sle: return negate(rw, loc, lessThan(rw, loc, rhs, lhs, scratch));
+  case P::eq: return equal(rw, loc, lhs, rhs, scratch);
+  case P::ne: return negate(rw, loc, equal(rw, loc, lhs, rhs, scratch));
   default: return std::nullopt;
   }
 }
@@ -217,9 +284,11 @@ struct Compare : OpRewritePattern<arith::CmpIOp> {
   LogicalResult matchAndRewrite(arith::CmpIOp op, PatternRewriter &rw) const override {
     if (!isRegister(op.getLhs()) || !isRegister(op.getRhs()))
       return failure();
-    std::optional<Value> result = compare(rw, op.getLoc(), op.getPredicate(), op.getLhs(), op.getRhs());
+    Scratch scratch;
+    std::optional<Value> result = compare(rw, op.getLoc(), op.getPredicate(), op.getLhs(), op.getRhs(), scratch);
     if (!result)
       return rw.notifyMatchFailure(op, "only signed comparisons are supported");
+    scratch.free(rw, op.getLoc());
     replaceWithRegisters(rw, op, *result);
     return success();
   }
@@ -228,9 +297,9 @@ struct Compare : OpRewritePattern<arith::CmpIOp> {
 // The product, modulo the result's width, by shift and add: for each bit of the first operand, the second operand shifted
 // left by that bit's place is copied into a temporary by Toffolis on that bit, added into the result, and the temporary is
 // cleared by the same Toffolis. Operands are sign-extended, which is right modulo the width.
-Value product(OpBuilder &rw, Location loc, Value lhs, Value rhs, unsigned width) {
-  rhs = distinctFrom(rw, loc, lhs, rhs);
-  Value result = allocate(rw, loc, width), partial = allocate(rw, loc, width), carry = allocate(rw, loc, 1);
+Value product(OpBuilder &rw, Location loc, Value lhs, Value rhs, unsigned width, Scratch &scratch) {
+  rhs = distinctFrom(rw, loc, lhs, rhs, scratch);
+  Value result = allocate(rw, loc, width), partial = scratch.add(allocate(rw, loc, width)), carry = scratch.add(allocate(rw, loc, 1));
   SmallVector<Value> l = load(rw, loc, lhs), r = load(rw, loc, rhs), p = load(rw, loc, partial), c = load(rw, loc, carry);
   SmallVector<Value> args(p), res = load(rw, loc, result);
   args.append(res.begin(), res.end());
@@ -256,7 +325,10 @@ template <typename Op> struct Product : OpRewritePattern<Op> {
     auto it = widths.find(op.getResult());
     if (it == widths.end() || !isRegister(op.getLhs()) || !isRegister(op.getRhs()))
       return failure();
-    replaceWithRegisters(rw, op, product(rw, op.getLoc(), op.getLhs(), op.getRhs(), it->second));
+    Scratch scratch;
+    Value result = product(rw, op.getLoc(), op.getLhs(), op.getRhs(), it->second, scratch);
+    scratch.free(rw, op.getLoc());
+    replaceWithRegisters(rw, op, result);
     return success();
   }
 };
@@ -273,7 +345,8 @@ template <typename Op, Bitwise Kind> struct BitwiseOp : OpRewritePattern<Op> {
     if (it == widths.end() || !isRegister(op.getLhs()) || !isRegister(op.getRhs()))
       return failure();
     Location loc = op.getLoc();
-    Value result = allocate(rw, loc, it->second), rhs = distinctFrom(rw, loc, op.getLhs(), op.getRhs());
+    Scratch scratch;
+    Value result = allocate(rw, loc, it->second), rhs = distinctFrom(rw, loc, op.getLhs(), op.getRhs(), scratch);
     SmallVector<Value> l = load(rw, loc, op.getLhs()), r = load(rw, loc, rhs), res = load(rw, loc, result);
     auto at = [](ArrayRef<Value> bits, unsigned i) { return bits[std::min<size_t>(i, bits.size() - 1)]; };
     for (unsigned i = 0; i < res.size(); ++i) {
@@ -286,6 +359,7 @@ template <typename Op, Bitwise Kind> struct BitwiseOp : OpRewritePattern<Op> {
       if (Kind == Bitwise::Or)
         controlledX(rw, loc, {at(l, i), at(r, i)}, res[i]);
     }
+    scratch.free(rw, loc);
     replaceWithRegisters(rw, op, result);
     return success();
   }
@@ -297,7 +371,10 @@ template <typename Op> struct DistCompare : OpRewritePattern<Op> {
     if (!isRegister(op.getLhs()) || !isRegister(op.getRhs()))
       return failure();
     auto predicate = std::is_same_v<Op, existing_ir::dist::EqOp> ? arith::CmpIPredicate::eq : arith::CmpIPredicate::slt;
-    replaceWithRegisters(rw, op, *compare(rw, op.getLoc(), predicate, op.getLhs(), op.getRhs()));
+    Scratch scratch;
+    Value result = *compare(rw, op.getLoc(), predicate, op.getLhs(), op.getRhs(), scratch);
+    scratch.free(rw, op.getLoc());
+    replaceWithRegisters(rw, op, result);
     return success();
   }
 };
@@ -319,14 +396,15 @@ struct Update : OpRewritePattern<Op> {
     Location loc = op.getLoc();
     Value target = op.getTarget();
     unsigned width = registerWidth(target);
+    Scratch scratch;
     if (!inPlace.contains(op) || it->second > width) {
-      replaceWithRegisters(rw, op, sum(rw, loc, target, op.getAmount(), it->second, Inverse));
+      Value result = sum(rw, loc, target, op.getAmount(), it->second, Inverse, scratch);
+      scratch.free(rw, loc);
+      replaceWithRegisters(rw, op, result);
       return success();
     }
-    Value operand = allocate(rw, loc, width), carry = allocate(rw, loc, 1);
-    SmallVector<Value> targetQubits = load(rw, loc, target), amount = load(rw, loc, op.getAmount()),
-                       temporary = load(rw, loc, operand), c = load(rw, loc, carry);
-    copy(rw, loc, amount, temporary);
+    Value operand = scratch.copyOf(rw, loc, op.getAmount(), width), carry = scratch.add(allocate(rw, loc, 1));
+    SmallVector<Value> targetQubits = load(rw, loc, target), temporary = load(rw, loc, operand), c = load(rw, loc, carry);
     SmallVector<Value> args(temporary);
     args.append(targetQubits.begin(), targetQubits.end());
     args.push_back(c[0]);
@@ -335,6 +413,7 @@ struct Update : OpRewritePattern<Op> {
       mlir::qc::CallOp::create(rw, loc, callee, args);
     else
       mlir::qc::InvOp::create(rw, loc, args, [&](ValueRange inner) { mlir::qc::CallOp::create(rw, loc, callee, inner); });
+    scratch.free(rw, loc);
     replaceWithRegisters(rw, op, target);
     return success();
   }
@@ -383,7 +462,8 @@ struct Lift : OpRewritePattern<existing_ir::dist::LiftOp> {
 // condition ? a : b, bit by bit: the result starts as b and takes (a xor b) in the bits where the condition is set.
 // Both operands have already been computed, so the selection costs one Toffoli per bit.
 Value select(OpBuilder &rw, Location loc, Value condition, Value trueValue, Value falseValue, unsigned width) {
-  Value result = allocate(rw, loc, width), delta = allocate(rw, loc, width);
+  Scratch scratch;
+  Value result = allocate(rw, loc, width), delta = scratch.add(allocate(rw, loc, width));
   SmallVector<Value> res = load(rw, loc, result), d = load(rw, loc, delta), a = load(rw, loc, trueValue),
                      b = load(rw, loc, falseValue);
   Value bit = load(rw, loc, condition)[0];
@@ -392,6 +472,8 @@ Value select(OpBuilder &rw, Location loc, Value condition, Value trueValue, Valu
   copy(rw, loc, b, d);
   for (unsigned i = 0; i < res.size(); ++i)
     controlledX(rw, loc, {bit, d[i]}, res[i]);
+  scratch.copies = {{trueValue, delta}, {falseValue, delta}};  // the difference of the two, cleared by copying them in again
+  scratch.free(rw, loc);
   return result;
 }
 
@@ -473,8 +555,8 @@ void prepareUniform(OpBuilder &rw, Location loc, ArrayRef<Value> qubits, uint64_
   }
 }
 
-// An equal superposition of start .. stop - 1: 0 .. stop - start - 1 prepared on the low qubits, then `start` added when it is
-// not zero (the prepared register has a zero bit above its values so that it reads as non-negative).
+// An equal superposition of start .. stop - 1: 0 .. stop - start - 1 prepared on the low qubits of the result's register, then
+// `start` added in place when it is not zero (an offset register loaded with the constant, and a carry, both cleared afterwards).
 struct Uniform : OpRewritePattern<existing_ir::dist::UniformOp> {
   Uniform(MLIRContext *c, const Widths &w) : OpRewritePattern(c), widths(w) {}
   const Widths &widths;
@@ -485,21 +567,27 @@ struct Uniform : OpRewritePattern<existing_ir::dist::UniformOp> {
     Location loc = op.getLoc();
     int64_t start = int32_t(op.getStart());
     uint64_t n = uint64_t(int64_t(int32_t(op.getStop())) - start);
-    unsigned values = std::max(llvm::Log2_64_Ceil(n), 1u) + 1;  // bits for 0 .. n - 1 as a non-negative signed value
-    Value prepared = allocate(rw, loc, start == 0 ? it->second : std::max(values, 1u));
-    SmallVector<Value> qubits = load(rw, loc, prepared);
+    Value result = allocate(rw, loc, it->second);
+    SmallVector<Value> qubits = load(rw, loc, result);
     prepareUniform(rw, loc, qubits, n);
-    if (start == 0) {
-      replaceWithRegisters(rw, op, prepared);
-      return success();
+    if (start != 0) {
+      Scratch scratch;
+      Value offset = scratch.add(allocate(rw, loc, it->second)), carry = scratch.add(allocate(rw, loc, 1));
+      SmallVector<Value> bits = load(rw, loc, offset);
+      APInt pattern = APInt(64, start, true).sextOrTrunc(it->second);
+      Span constant(rw);  // the constant, set and later cleared by the same X gates
+      for (unsigned k = 0; k < bits.size(); ++k)
+        if (pattern[k])
+          mlir::qc::XOp::create(rw, loc, bits[k]);
+      constant.close(rw);
+      SmallVector<Value> args(bits);
+      args.append(qubits.begin(), qubits.end());
+      args.push_back(::load(rw, loc, carry)[0]);
+      mlir::qc::CallOp::create(rw, loc, FlatSymbolRefAttr::get(rw.getContext(), adderName(it->second)), args);
+      uncompute(rw, loc, constant);
+      scratch.free(rw, loc);
     }
-    Value offset = allocate(rw, loc, it->second);
-    SmallVector<Value> bits = load(rw, loc, offset);
-    APInt pattern = APInt(64, start, true).sextOrTrunc(it->second);
-    for (unsigned k = 0; k < bits.size(); ++k)
-      if (pattern[k])
-        mlir::qc::XOp::create(rw, loc, bits[k]);
-    replaceWithRegisters(rw, op, sum(rw, loc, prepared, offset, it->second, false));
+    replaceWithRegisters(rw, op, result);
     return success();
   }
 };
@@ -512,7 +600,10 @@ struct Return : OpRewritePattern<func::ReturnOp> {
       return failure();
     Location loc = op.getLoc();
     SmallVector<Value> registers;
-    main.walk([&](memref::AllocOp alloc) { registers.push_back(alloc); });
+    main.walk([&](memref::AllocOp alloc) {
+      if (llvm::none_of(alloc->getUsers(), [](Operation *user) { return isa<memref::DeallocOp>(user); }))
+        registers.push_back(alloc);  // freed already: the temporaries of the operations
+    });
     SmallVector<Value> qubits = load(rw, loc, op.getOperand(0));
     auto type = mlir::cbit::RegisterType::get(rw.getContext(), qubits.size());
     Value bits = mlir::cbit::AllocOp::create(rw, loc, type, mlir::cbit::InitializationAttr::get(rw.getContext(), mlir::cbit::Initialization::Undefined));

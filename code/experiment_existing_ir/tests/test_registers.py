@@ -46,11 +46,12 @@ class Registers(unittest.TestCase):
         for golden in GOLDEN:
             program = translate(parse(golden.source, "v2"))
             plan = pipeline.optimise(program, *pipeline.BEFORE_LOWERING, "--plan-registers", "--qubit-liveness")
-            held, dedicated, pool = (int(re.search(rf"existing_ir\.{key} = (\d+)", plan).group(1))
-                                     for key in ("qubits_held", "qubits_dedicated", "qubits_pool"))
+            held, dedicated, freed, pool = (int(re.search(rf"existing_ir\.{key} = (\d+)", plan).group(1))
+                                            for key in ("qubits_held", "qubits_dedicated", "qubits_scratch_freed", "qubits_pool"))
             lowered = int(re.search(r"existing_ir\.peak_qubits = (\d+)", pipeline.build(program, *pipeline.DEFAULT)).group(1))
-            self.assertEqual(held, lowered, golden.name)
-            self.assertLessEqual(pool, dedicated, golden.name)
+            self.assertEqual(freed, lowered, golden.name)  # registers held to the return, each operation's temporaries freed
+            self.assertLessEqual(pool, freed, golden.name)
+            self.assertLessEqual(freed, dedicated, golden.name)
             self.assertLessEqual(dedicated, held, golden.name)
 
     def test_a_register_is_released_only_when_the_budget_needs_its_qubits_and_a_program_that_cannot_fit_is_refused(self):

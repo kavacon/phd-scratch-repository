@@ -8,6 +8,7 @@
 //   on each operation: `existing_ir.live_qubits`: the qubits live while it runs (its operands and results included).
 // The first two count the values themselves. The temporaries an operation uses while it runs (an operand copy, a carry) are the
 // plan's `existing_ir.scratch`, and three ways of providing them are counted on the function:
+//   `existing_ir.qubits_scratch_freed`: every register held to the return, an operation's temporaries freed when it ends (the lowering);
 //   `existing_ir.qubits_held`:      every register and every operation's temporaries held to the return (what the lowering does now);
 //   `existing_ir.qubits_dedicated`: every register held, and one scratch region shared by all operations, as large as the
 //                                   largest any operation needs (each operation leaves it clean);
@@ -82,6 +83,15 @@ struct QubitLiveness : PassWrapper<QubitLiveness, OperationPass<func::FuncOp>> {
       if (live)
         timeline.order[i]->setAttr("existing_ir.live_qubits", builder.getI64IntegerAttr(live));
     }
+    // Every register held to the return, each operation's temporaries freed when it ends: what the lowering does.
+    int64_t allocated = 0, freed = 0;
+    for (size_t i = 0; i < timeline.order.size(); ++i) {
+      for (auto &entry : timeline.registers)
+        if (entry.second.first == static_cast<int64_t>(i))
+          allocated += entry.second.qubits;
+      freed = std::max(freed, allocated + timeline.scratch[i]);
+    }
+    function->setAttr("existing_ir.qubits_scratch_freed", builder.getI64IntegerAttr(freed));
     function->setAttr("existing_ir.qubits_held", builder.getI64IntegerAttr(total + scratchTotal));
     function->setAttr("existing_ir.qubits_dedicated", builder.getI64IntegerAttr(total + scratchMax));
     function->setAttr("existing_ir.qubits_pool", builder.getI64IntegerAttr(pool));
