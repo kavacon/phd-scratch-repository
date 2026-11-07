@@ -27,8 +27,29 @@ namespace {
 using Widths = DenseMap<Value, unsigned>;
 Type qubit(MLIRContext *c) { return QubitType::get(c); }
 
+// Every register is annotated with what it is. As allocated it is scratch (a temporary of one operation); the register that holds the
+// result of an operation is then marked as that value's (`replaceWithRegisters`). All start in the zero state.
+//   `existing_ir.role`:     "scratch" or "value";
+//   `existing_ir.register`: for a value, its register number in the plan (`plan-registers`);
+//   `existing_ir.initial`:  the state the register is allocated in.
 Value allocate(OpBuilder &b, Location loc, unsigned width) {
-  return memref::AllocOp::create(b, loc, MemRefType::get({width}, qubit(b.getContext())));
+  auto alloc = memref::AllocOp::create(b, loc, MemRefType::get({width}, qubit(b.getContext())));
+  alloc->setAttr("existing_ir.role", b.getStringAttr("scratch"));
+  alloc->setAttr("existing_ir.initial", b.getStringAttr("zero"));
+  return alloc;
+}
+
+// Replace an operation by the registers that hold its results, marking each register that was allocated for one as that value's.
+void replaceWithRegisters(PatternRewriter &rw, Operation *op, ValueRange registers) {
+  auto numbers = op->getAttrOfType<DenseI64ArrayAttr>("existing_ir.register");
+  for (auto [k, reg] : llvm::enumerate(registers)) {
+    auto alloc = reg.getDefiningOp<memref::AllocOp>();
+    if (alloc && numbers && numbers.asArrayRef()[k] >= 0 && alloc->getAttrOfType<StringAttr>("existing_ir.role").getValue() == "scratch") {
+      alloc->setAttr("existing_ir.role", rw.getStringAttr("value"));
+      alloc->setAttr("existing_ir.register", rw.getI64IntegerAttr(numbers.asArrayRef()[k]));
+    }
+  }
+  rw.replaceOp(op, registers);
 }
 
 SmallVector<Value> load(OpBuilder &b, Location loc, Value reg) {
@@ -89,7 +110,7 @@ struct Constant : OpRewritePattern<arith::ConstantOp> {
     for (unsigned k = 0; k < qubits.size(); ++k)
       if (bits[k])
         mlir::qc::XOp::create(rw, op.getLoc(), qubits[k]);
-    rw.replaceOp(op, reg);
+    replaceWithRegisters(rw, op, reg);
     return success();
   }
 };
@@ -142,7 +163,7 @@ struct Sum : OpRewritePattern<Op> {
     auto it = widths.find(op.getResult());
     if (it == widths.end() || !isRegister(op.getLhs()) || !isRegister(op.getRhs()))
       return failure();
-    rw.replaceOp(op, sum(rw, op.getLoc(), op.getLhs(), op.getRhs(), it->second, Inverse));
+    replaceWithRegisters(rw, op, sum(rw, op.getLoc(), op.getLhs(), op.getRhs(), it->second, Inverse));
     return success();
   }
 };
@@ -199,7 +220,7 @@ struct Compare : OpRewritePattern<arith::CmpIOp> {
     std::optional<Value> result = compare(rw, op.getLoc(), op.getPredicate(), op.getLhs(), op.getRhs());
     if (!result)
       return rw.notifyMatchFailure(op, "only signed comparisons are supported");
-    rw.replaceOp(op, *result);
+    replaceWithRegisters(rw, op, *result);
     return success();
   }
 };
@@ -235,7 +256,7 @@ template <typename Op> struct Product : OpRewritePattern<Op> {
     auto it = widths.find(op.getResult());
     if (it == widths.end() || !isRegister(op.getLhs()) || !isRegister(op.getRhs()))
       return failure();
-    rw.replaceOp(op, product(rw, op.getLoc(), op.getLhs(), op.getRhs(), it->second));
+    replaceWithRegisters(rw, op, product(rw, op.getLoc(), op.getLhs(), op.getRhs(), it->second));
     return success();
   }
 };
@@ -265,7 +286,7 @@ template <typename Op, Bitwise Kind> struct BitwiseOp : OpRewritePattern<Op> {
       if (Kind == Bitwise::Or)
         controlledX(rw, loc, {at(l, i), at(r, i)}, res[i]);
     }
-    rw.replaceOp(op, result);
+    replaceWithRegisters(rw, op, result);
     return success();
   }
 };
@@ -276,7 +297,7 @@ template <typename Op> struct DistCompare : OpRewritePattern<Op> {
     if (!isRegister(op.getLhs()) || !isRegister(op.getRhs()))
       return failure();
     auto predicate = std::is_same_v<Op, existing_ir::dist::EqOp> ? arith::CmpIPredicate::eq : arith::CmpIPredicate::slt;
-    rw.replaceOp(op, *compare(rw, op.getLoc(), predicate, op.getLhs(), op.getRhs()));
+    replaceWithRegisters(rw, op, *compare(rw, op.getLoc(), predicate, op.getLhs(), op.getRhs()));
     return success();
   }
 };
@@ -299,7 +320,7 @@ struct Update : OpRewritePattern<Op> {
     Value target = op.getTarget();
     unsigned width = registerWidth(target);
     if (!inPlace.contains(op) || it->second > width) {
-      rw.replaceOp(op, sum(rw, loc, target, op.getAmount(), it->second, Inverse));
+      replaceWithRegisters(rw, op, sum(rw, loc, target, op.getAmount(), it->second, Inverse));
       return success();
     }
     Value operand = allocate(rw, loc, width), carry = allocate(rw, loc, 1);
@@ -314,7 +335,7 @@ struct Update : OpRewritePattern<Op> {
       mlir::qc::CallOp::create(rw, loc, callee, args);
     else
       mlir::qc::InvOp::create(rw, loc, args, [&](ValueRange inner) { mlir::qc::CallOp::create(rw, loc, callee, inner); });
-    rw.replaceOp(op, target);
+    replaceWithRegisters(rw, op, target);
     return success();
   }
 };
@@ -332,7 +353,7 @@ struct ZeroExtend : OpRewritePattern<arith::ExtUIOp> {
     SmallVector<Value> in = load(rw, loc, op.getIn()), out = load(rw, loc, result);
     for (unsigned i = 0; i < std::min(in.size(), out.size()); ++i)
       controlledX(rw, loc, {in[i]}, out[i]);
-    rw.replaceOp(op, result);
+    replaceWithRegisters(rw, op, result);
     return success();
   }
 };
@@ -349,12 +370,12 @@ struct Lift : OpRewritePattern<existing_ir::dist::LiftOp> {
     if (it == widths.end() || !isRegister(input))
       return failure();
     if (reuse.contains(op)) {
-      rw.replaceOp(op, input);
+      replaceWithRegisters(rw, op, input);
       return success();
     }
     Value result = allocate(rw, op.getLoc(), it->second);
     copy(rw, op.getLoc(), load(rw, op.getLoc(), input), load(rw, op.getLoc(), result));
-    rw.replaceOp(op, result);
+    replaceWithRegisters(rw, op, result);
     return success();
   }
 };
@@ -382,7 +403,7 @@ struct Select : OpRewritePattern<arith::SelectOp> {
     if (it == widths.end() || !isRegister(op.getCondition()) || !isRegister(op.getTrueValue()) ||
         !isRegister(op.getFalseValue()))
       return failure();
-    rw.replaceOp(op, select(rw, op.getLoc(), op.getCondition(), op.getTrueValue(), op.getFalseValue(), it->second));
+    replaceWithRegisters(rw, op, select(rw, op.getLoc(), op.getCondition(), op.getTrueValue(), op.getFalseValue(), it->second));
     return success();
   }
 };
@@ -397,7 +418,7 @@ struct DistSelect : OpRewritePattern<existing_ir::dist::SelectOp> {
     SmallVector<Value> results;
     for (auto [t, f, r] : llvm::zip(op.getTrueValues(), op.getFalseValues(), op.getResults()))
       results.push_back(select(rw, op.getLoc(), op.getCondition(), t, f, widths.lookup(r)));
-    rw.replaceOp(op, results);
+    replaceWithRegisters(rw, op, results);
     return success();
   }
 };
@@ -408,7 +429,7 @@ struct DistMeasure : OpRewritePattern<existing_ir::dist::MeasureOp> {
   LogicalResult matchAndRewrite(existing_ir::dist::MeasureOp op, PatternRewriter &rw) const override {
     if (!isRegister(op.getInput()))
       return failure();
-    rw.replaceOp(op, op.getInput());
+    replaceWithRegisters(rw, op, op.getInput());
     return success();
   }
 };
@@ -469,7 +490,7 @@ struct Uniform : OpRewritePattern<existing_ir::dist::UniformOp> {
     SmallVector<Value> qubits = load(rw, loc, prepared);
     prepareUniform(rw, loc, qubits, n);
     if (start == 0) {
-      rw.replaceOp(op, prepared);
+      replaceWithRegisters(rw, op, prepared);
       return success();
     }
     Value offset = allocate(rw, loc, it->second);
@@ -478,7 +499,7 @@ struct Uniform : OpRewritePattern<existing_ir::dist::UniformOp> {
     for (unsigned k = 0; k < bits.size(); ++k)
       if (pattern[k])
         mlir::qc::XOp::create(rw, loc, bits[k]);
-    rw.replaceOp(op, sum(rw, loc, prepared, offset, it->second, false));
+    replaceWithRegisters(rw, op, sum(rw, loc, prepared, offset, it->second, false));
     return success();
   }
 };
