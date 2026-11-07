@@ -103,8 +103,8 @@ struct Constant : OpRewritePattern<arith::ConstantOp> {
   LogicalResult matchAndRewrite(arith::ConstantOp op, PatternRewriter &rw) const override {
     auto it = widths.find(op.getResult());
     auto value = dyn_cast<IntegerAttr>(op.getValue());
-    if (it == widths.end() || !value || !isa<IntegerType>(op.getType()))
-      return failure();
+    if (it == widths.end() || !value || !isa<IntegerType>(op.getType()) || op->hasAttr("existing_ir.immediate"))
+      return failure();  // (an immediate constant is written by its users)
     Value reg = allocate(rw, op.getLoc(), it->second);
     APInt bits = value.getValue().sextOrTrunc(it->second);
     SmallVector<Value> qubits = load(rw, op.getLoc(), reg);
@@ -116,11 +116,43 @@ struct Constant : OpRewritePattern<arith::ConstantOp> {
   }
 };
 
+bool isRegister(Value v) { return isa<MemRefType>(v.getType()); }
+// A constant that the plan gave no register (`existing_ir.immediate`): its users write it straight into their own qubits.
+bool isImmediate(Value v) {
+  auto constant = v.getDefiningOp<arith::ConstantOp>();
+  return constant && constant->hasAttr("existing_ir.immediate");
+}
+// An operand a pattern can take: a register, or an immediate constant where the operand is one that accepts it.
+bool isOperand(Value v) { return isRegister(v) || isImmediate(v); }
+// The qubits of an operand: its register's, or the width the plan found the constant needs.
+unsigned operandWidth(Value v) {
+  if (isImmediate(v))
+    return v.getDefiningOp()->getAttrOfType<DenseI64ArrayAttr>("existing_ir.qubits").asArrayRef()[0];
+  return cast<MemRefType>(v.getType()).getDimSize(0);
+}
+unsigned registerWidth(Value v) { return operandWidth(v); }
+
+// The qubits of `target` set to the bits of `source` (sign-extended if narrower, truncated if wider, which is right modulo the target's
+// width): a register is copied in with CNOTs, and a constant is written with X gates on its set bits. The same gates, applied again,
+// clear it.
+void copyFrom(OpBuilder &b, Location loc, Value source, ArrayRef<Value> target);
+
 // The first operand is copied into the result and the second into a temporary: sign-extended if narrower,
 // truncated if wider, which is right modulo the result's width.
 void copy(OpBuilder &b, Location loc, ArrayRef<Value> source, ArrayRef<Value> target) {
   for (unsigned i = 0; i < target.size(); ++i)
     controlledX(b, loc, {source[std::min<size_t>(i, source.size() - 1)]}, target[i]);
+}
+
+void copyFrom(OpBuilder &b, Location loc, Value source, ArrayRef<Value> target) {
+  if (!isImmediate(source)) {
+    copy(b, loc, load(b, loc, source), target);
+    return;
+  }
+  APInt value = cast<IntegerAttr>(source.getDefiningOp<arith::ConstantOp>().getValue()).getValue().sextOrTrunc(target.size());
+  for (unsigned i = 0; i < target.size(); ++i)
+    if (value[i])
+      mlir::qc::XOp::create(b, loc, target[i]);
 }
 
 // An operation's temporaries, and how each is returned to zero so that it can be freed at once: a bitwise copy of an operand is
@@ -136,13 +168,13 @@ struct Scratch {
   }
   Value copyOf(OpBuilder &b, Location loc, Value source, unsigned width) {
     Value target = add(allocate(b, loc, width));
-    copy(b, loc, load(b, loc, source), load(b, loc, target));
+    copyFrom(b, loc, source, load(b, loc, target));
     copies.push_back({source, target});
     return target;
   }
   void free(OpBuilder &b, Location loc) {
     for (auto &[source, target] : llvm::reverse(copies))
-      copy(b, loc, load(b, loc, source), load(b, loc, target));
+      copyFrom(b, loc, source, load(b, loc, target));
     for (Value reg : registers)
       memref::DeallocOp::create(b, loc, reg);
   }
@@ -196,8 +228,8 @@ Value distinctFrom(OpBuilder &rw, Location loc, Value lhs, Value rhs, Scratch &s
 // copied into a temporary, and the adder (or its inverse) adds the temporary into the result.
 Value sum(OpBuilder &rw, Location loc, Value lhs, Value rhs, unsigned width, bool inverse, Scratch &scratch) {
   Value result = allocate(rw, loc, width), operand = scratch.copyOf(rw, loc, rhs, width), carry = scratch.add(allocate(rw, loc, 1));
-  SmallVector<Value> left = load(rw, loc, lhs), res = load(rw, loc, result), tmp = load(rw, loc, operand), c = load(rw, loc, carry);
-  copy(rw, loc, left, res);
+  SmallVector<Value> res = load(rw, loc, result), tmp = load(rw, loc, operand), c = load(rw, loc, carry);
+  copyFrom(rw, loc, lhs, res);
   SmallVector<Value> args(tmp);
   args.append(res.begin(), res.end());
   args.push_back(c[0]);
@@ -210,8 +242,7 @@ Value sum(OpBuilder &rw, Location loc, Value lhs, Value rhs, unsigned width, boo
   return result;
 }
 
-bool isRegister(Value v) { return isa<MemRefType>(v.getType()); }
-unsigned registerWidth(Value v) { return cast<MemRefType>(v.getType()).getDimSize(0); }
+
 
 template <typename Op, bool Inverse>
 struct Sum : OpRewritePattern<Op> {
@@ -219,7 +250,7 @@ struct Sum : OpRewritePattern<Op> {
   const Widths &widths;
   LogicalResult matchAndRewrite(Op op, PatternRewriter &rw) const override {
     auto it = widths.find(op.getResult());
-    if (it == widths.end() || !isRegister(op.getLhs()) || !isRegister(op.getRhs()))
+    if (it == widths.end() || !isOperand(op.getLhs()) || !isOperand(op.getRhs()))
       return failure();
     Scratch scratch;
     Value result = sum(rw, op.getLoc(), op.getLhs(), op.getRhs(), it->second, Inverse, scratch);
@@ -249,10 +280,10 @@ Value lessThan(OpBuilder &rw, Location loc, Value lhs, Value rhs, Scratch &scrat
 Value equal(OpBuilder &rw, Location loc, Value lhs, Value rhs, Scratch &scratch) {
   unsigned width = std::max(registerWidth(lhs), registerWidth(rhs));
   Value difference = scratch.add(allocate(rw, loc, width)), result = allocate(rw, loc, 1);
-  SmallVector<Value> d = load(rw, loc, difference), l = load(rw, loc, lhs), r = load(rw, loc, rhs);
+  SmallVector<Value> d = load(rw, loc, difference);
   Span span(rw);
-  copy(rw, loc, l, d);
-  copy(rw, loc, r, d);
+  copyFrom(rw, loc, lhs, d);
+  copyFrom(rw, loc, rhs, d);
   for (Value bit : d)
     mlir::qc::XOp::create(rw, loc, bit);
   span.close(rw);
@@ -284,7 +315,7 @@ std::optional<Value> compare(OpBuilder &rw, Location loc, arith::CmpIPredicate p
 struct Compare : OpRewritePattern<arith::CmpIOp> {
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(arith::CmpIOp op, PatternRewriter &rw) const override {
-    if (!isRegister(op.getLhs()) || !isRegister(op.getRhs()))
+    if (!isOperand(op.getLhs()) || !isOperand(op.getRhs()))
       return failure();
     Scratch scratch;
     std::optional<Value> result = compare(rw, op.getLoc(), op.getPredicate(), op.getLhs(), op.getRhs(), scratch);
@@ -370,7 +401,7 @@ template <typename Op, Bitwise Kind> struct BitwiseOp : OpRewritePattern<Op> {
 template <typename Op> struct DistCompare : OpRewritePattern<Op> {
   using OpRewritePattern<Op>::OpRewritePattern;
   LogicalResult matchAndRewrite(Op op, PatternRewriter &rw) const override {
-    if (!isRegister(op.getLhs()) || !isRegister(op.getRhs()))
+    if (!isOperand(op.getLhs()) || !isOperand(op.getRhs()))
       return failure();
     auto predicate = std::is_same_v<Op, existing_ir::dist::EqOp> ? arith::CmpIPredicate::eq : arith::CmpIPredicate::slt;
     Scratch scratch;
@@ -393,7 +424,7 @@ struct Update : OpRewritePattern<Op> {
   const DenseSet<Operation *> &inPlace;
   LogicalResult matchAndRewrite(Op op, PatternRewriter &rw) const override {
     auto it = widths.find(op.getResult());
-    if (it == widths.end() || !isRegister(op.getTarget()) || !isRegister(op.getAmount()))
+    if (it == widths.end() || !isRegister(op.getTarget()) || !isOperand(op.getAmount()))
       return failure();
     Location loc = op.getLoc();
     Value target = op.getTarget();
@@ -448,14 +479,14 @@ struct Lift : OpRewritePattern<existing_ir::dist::LiftOp> {
   LogicalResult matchAndRewrite(existing_ir::dist::LiftOp op, PatternRewriter &rw) const override {
     Value input = op.getInput();
     auto it = widths.find(op.getResult());
-    if (it == widths.end() || !isRegister(input))
+    if (it == widths.end() || !isOperand(input))
       return failure();
     if (reuse.contains(op)) {
       replaceWithRegisters(rw, op, input);
       return success();
     }
-    Value result = allocate(rw, op.getLoc(), it->second);
-    copy(rw, op.getLoc(), load(rw, op.getLoc(), input), load(rw, op.getLoc(), result));
+    Value result = allocate(rw, op.getLoc(), it->second);  // (a constant is the starting state of the register)
+    copyFrom(rw, op.getLoc(), input, load(rw, op.getLoc(), result));
     replaceWithRegisters(rw, op, result);
     return success();
   }
@@ -466,12 +497,11 @@ struct Lift : OpRewritePattern<existing_ir::dist::LiftOp> {
 Value select(OpBuilder &rw, Location loc, Value condition, Value trueValue, Value falseValue, unsigned width) {
   Scratch scratch;
   Value result = allocate(rw, loc, width), delta = scratch.add(allocate(rw, loc, width));
-  SmallVector<Value> res = load(rw, loc, result), d = load(rw, loc, delta), a = load(rw, loc, trueValue),
-                     b = load(rw, loc, falseValue);
+  SmallVector<Value> res = load(rw, loc, result), d = load(rw, loc, delta);
   Value bit = load(rw, loc, condition)[0];
-  copy(rw, loc, b, res);
-  copy(rw, loc, a, d);
-  copy(rw, loc, b, d);
+  copyFrom(rw, loc, falseValue, res);
+  copyFrom(rw, loc, trueValue, d);
+  copyFrom(rw, loc, falseValue, d);
   for (unsigned i = 0; i < res.size(); ++i)
     controlledX(rw, loc, {bit, d[i]}, res[i]);
   scratch.copies = {{trueValue, delta}, {falseValue, delta}};  // the difference of the two, cleared by copying them in again
@@ -484,8 +514,8 @@ struct Select : OpRewritePattern<arith::SelectOp> {
   const Widths &widths;
   LogicalResult matchAndRewrite(arith::SelectOp op, PatternRewriter &rw) const override {
     auto it = widths.find(op.getResult());
-    if (it == widths.end() || !isRegister(op.getCondition()) || !isRegister(op.getTrueValue()) ||
-        !isRegister(op.getFalseValue()))
+    if (it == widths.end() || !isRegister(op.getCondition()) || !isOperand(op.getTrueValue()) ||
+        !isOperand(op.getFalseValue()))
       return failure();
     replaceWithRegisters(rw, op, select(rw, op.getLoc(), op.getCondition(), op.getTrueValue(), op.getFalseValue(), it->second));
     return success();
@@ -496,8 +526,8 @@ struct DistSelect : OpRewritePattern<existing_ir::dist::SelectOp> {
   DistSelect(MLIRContext *c, const Widths &w) : OpRewritePattern(c), widths(w) {}
   const Widths &widths;
   LogicalResult matchAndRewrite(existing_ir::dist::SelectOp op, PatternRewriter &rw) const override {
-    if (!isRegister(op.getCondition()) || !llvm::all_of(op.getTrueValues(), isRegister) ||
-        !llvm::all_of(op.getFalseValues(), isRegister))
+    if (!isRegister(op.getCondition()) || !llvm::all_of(op.getTrueValues(), isOperand) ||
+        !llvm::all_of(op.getFalseValues(), isOperand))
       return failure();
     SmallVector<Value> results;
     for (auto [t, f, r] : llvm::zip(op.getTrueValues(), op.getFalseValues(), op.getResults()))

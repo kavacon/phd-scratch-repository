@@ -2,6 +2,7 @@
 // MQT's own QC and cbit dialects (built from source under code/build), plus our `dist` dialect.
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -33,6 +34,20 @@ struct QubitTimeline {
   llvm::SmallVector<int64_t> scratch;           // the temporaries each operation allocates
 };
 bool computeTimeline(mlir::func::FuncOp function, QubitTimeline &timeline);
+
+// Whether an operation can take operand `index` as a constant written straight into its own qubits, so that a constant used only by such
+// operations needs no register of its own: a sum or difference, a comparison, the amount of an update, the arms of a select, and the integer a
+// distribution is lifted from (which becomes the starting state of the distribution's register).
+inline bool acceptsImmediate(mlir::Operation *user, unsigned index) {
+  using namespace dist;
+  if (llvm::isa<mlir::arith::AddIOp, mlir::arith::SubIOp, mlir::arith::CmpIOp, AddIOp, SubIOp, SltOp, EqOp>(user))
+    return true;
+  if (llvm::isa<AddAssignOp, SubAssignOp>(user))
+    return index == 1;
+  if (llvm::isa<mlir::arith::SelectOp, SelectOp>(user))
+    return index >= 1;
+  return llvm::isa<LiftOp>(user);
+}
 
 // Registers the passes of this project.
 void registerLowerToQC();

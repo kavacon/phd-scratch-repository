@@ -32,7 +32,9 @@ class Pipeline(unittest.TestCase):
     def test_folding_the_source_first_removes_the_arithmetic_from_the_circuit(self):
         plain = pipeline.optimise(program(ARITHMETIC), *pipeline.PREPARE, "--lower-to-qc")
         folded = pipeline.optimise(program(ARITHMETIC), *pipeline.PREPARE, "--canonicalize", "--lower-to-qc")
-        self.assertEqual((registers(plain), "qc.call" in plain), (9, True))
+        # the constants 5, 3 and 1 are written into the registers that use them, so they are none of the six: the registers of x and y,
+        # and for each of the two sums an operand temporary and a carry
+        self.assertEqual((registers(plain), "qc.call" in plain), (6, True))
         self.assertEqual((registers(folded), "qc.call" in folded), (1, False))  # 7 is 0111, in one register
 
     def test_arithmetic_wraps_modulo_the_type_width(self):
@@ -53,10 +55,11 @@ class Pipeline(unittest.TestCase):
             self.assertTrue(all(400 < count < 600 for count in counts.values()), (source, counts))
 
     def test_updates_reuse_the_distribution_s_register_however_far_they_widen_it(self):
-        # three constants, the distribution, and for each update only a temporary and a carry: no fresh result register
+        # the distribution, and for each update only a temporary and a carry: no fresh result register, and the constants are written
+        # into the temporaries and have no register of their own
         source = program("a = 0..4; a += 3; a += 5; a -= 20; return a;", "v2")
         lowered = optimise(source, "--canonicalize", "--in-place-updates", "--lower-to-qc")
-        self.assertEqual(registers(lowered), 3 + 1 + 3 * 2)
+        self.assertEqual(registers(lowered), 1 + 3 * 2)
         self.assertEqual(set(pipeline.run(source)), {-12, -11, -10, -9})  # 0..3 + 3 + 5 - 20
 
     def test_adding_a_distribution_in_place_gives_the_distribution_of_the_sum(self):

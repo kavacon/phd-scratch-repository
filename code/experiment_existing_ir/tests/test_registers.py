@@ -21,15 +21,18 @@ class Registers(unittest.TestCase):
         self.assertEqual(len(registers), 1)  # the range and both updates are one register
         self.assertTrue(all("existing_ir.in_place" in line and "existing_ir.qubits = array<i64: 4>" in line for line in updates))  # 0..3 + 4 is 4..7
 
-    def test_a_register_is_definite_unless_a_value_in_it_depends_on_a_distribution(self):
+    def test_a_register_is_definite_unless_a_value_in_it_depends_on_a_distribution_and_a_constant_used_only_as_an_operand_has_none(self):
         text = pipeline.optimise(translate(parse("a = 0..4; b = 3; c = a + b; return c;", "v2")), *pipeline.BEFORE_LOWERING,
                                  "--dist-status", "--plan-registers")
+        constant = next(line for line in text.splitlines() if "arith.constant" in line)
+        self.assertIn("existing_ir.immediate", constant)  # it is written into the operation that uses it
+        self.assertIn("existing_ir.register = array<i64: -1>", constant)
         status = {}
         for line in text.splitlines():
             register = re.search(r"existing_ir\.register = array<i64: (\d+)>", line)
             if register:
                 status[int(register.group(1))] = int(re.search(r"existing_ir\.status = array<i64: (\d)>", line).group(1))
-        self.assertEqual(sorted(status.values()), [0, 1])  # the constant is definite; the die and its sum are one superposed register
+        self.assertEqual(list(status.values()), [1])  # the die and its sum are one superposed register
 
     def test_releasing_each_register_at_its_last_use_needs_fewer_qubits_than_holding_them_all(self):
         text = planned("a = 0..4; b = a + 1; c = b - a; d = c + c; return d;", "--qubit-liveness")

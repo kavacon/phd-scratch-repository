@@ -18,6 +18,8 @@
 //   `existing_ir.scratch`:  on an operation that needs temporaries while it runs, how many qubits it allocates for them (an operand
 //                           copy and a carry for a sum, the difference register of a comparison, ...). They are not values; the
 //                           lowering allocates exactly these, and nothing releases them yet;
+//   `existing_ir.immediate`: on a constant that every user takes straight into its own qubits, which then holds no register (its
+//                           `existing_ir.register` is -1 and its qubits are its width);
 //   `existing_ir.in_place`: on an update done in its target's register; `existing_ir.reuse`: on a lift that is its integer's register.
 // (Reading a distribution, `dist.measure`, is its register too: the measurement is the program's return.)
 #include "Dialects.h"
@@ -66,6 +68,18 @@ void existing_ir::planRegisters(ModuleOp module) {
     }
   });
 
+  // A constant that every user takes straight into its own qubits needs no register of its own.
+  DenseSet<Operation *> immediate;
+  module.walk([&](arith::ConstantOp constant) {
+    if (!widths.contains(constant.getResult()) || constant->use_empty())
+      return;
+    bool all = true;
+    for (OpOperand &use : constant->getUses())
+      all &= acceptsImmediate(use.getOwner(), use.getOperandNumber());
+    if (all)
+      immediate.insert(constant);
+  });
+
   // The values that share a register (union-find), and the operations that make them share.
   DenseSet<Operation *> inPlace, reuse;
   DenseMap<Value, Value> parent;
@@ -75,7 +89,7 @@ void existing_ir::planRegisters(ModuleOp module) {
     return value;
   };
   module.walk([&](Operation *op) {
-    if (auto lift = dyn_cast<LiftOp>(op); lift && lift.getInput().hasOneUse()) {
+    if (auto lift = dyn_cast<LiftOp>(op); lift && lift.getInput().hasOneUse() && !immediate.contains(lift.getInput().getDefiningOp())) {
       reuse.insert(op);
       parent.try_emplace(lift.getInput(), lift.getInput());
       parent.try_emplace(lift.getResult(), lift.getResult());
@@ -163,6 +177,12 @@ void existing_ir::planRegisters(ModuleOp module) {
   module.walk([&](Operation *op) {
     SmallVector<int64_t> registers, qubits;
     bool any = false;
+    if (immediate.contains(op)) {  // its width is known (the operations that take it size their registers by it), but it holds no register
+      op->setAttr("existing_ir.qubits", builder.getDenseI64ArrayAttr({int64_t(widths.lookup(op->getResult(0)))}));
+      op->setAttr("existing_ir.register", builder.getDenseI64ArrayAttr({int64_t(-1)}));
+      op->setAttr("existing_ir.immediate", builder.getUnitAttr());
+      return;
+    }
     for (Value result : op->getResults()) {
       auto it = widths.find(result);
       if (it == widths.end()) {
