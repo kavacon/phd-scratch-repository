@@ -74,6 +74,24 @@ class Release(unittest.TestCase):
         self.assertLess(metrics.of_qc(roomy).depth, metrics.of_qc(tight).depth)  # and so less waits for a qubit that is being cleared
         self.assertLess(outcome(name, roomy), TOLERANCE)
 
+    def test_a_die_that_feeds_the_result_through_a_flag_is_held_even_when_the_flag_is_released_and_is_reported_as_garbage(self):
+        name = "conditional on a distribution"  # a = 0..4; x = 2; if a < 2 { x += 3; } else { x -= 1; } return x;
+        program = translate(parse(entry(name).source, "v2"))
+        for strategy in ("lazy", "eager"):
+            qc = pipeline.optimise(program, *tuple(p.replace("strategy=lazy", f"strategy={strategy}") for p in pipeline.DEFAULT))
+            garbage = metrics.garbage(qc)
+            entangled = [register for register in garbage.registers if "entangled" in register[2]]
+            self.assertEqual([qubits for _, qubits, _ in entangled], [3], strategy)  # the die of 0..4, however its flag is handled
+            self.assertEqual(garbage.blocked_qubits, 3, strategy)
+            self.assertLess(outcome(name, qc), TOLERANCE, strategy)
+
+    def test_with_no_system_everything_that_could_be_released_is_reported_as_held_only_because_it_was_not_needed(self):
+        qc = compile_with("a loop variable compared with a distribution")
+        garbage = metrics.garbage(qc)
+        self.assertGreater(garbage.optional_qubits, 0)
+        self.assertEqual(sum(q for _, q, reason in garbage.registers if reason.startswith("could be released")), garbage.optional_qubits)
+        self.assertIn("released_registers = 0", qc)
+
 
 if __name__ == "__main__":
     unittest.main()

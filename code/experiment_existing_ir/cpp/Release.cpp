@@ -12,6 +12,10 @@
 //          from waits until those that can be released have been, since it must be there to run them backwards;
 //   lazy:  a register is released only when the qubits live at an operation would pass the system's qubits, and as few and as large
 //          as will make it fit. With no system, nothing is released.
+// The registers that stay held until the program ends are the garbage, and are reported, never an error: `existing_ir.garbage` on `main`
+// lists, for each, its number, its qubits and why: 1 it is entangled with a held register that depends on it (a prepared register that
+// something kept needs), 2 an input of it changes before it is last used, so it cannot be run backwards, 3 it could be released but
+// the system did not need the qubits. (The register that holds the result is not garbage.)
 // A register released has its number in `existing_ir.release_after` on the operation after which it is released, and every operation
 // of `main` has its position in `existing_ir.id`. If the program does not fit however much is released, the pass says so.
 #include "Dialects.h"
@@ -115,17 +119,33 @@ struct ScheduleRelease : PassWrapper<ScheduleRelease, OperationPass<ModuleOp>> {
             hi = std::min(hi, consumedAt[input] - 1);
       return hi;
     };
+    // Everything that depends on a register, directly or through other registers. A prepared register stays entangled with a register
+    // computed from it however many registers lie between, even when those between are themselves released.
+    std::map<int64_t, std::set<int64_t>> reach;
+    std::function<const std::set<int64_t> &(int64_t)> closure = [&](int64_t r) -> const std::set<int64_t> & {
+      auto found = reach.find(r);
+      if (found != reach.end())
+        return found->second;
+      std::set<int64_t> all;
+      for (int64_t d : dependents[r]) {
+        all.insert(d);
+        const std::set<int64_t> &below = closure(d);
+        all.insert(below.begin(), below.end());
+      }
+      return reach[r] = all;
+    };
     // A register that can never be released: the output, one whose inputs change before it is last used, and a prepared one that
-    // something never released depends on.
+    // something that can never be released depends on, however indirectly.
+    auto own = [&](int64_t r) { return output.contains(r) || latest(r) < lastUse(r); };
     std::map<int64_t, bool> never;
-    std::function<bool(int64_t)> impossible = [&](int64_t r) {
-      if (never.count(r))
-        return never[r];
-      never[r] = true;  // (the dependencies are acyclic; this only guards a loop)
-      bool result = output.contains(r) || latest(r) < lastUse(r);
+    auto impossible = [&](int64_t r) {
+      auto found = never.find(r);
+      if (found != never.end())
+        return found->second;
+      bool result = own(r);
       if (!result && prepared(r))
-        for (int64_t d : dependents[r])
-          result |= impossible(d);
+        for (int64_t d : closure(r))
+          result |= own(d);
       return never[r] = result;
     };
 
@@ -146,9 +166,9 @@ struct ScheduleRelease : PassWrapper<ScheduleRelease, OperationPass<ModuleOp>> {
           if (released.contains(registerOf[input]))
             return false;  // it has to be there to run this one backwards
       if (prepared(r))
-        for (int64_t d : dependents[r])
+        for (int64_t d : closure(r))
           if (!released.contains(d))
-            return false;  // still entangled
+            return false;  // still entangled with something computed from it
       return true;
     };
     // Eagerly a register waits for the registers computed from it that can be released.
@@ -220,6 +240,18 @@ struct ScheduleRelease : PassWrapper<ScheduleRelease, OperationPass<ModuleOp>> {
           positions.push_back(writer.position);
         main->setAttr(("existing_ir.writers_" + Twine(r)).str(), builder.getDenseI64ArrayAttr(positions));
       }
+    SmallVector<int64_t> garbage;
+    int64_t blocked = 0, optional = 0;
+    for (int64_t r : registers) {
+      if (released.contains(r) || output.contains(r))
+        continue;
+      int64_t reason = latest(r) < lastUse(r) ? 2 : impossible(r) ? 1 : 3;
+      garbage.insert(garbage.end(), {r, timeline.registers[r].qubits, reason});
+      (reason == 3 ? optional : blocked) += timeline.registers[r].qubits;
+    }
+    main->setAttr("existing_ir.garbage", builder.getDenseI64ArrayAttr(garbage));
+    main->setAttr("existing_ir.garbage_blocked_qubits", builder.getI64IntegerAttr(blocked));
+    main->setAttr("existing_ir.garbage_optional_qubits", builder.getI64IntegerAttr(optional));
     main->setAttr("existing_ir.releases", builder.getDenseI64ArrayAttr(pairs));
     main->setAttr("existing_ir.released_registers", builder.getI64IntegerAttr(pairs.size() / 2));
     main->setAttr("existing_ir.qubits_needed", builder.getI64IntegerAttr(needed));
