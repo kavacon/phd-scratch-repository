@@ -316,10 +316,6 @@ template <typename Op> struct CombineConstantSteps : OpRewritePattern<Op> {
     return success();
   }
 };
-void AddIOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<CombineConstantSteps<AddIOp>>(context); }
-void SubIOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<CombineConstantSteps<SubIOp>>(context); }
-void AddAssignOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<CombineConstantSteps<AddAssignOp>>(context); }
-void SubAssignOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<CombineConstantSteps<SubAssignOp>>(context); }
 
 // ---- flattening nested conditionals ------------------------------------------------------------------------------------------
 
@@ -354,7 +350,13 @@ struct FlattenSelect : OpRewritePattern<SelectOp> {
     return failure();
   }
 };
-void SelectOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<FlattenSelect>(context); }
+void existing_ir::populateDistRewrites(RewritePatternSet &patterns, bool combineSteps, bool flatten) {
+  if (combineSteps)
+    patterns.add<CombineConstantSteps<AddIOp>, CombineConstantSteps<SubIOp>, CombineConstantSteps<AddAssignOp>,
+                 CombineConstantSteps<SubAssignOp>>(patterns.getContext());
+  if (flatten)
+    patterns.add<FlattenSelect>(patterns.getContext());
+}
 
 OpFoldResult AddAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, plus); }
 OpFoldResult SubAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, minus); }

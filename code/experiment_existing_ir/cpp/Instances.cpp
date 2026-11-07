@@ -31,10 +31,13 @@ void collectHistory(Value value, SetVector<Operation *> &history) {
 
 struct ResolveInstances : PassWrapper<ResolveInstances, OperationPass<func::FuncOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ResolveInstances)
+  ResolveInstances() = default;
+  ResolveInstances(const ResolveInstances &other) : PassWrapper(other) {}
   StringRef getArgument() const final { return "resolve-instances"; }
   StringRef getDescription() const final {
     return "Make each dist.instance an independent distribution by replaying the history of its input";
   }
+  Option<bool> shareArms{*this, "share-arms", llvm::cl::desc("the arms of a conditional share the work they have in common"), llvm::cl::init(true)};
   void getDependentDialects(DialectRegistry &registry) const override { registry.insert<DistDialect>(); }
 
   void runOnOperation() override {
@@ -50,7 +53,7 @@ struct ResolveInstances : PassWrapper<ResolveInstances, OperationPass<func::Func
       // The two arms of a conditional are never both seen, so a value computed in one arm and in the other, from the same
       // operations, is computed once. The arms are told apart by the select that takes both: this instance's partner is the
       // value at the same place on the other side, and it must already be replayed (so that its clones come first).
-      if (std::optional<Value> partner = otherArm(instance)) {
+      if (std::optional<Value> partner = shareArms ? otherArm(instance) : std::nullopt) {
         auto found = replays.find(*partner);
         if (found != replays.end()) {
           SmallVector<Operation *> common;

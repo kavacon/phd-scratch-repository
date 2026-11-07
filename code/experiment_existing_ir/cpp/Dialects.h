@@ -55,6 +55,10 @@ void registerDistStatus();
 void registerInstances();
 void registerInPlaceUpdates();
 void registerFoldByRange();
+void registerDistRewrites();
+// The source-level rewrites that are patterns on dist operations: a chain of constant steps on one value is one step, and
+// conditionals nested around the same value are one condition. Each is separate so that a pipeline can leave it out.
+void populateDistRewrites(mlir::RewritePatternSet &patterns, bool combineSteps, bool flatten);
 void registerResolveDist();
 void registerPlanRegisters();
 void registerQubitLiveness();

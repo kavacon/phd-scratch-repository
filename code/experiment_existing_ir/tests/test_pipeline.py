@@ -2,7 +2,7 @@ import subprocess
 import unittest
 
 from compiler.parser.parser import parse
-from experiment_existing_ir import pipeline
+from experiment_existing_ir import metrics, pipeline
 from experiment_existing_ir.translate import TranslationError, translate
 
 ARITHMETIC = "x = 5; y = x + 3; y = y - 1; return y;"
@@ -244,6 +244,14 @@ class Pipeline(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError) as caught:
                 pipeline.optimise(program(source, "v2"), *pipeline.DEFAULT)
             self.assertIn(message, caught.exception.stderr)
+
+    def test_the_source_level_rewrites_can_be_left_out_and_the_outcome_is_the_same_with_a_larger_circuit(self):
+        source = program("a = 0..4; b = 0..3; x = 0; if a < 2 { x = b * b + 1; } else { x = b * b + 2; } x += 1; x += 2; return x;", "v2")
+        gates = {}
+        for name, stages in (("rewritten", pipeline.DEFAULT), ("unrewritten", pipeline.UNREWRITTEN)):
+            gates[name] = metrics.of_qc(optimise(source, *stages)).gates
+            self.assertEqual(set(pipeline.run(source, stages)), {4, 5, 6, 8, 9}, name)  # the squares 0, 1, 4, plus 1 or 2 by arm, plus 3
+        self.assertLess(gates["rewritten"], gates["unrewritten"])
 
 
 if __name__ == "__main__":
