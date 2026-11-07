@@ -56,11 +56,11 @@ class Pipeline(unittest.TestCase):
 
     def test_updates_reuse_the_distribution_s_register_however_far_they_widen_it(self):
         # the distribution, and for each update only a temporary and a carry: no fresh result register, and the constants are written
-        # into the temporaries and have no register of their own
-        source = program("a = 0..4; a += 3; a += 5; a -= 20; return a;", "v2")
+        # into the temporaries and have no register of their own (the distribution between the constants keeps them from combining)
+        source = program("a = 0..4; p = 0..2; a += 3; a += p; a -= 20; return a;", "v2")
         lowered = optimise(source, "--canonicalize", "--in-place-updates", "--lower-to-qc")
-        self.assertEqual(registers(lowered), 1 + 3 * 2)
-        self.assertEqual(set(pipeline.run(source)), {-12, -11, -10, -9})  # 0..3 + 3 + 5 - 20
+        self.assertEqual(registers(lowered), 2 + 3 * 2)  # a, p and the three updates
+        self.assertEqual(set(pipeline.run(source)), {-17, -16, -15, -14, -13})  # 0..3 + 3 + 0..1 - 20
 
     def test_adding_a_distribution_in_place_gives_the_distribution_of_the_sum(self):
         # a is 0..3 and p is 0..1 independently, so a + p is 0 to 4 with weights 1, 2, 2, 2, 1 out of 8

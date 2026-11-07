@@ -1,6 +1,8 @@
 #include "Dialects.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Dominance.h"
+#include "mlir/IR/Matchers.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/Transforms/InliningUtils.h"
 #include "mlir/Interfaces/Utils/InferIntRangeCommon.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -280,6 +282,45 @@ OpFoldResult XOrIOp::fold(FoldAdaptor adaptor) {
     return pointOf(getType(), APInt(elementOf(getType()).getIntOrFloatBitWidth(), 0));
   return foldBinary(*this, adaptor, differ);
 }
+// ---- combining constant steps -----------------------------------------------------------------------------------------
+
+// A sum or difference of a constant taken from another one with a constant is one step: (x + 1) + 2 is x + 3, as arith does.
+// The inner step must have no other user; its result is only the outer step's operand. `y = a + 1; z = y + 1` is such a chain
+// (each assignment replays `a`, so the chain is on one value), and one step costs one adder where the chain cost several.
+template <typename Op> struct CombineConstantSteps : OpRewritePattern<Op> {
+  using OpRewritePattern<Op>::OpRewritePattern;
+  static bool isStep(Operation *op) { return isa<AddIOp, SubIOp, AddAssignOp, SubAssignOp>(op); }
+  static bool subtracts(Operation *op) { return isa<SubIOp, SubAssignOp>(op); }
+  LogicalResult matchAndRewrite(Op op, PatternRewriter &rewriter) const override {
+    Operation *inner = op->getOperand(0).getDefiningOp();
+    APInt outerAmount, innerAmount;
+    if (!inner || !isStep(inner) || !inner->getResult(0).hasOneUse() ||
+        !matchPattern(op->getOperand(1), m_ConstantInt(&outerAmount)) || !matchPattern(inner->getOperand(1), m_ConstantInt(&innerAmount)) ||
+        outerAmount.getBitWidth() != innerAmount.getBitWidth())
+      return failure();
+    APInt total = (subtracts(inner) ? -innerAmount : innerAmount) + (subtracts(op) ? -outerAmount : outerAmount);
+    if (total.isZero())
+      return failure();
+    bool inPlace = isa<AddAssignOp, SubAssignOp>(inner);  // the inner step consumed its operand, so the combined one does
+    Value operand = inner->getOperand(0);
+    Value amount = arith::ConstantOp::create(rewriter, op->getLoc(), rewriter.getIntegerAttr(op->getOperand(1).getType(), total.isNegative() ? -total : total));
+    Type type = op->getResult(0).getType();
+    Operation *step;
+    if (total.isNegative())
+      step = inPlace ? SubAssignOp::create(rewriter, op->getLoc(), type, operand, amount).getOperation()
+                     : SubIOp::create(rewriter, op->getLoc(), type, operand, amount).getOperation();
+    else
+      step = inPlace ? AddAssignOp::create(rewriter, op->getLoc(), type, operand, amount).getOperation()
+                     : AddIOp::create(rewriter, op->getLoc(), type, operand, amount).getOperation();
+    rewriter.replaceOp(op, step->getResults());
+    return success();
+  }
+};
+void AddIOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<CombineConstantSteps<AddIOp>>(context); }
+void SubIOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<CombineConstantSteps<SubIOp>>(context); }
+void AddAssignOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<CombineConstantSteps<AddAssignOp>>(context); }
+void SubAssignOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<CombineConstantSteps<SubAssignOp>>(context); }
+
 OpFoldResult AddAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, plus); }
 OpFoldResult SubAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, minus); }
 OpFoldResult ConstantOp::fold(FoldAdaptor) { return getValue(); }
