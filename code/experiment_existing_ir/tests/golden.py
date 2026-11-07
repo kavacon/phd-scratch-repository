@@ -199,6 +199,16 @@ GOLDEN: Tuple[Golden, ...] = (
     Golden("two variables in one arm stay independent when the arms share work",
            "a = 0..4; b = 0..2; x = 0; y = 0; if a < 2 { x = b * b + 1; y = b * b + 2; } else { x = b * b + 3; y = b * b + 4; } return x - y;",
            {-2: 1/4, -1: 1/2, 0: 1/4}),
+    # nested conditionals that give the same value outside the inner one are one condition: && when nested in the true arm, || in the false
+    Golden("a conditional nested in the true arm",
+           "a = 0..4; b = 0..4; x = 0; if a < 2 { if b < 2 { x += 1; } } return x;",
+           {0: 3/4, 1: 1/4}),
+    Golden("a conditional nested in the false arm",
+           "a = 0..4; b = 0..4; x = 0; if a < 2 { x += 1; } else { if b < 2 { x += 1; } } return x;",
+           {0: 1/4, 1: 3/4}),
+    Golden("a conditional nested in the true arm with an else of its own",
+           "a = 0..4; b = 0..4; x = 0; if a < 2 { if b < 2 { x += 1; } else { x += 2; } } return x;",
+           {0: 1/2, 1: 1/4, 2: 1/4}),
     # independent computations joined at the end: regions that could run side by side
     Golden("two independent sums joined by a product",
            'a = 0..4; b = 0..4; c = 0..4; d = 0..4; return (a + b) * (c + d);',

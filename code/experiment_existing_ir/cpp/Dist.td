@@ -136,6 +136,7 @@ def Dist_SubAssignOp : Dist_UpdateOp<"sub_assign"> {
 // For each pair, the true value where the condition holds and the false value where it does not. One operation takes
 // all the pairs so the condition, a distribution, is used once however many variables the conditional changes.
 def Dist_SelectOp : Dist_PureOp<"select", [AttrSizedOperandSegments]> {
+  let hasCanonicalizer = 1;
   let arguments = (ins Dist_Dist:$condition, Variadic<Dist_DistOrInt>:$trueValues, Variadic<Dist_DistOrInt>:$falseValues);
   let results = (outs Variadic<Dist_Dist>:$results);
   let assemblyFormat = "$condition `,` `(` $trueValues `)` `,` `(` $falseValues `)` attr-dict `:` type($condition) `,` "

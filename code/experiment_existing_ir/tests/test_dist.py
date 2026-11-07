@@ -62,6 +62,12 @@ class Distributions(unittest.TestCase):
                                *pipeline.BEFORE_LOWERING)
         self.assertEqual(ir.count("dist.muli"), 1)
 
+    def test_conditionals_nested_around_the_same_value_become_one_condition(self):
+        ir = pipeline.optimise(translate(parse("a = 0..4; b = 0..4; c = 0..4; x = 0; if a < 2 { if b < 2 { if c < 2 { x += 1; } } } return x;", "v2")),
+                               *pipeline.BEFORE_LOWERING)
+        self.assertEqual(ir.count("dist.select"), 1)
+        self.assertEqual(ir.count("dist.andi"), 2)
+
 
 if __name__ == "__main__":
     unittest.main()
