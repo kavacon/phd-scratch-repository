@@ -8,7 +8,7 @@ from tests.golden import GOLDEN
 
 
 def planned(source: str, *passes: str) -> str:
-    return pipeline.optimise(translate(parse(source, "v2")), *pipeline.BEFORE_LOWERING, "--plan-registers", *passes)
+    return pipeline.optimise(translate(parse(source, "v2")), *pipeline.PLANNED, *passes)
 
 
 @unittest.skipUnless(pipeline.built(), "existing-ir-opt is not built: run helper/cpp/setup.sh and cpp/build.sh")
@@ -22,8 +22,7 @@ class Registers(unittest.TestCase):
         self.assertTrue(all("existing_ir.in_place" in line and "existing_ir.qubits = array<i64: 4>" in line for line in updates))  # 0..3 + 4 is 4..7
 
     def test_a_register_is_definite_unless_a_value_in_it_depends_on_a_distribution_and_a_constant_used_only_as_an_operand_has_none(self):
-        text = pipeline.optimise(translate(parse("a = 0..4; b = 3; c = a + b; return c;", "v2")), *pipeline.BEFORE_LOWERING,
-                                 "--dist-status", "--plan-registers")
+        text = pipeline.optimise(translate(parse("a = 0..4; b = 3; c = a + b; return c;", "v2")), *pipeline.PLANNED)
         constant = next(line for line in text.splitlines() if "arith.constant" in line)
         self.assertIn("existing_ir.immediate", constant)  # it is written into the operation that uses it
         self.assertIn("existing_ir.register = array<i64: -1>", constant)
@@ -46,7 +45,7 @@ class Registers(unittest.TestCase):
     def test_the_planned_qubits_are_exactly_what_the_lowering_allocates_and_each_way_of_providing_scratch_needs_no_more_than_the_last(self):
         for golden in GOLDEN:
             program = translate(parse(golden.source, "v2"))
-            plan = pipeline.optimise(program, *pipeline.BEFORE_LOWERING, "--plan-registers", "--qubit-liveness")
+            plan = pipeline.optimise(program, *pipeline.PLANNED, "--qubit-liveness")
             held, dedicated, freed, pool = (int(re.search(rf"existing_ir\.{key} = (\d+)", plan).group(1))
                                             for key in ("qubits_held", "qubits_dedicated", "qubits_scratch_freed", "qubits_pool"))
             lowered = int(re.search(r"existing_ir\.peak_qubits = (\d+)", pipeline.build(program, *pipeline.DEFAULT)).group(1))
@@ -91,6 +90,25 @@ func.func @main() -> i32 {
 }"""
         sunk = pipeline.optimise(text, "--sink-to-use")
         self.assertLess(sunk.index("dist.addi %"), sunk.index("dist.add_assign"))
+
+    def test_reordering_keeps_a_value_before_the_update_that_consumes_it_and_after_what_makes_it(self):
+        text = """
+func.func @main() -> i32 {
+  %five = arith.constant 5 : i32
+  %a = dist.uniform 0, 4 : !dist.dist<i32>
+  %b = dist.uniform 0, 4 : !dist.dist<i32>
+  %t = dist.addi %a, %b : !dist.dist<i32>, !dist.dist<i32> -> !dist.dist<i32>
+  %a2 = dist.add_assign %a, %five : !dist.dist<i32>, i32 -> !dist.dist<i32>
+  %u = dist.addi %t, %a2 : !dist.dist<i32>, !dist.dist<i32> -> !dist.dist<i32>
+  %m = dist.measure %u : !dist.dist<i32> -> i32
+  return %m : i32
+}"""
+        for policy in ("level", "chain", "critical", "random seed=3", "random seed=4"):
+            ordered = pipeline.optimise(text, "--plan-registers", f"--reorder-ops{{policy={policy}}}").splitlines()
+            kinds = [next(k for k in ("dist.uniform", "dist.addi", "dist.add_assign") if k in line) for line in ordered
+                     if any(k in line for k in ("dist.uniform", "dist.addi", "dist.add_assign"))]
+            # both dice are made before anything reads them; the sum t reads a before the update changes it; the last sum needs the update
+            self.assertEqual(kinds, ["dist.uniform", "dist.uniform", "dist.addi", "dist.add_assign", "dist.addi"], policy)
 
 
 if __name__ == "__main__":

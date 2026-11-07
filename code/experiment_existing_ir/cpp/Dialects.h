@@ -61,6 +61,7 @@ void registerScheduleRelease();
 void registerReleaseRegisters();
 void registerAssignQubits();
 void registerSinkToUse();
+void registerReorderOps();
 // The plan of `plan-registers`, written on the operations of the module (see Registers.cpp).
 void planRegisters(mlir::ModuleOp module);
 } // namespace existing_ir

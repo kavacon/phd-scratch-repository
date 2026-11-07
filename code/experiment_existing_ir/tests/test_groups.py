@@ -19,7 +19,7 @@ def reported_groups(program: str) -> Dict[int, Optional[int]]:
     registers up to the measurement. A read gives a definite integer, and the measurement is the program's return, so what comes
     after it (widening the result for return) is output, which the circuit still holds as a correlated register.
     """
-    text = pipeline.optimise(program, *pipeline.BEFORE_LOWERING, "--plan-registers", "--dist-status")
+    text = pipeline.optimise(program, *pipeline.PLANNED)
     groups: Dict[int, Optional[int]] = {}
     for line in text.splitlines():
         register = re.search(r"existing_ir\.register = array<i64: (\d+)>", line)
