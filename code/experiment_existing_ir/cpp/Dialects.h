@@ -42,7 +42,8 @@ void registerInPlaceUpdates();
 void registerResolveDist();
 void registerPlanRegisters();
 void registerQubitLiveness();
-void registerClassifyRelease();
+void registerScheduleRelease();
+void registerReleaseRegisters();
 void registerAssignQubits();
 // The plan of `plan-registers`, written on the operations of the module (see Registers.cpp).
 void planRegisters(mlir::ModuleOp module);

@@ -1,36 +1,43 @@
-// Which registers must be released, from the plan, the liveness and the system's qubits.
+// When each register may be released, and which are, from the plan and the liveness.
 //
-// A register is dead from the operation after its last use. Holding a dead register costs its qubits at every later operation; releasing
-// it frees them. This takes every dead register to be releasable, which is an upper bound on what release can do: a register can only be
-// returned to zero when its value is definite or can be recomputed from registers still live, and one entangled with live data that does
-// not determine it stays held. That, and the earliest point at which each register may be reclaimed (never before its last use), is the
-// work of release (M7); until then the last use stands in for it. A release costs gates (the register has to be returned to zero), so the rule is to release only what must be
-// released: a dead register is released when the qubits live at some later operation, with its temporaries and every dead register
-// still held, would pass the system's qubits. When no system is described nothing needs releasing and every register stays held.
+// To release a register is to return its qubits to zero so they can serve something else. A register is returned to zero by running
+// the gates that computed it backwards. That is valid when its value is a classical function of registers that are still as they
+// were: each input of each of its writing operations must still be held (not released) and must not have been changed since by an
+// in-place update. A register that was born from a preparation (a range) is not a function of anything, and running its preparation
+// backwards gives zero only if it is unentangled, so everything that depends on it, directly or through other registers, must have been
+// released first; if one of them stays held, so does it. The register that holds the result is never released.
 //
-// The classes, as an array indexed by register number on `main` (`existing_ir.release_class`):
-//   0 held:     left as it is to the return;
-//   1 reuse:    released at its last use so that its qubits serve the operations after it, because the budget needs them.
-// A register released "for fidelity" is one whose entanglement with a value still in use would change something computed from it
-// later. Every operation here shuffles basis states and is applied after the preparation of the distributions, so nothing is ever
-// computed that could interfere with it, and no register needs releasing for that reason; the class is added when the language has an
-// operation that interferes (a Hadamard after the preparation).
-//
-// A register released has its number in `existing_ir.release_after` on the operation that is its last use. The registers to release
-// are chosen largest first when several are dead, and `existing_ir.qubits_needed` on `main` is the most qubits live at once with
-// those released. If even releasing every dead register leaves some operation over the budget, the program does not fit and the pass
-// says by how much.
+// Two strategies choose among the valid releases (the option `strategy`):
+//   eager: each register is released at the earliest point it may be, after its last use. A register that others were computed
+//          from waits until those that can be released have been, since it must be there to run them backwards;
+//   lazy:  a register is released only when the qubits live at an operation would pass the system's qubits, and as few and as large
+//          as will make it fit. With no system, nothing is released.
+// A register released has its number in `existing_ir.release_after` on the operation after which it is released, and every operation
+// of `main` has its position in `existing_ir.id`. If the program does not fit however much is released, the pass says so.
 #include "Dialects.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Pass/Pass.h"
+#include <set>
 
 using namespace mlir;
 
 namespace {
-struct ClassifyRelease : PassWrapper<ClassifyRelease, OperationPass<ModuleOp>> {
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ClassifyRelease)
-  StringRef getArgument() const final { return "classify-release"; }
-  StringRef getDescription() const final { return "Say which registers must be released to fit the system's qubits"; }
+constexpr int64_t NEVER = std::numeric_limits<int64_t>::max();
+
+struct Writer {
+  int64_t position;
+  SmallVector<Value> inputs;  // operands held in other registers
+  bool prepares;              // a preparation of a distribution, which is not a function of its inputs
+};
+
+struct ScheduleRelease : PassWrapper<ScheduleRelease, OperationPass<ModuleOp>> {
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ScheduleRelease)
+  ScheduleRelease() = default;
+  ScheduleRelease(const ScheduleRelease &other) : PassWrapper(other) {}
+  Option<std::string> strategy{*this, "strategy", llvm::cl::desc("eager or lazy"), llvm::cl::init("lazy")};
+
+  StringRef getArgument() const final { return "schedule-release"; }
+  StringRef getDescription() const final { return "Decide which registers are released, and where, to fit the system's qubits"; }
 
   void runOnOperation() override {
     ModuleOp module = getOperation();
@@ -38,56 +45,186 @@ struct ClassifyRelease : PassWrapper<ClassifyRelease, OperationPass<ModuleOp>> {
     existing_ir::QubitTimeline timeline;
     if (!main || !existing_ir::computeTimeline(main, timeline))
       return;
+    Builder builder(&getContext());
+    int64_t size = timeline.order.size();
+
+    // The register of every value, and the operations that write each register, from the plan.
+    DenseMap<Value, int64_t> registerOf, definedAt;
+    std::map<int64_t, SmallVector<Writer>> writers;
+    std::set<int64_t> registers;
+    for (int64_t i = 0; i < size; ++i) {
+      Operation *op = timeline.order[i];
+      op->setAttr("existing_ir.id", builder.getI64IntegerAttr(i));
+      auto numbers = op->getAttrOfType<DenseI64ArrayAttr>("existing_ir.register");
+      if (!numbers)
+        continue;
+      for (auto [result, number] : llvm::zip(op->getResults(), numbers.asArrayRef()))
+        if (number >= 0) {
+          registerOf[result] = number;
+          definedAt[result] = i;
+          registers.insert(number);
+        }
+    }
+    for (int64_t i = 0; i < size; ++i) {
+      Operation *op = timeline.order[i];
+      if (isa<existing_ir::dist::MeasureOp>(op))
+        continue;  // reading a distribution is its register; it writes nothing
+      auto numbers = op->getAttrOfType<DenseI64ArrayAttr>("existing_ir.register");
+      if (!numbers)
+        continue;
+      for (auto [result, number] : llvm::zip(op->getResults(), numbers.asArrayRef())) {
+        if (number < 0)
+          continue;
+        Writer writer{i, {}, isa<existing_ir::dist::UniformOp>(op)};
+        for (Value operand : op->getOperands())
+          if (registerOf.contains(operand) && registerOf[operand] != number)
+            writer.inputs.push_back(operand);
+        writers[number].push_back(writer);
+      }
+    }
+    // The register the program returns is never released.
+    DenseSet<int64_t> output;
+    for (Operation *op : timeline.order)
+      if (isa<func::ReturnOp>(op))
+        for (Value operand : op->getOperands())
+          if (registerOf.contains(operand))
+            output.insert(registerOf[operand]);
+
+    // The operation after which a value stops being what it was: the in-place update that consumes it.
+    DenseMap<Value, int64_t> consumedAt;
+    for (int64_t i = 0; i < size; ++i)
+      if (timeline.order[i]->hasAttr("existing_ir.in_place"))
+        consumedAt[timeline.order[i]->getOperand(0)] = i;
+    auto lastUse = [&](int64_t r) { return timeline.registers[r].last; };
+
+    // Who depends on whom: a register depends on the registers its writers read.
+    std::map<int64_t, std::set<int64_t>> dependents;
+    for (auto &[r, ws] : writers)
+      for (Writer &writer : ws)
+        for (Value input : writer.inputs)
+          dependents[registerOf[input]].insert(r);
+    auto prepared = [&](int64_t r) {
+      return llvm::any_of(writers[r], [](Writer &w) { return w.prepares; });
+    };
+    // The latest point a register may be released: while every input is still as it was.
+    auto latest = [&](int64_t r) {
+      int64_t hi = size - 1;
+      for (Writer &writer : writers[r])
+        for (Value input : writer.inputs)
+          if (consumedAt.contains(input))
+            hi = std::min(hi, consumedAt[input] - 1);
+      return hi;
+    };
+    // A register that can never be released: the output, one whose inputs change before it is last used, and a prepared one that
+    // something never released depends on.
+    std::map<int64_t, bool> never;
+    std::function<bool(int64_t)> impossible = [&](int64_t r) {
+      if (never.count(r))
+        return never[r];
+      never[r] = true;  // (the dependencies are acyclic; this only guards a loop)
+      bool result = output.contains(r) || latest(r) < lastUse(r);
+      if (!result && prepared(r))
+        for (int64_t d : dependents[r])
+          result |= impossible(d);
+      return never[r] = result;
+    };
+
     FailureOr<Attribute> system = dlti::query(module, ArrayRef<StringRef>{"quantum", "qubits"});
     auto available = succeeded(system) ? dyn_cast<IntegerAttr>(*system) : IntegerAttr();
-    int64_t budget = available ? available.getInt() : std::numeric_limits<int64_t>::max();
+    int64_t budget = available ? available.getInt() : NEVER;
+    bool eager = strategy == "eager";
 
     DenseSet<int64_t> released;
-    SmallVector<int64_t> numbers;
-    for (auto &entry : timeline.registers)
-      numbers.push_back(entry.first);
-    // The qubits of the dead registers still held when operation `i` runs.
-    auto heldDead = [&](size_t i) {
+    std::map<int64_t, int64_t> releasedAfter;
+    SmallVector<int64_t> order;  // the registers in the order they are released, which has the registers computed from others first
+    // Whether register r may be released right after operation t, given what has been released so far.
+    std::function<bool(int64_t, int64_t)> valid = [&](int64_t r, int64_t t) {
+      if (released.contains(r) || impossible(r) || t < lastUse(r) || t > latest(r))
+        return false;
+      for (Writer &writer : writers[r])
+        for (Value input : writer.inputs)
+          if (released.contains(registerOf[input]))
+            return false;  // it has to be there to run this one backwards
+      if (prepared(r))
+        for (int64_t d : dependents[r])
+          if (!released.contains(d))
+            return false;  // still entangled
+      return true;
+    };
+    // Eagerly a register waits for the registers computed from it that can be released.
+    auto waits = [&](int64_t r) {
+      for (int64_t d : dependents[r])
+        if (!released.contains(d) && !impossible(d))
+          return true;
+      return false;
+    };
+    auto release = [&](int64_t r, int64_t t) {
+      released.insert(r);
+      releasedAfter[r] = t;
+      order.push_back(r);
+    };
+    auto heldDead = [&](int64_t i) {
       int64_t held = 0;
-      for (int64_t number : numbers)
-        if (!released.contains(number) && timeline.registers[number].last < static_cast<int64_t>(i))
-          held += timeline.registers[number].qubits;
+      for (int64_t r : registers)
+        if (!released.contains(r) && timeline.registers[r].last < i)
+          held += timeline.registers[r].qubits;
       return held;
     };
+
     int64_t needed = 0;
-    for (size_t i = 0; i < timeline.order.size(); ++i) {
+    for (int64_t i = 0; i < size; ++i) {
+      if (eager && i > 0) {  // after operation i - 1
+        bool changed = true;
+        while (changed) {
+          changed = false;
+          for (auto it = registers.rbegin(); it != registers.rend(); ++it)
+            if (valid(*it, i - 1) && !waits(*it)) {
+              release(*it, i - 1);
+              changed = true;
+            }
+        }
+      }
       while (timeline.live[i] + timeline.scratch[i] + heldDead(i) > budget) {
-        int64_t best = -1;  // the largest dead register still held
-        for (int64_t number : numbers)
-          if (!released.contains(number) && timeline.registers[number].last < static_cast<int64_t>(i) &&
-              (best < 0 || timeline.registers[number].qubits > timeline.registers[best].qubits))
-            best = number;
+        int64_t best = -1;  // the largest register that may be released now, after operation i - 1
+        for (int64_t r : registers)
+          if (i > 0 && valid(r, i - 1) && (best < 0 || timeline.registers[r].qubits > timeline.registers[best].qubits))
+            best = r;
         if (best < 0) {
-          main.emitError() << "the program needs " << timeline.live[i] + timeline.scratch[i] << " qubits at once at the first operation that does not fit, "
-                           << timeline.order[i]->getName() << ", even with every dead register released, but the system has "
-                           << budget;
+          main.emitError() << "the program needs " << timeline.live[i] + timeline.scratch[i] + heldDead(i) << " qubits at once at "
+                           << timeline.order[i]->getName() << ", the first operation that does not fit, even releasing every register "
+                           << "that may be released, but the system has " << budget;
           return signalPassFailure();
         }
-        released.insert(best);
+        release(best, i - 1);
       }
       needed = std::max(needed, timeline.live[i] + timeline.scratch[i] + heldDead(i));
     }
-
-    Builder builder(&getContext());
-    SmallVector<int64_t> classes(numbers.empty() ? 0 : *llvm::max_element(numbers) + 1, 0);
-    DenseMap<int64_t, SmallVector<int64_t>> after;  // by the position of the last use
-    for (int64_t number : released) {
-      classes[number] = 1;
-      after[timeline.registers[number].last].push_back(number);
-    }
+    // A register released after the last operation is not released: the program has ended.
+    DenseMap<int64_t, SmallVector<int64_t>> after;
+    for (auto &[r, t] : releasedAfter)
+      if (t < size - 1)
+        after[t].push_back(r);
     for (auto &entry : after) {
       llvm::sort(entry.second);
       timeline.order[entry.first]->setAttr("existing_ir.release_after", builder.getDenseI64ArrayAttr(entry.second));
     }
-    main->setAttr("existing_ir.release_class", builder.getDenseI64ArrayAttr(classes));
+    // What the emission needs once the operations are lowered and these are gone: (position, register) pairs in order, and the
+    // positions of the operations that wrote each register released.
+    SmallVector<int64_t> pairs;
+    for (int64_t r : order)
+      if (releasedAfter[r] < size - 1) {
+        pairs.push_back(releasedAfter[r]);
+        pairs.push_back(r);
+        SmallVector<int64_t> positions;
+        for (Writer &writer : writers[r])
+          positions.push_back(writer.position);
+        main->setAttr(("existing_ir.writers_" + Twine(r)).str(), builder.getDenseI64ArrayAttr(positions));
+      }
+    main->setAttr("existing_ir.releases", builder.getDenseI64ArrayAttr(pairs));
+    main->setAttr("existing_ir.released_registers", builder.getI64IntegerAttr(pairs.size() / 2));
     main->setAttr("existing_ir.qubits_needed", builder.getI64IntegerAttr(needed));
   }
 };
 } // namespace
 
-void existing_ir::registerClassifyRelease() { PassRegistration<ClassifyRelease>(); }
+void existing_ir::registerScheduleRelease() { PassRegistration<ScheduleRelease>(); }
