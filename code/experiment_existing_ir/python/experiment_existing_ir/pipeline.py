@@ -42,7 +42,7 @@ def built() -> bool:
 
 
 # The tool's own passes that are anchored on a function. Flags nest them by themselves; in a pipeline they are nested here.
-FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "resolve-dist", "qubit-liveness"}
+FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "resolve-dist", "qubit-liveness", "sink-to-use"}
 
 
 def command(*passes: str) -> list:

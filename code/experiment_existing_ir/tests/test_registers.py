@@ -55,6 +55,43 @@ class Registers(unittest.TestCase):
             self.assertLessEqual(freed, dedicated, golden.name)
             self.assertLessEqual(dedicated, held, golden.name)
 
+    def test_a_value_computed_early_is_moved_to_just_before_its_use_and_the_program_needs_fewer_qubits(self):
+        # b and e are made first and used last; the square in between is where the most qubits are needed, and does not use them
+        text = """
+func.func @main() -> i32 {
+  %b = dist.uniform 0, 16 : !dist.dist<i32>
+  %e = dist.uniform 0, 2 : !dist.dist<i32>
+  %d = dist.uniform 0, 16 : !dist.dist<i32>
+  %sq = dist.muli %d, %d : !dist.dist<i32>, !dist.dist<i32> -> !dist.dist<i32>
+  %m1 = dist.measure %sq : !dist.dist<i32> -> i32
+  %t = dist.add_assign %b, %e : !dist.dist<i32>, !dist.dist<i32> -> !dist.dist<i32>
+  %m = dist.measure %t : !dist.dist<i32> -> i32
+  return %m : i32
+}"""
+        lines = lambda extra: pipeline.optimise(text, *extra).splitlines()
+        position = lambda ls, name: next(i for i, line in enumerate(ls) if name in line)
+        plain, sunk = lines(()), lines(("--sink-to-use",))
+        self.assertLess(position(plain, "dist.uniform 0, 16"), position(plain, "dist.muli"))  # b is made first
+        self.assertGreater(max(i for i, line in enumerate(sunk) if "dist.uniform 0, 16" in line), position(sunk, "dist.muli"))  # and now after
+        used = lambda *extra: int(re.search(r"pool_qubits = (\d+)", pipeline.optimise(
+            text, *extra, "--plan-registers", "--lower-to-qc", "--release-registers", "--assign-qubits")).group(1))
+        self.assertLess(used("--sink-to-use"), used())
+
+    def test_a_value_does_not_move_past_the_update_of_one_of_its_inputs(self):
+        # t reads a before the update changes it, so it stays before the update even though its result is used after it
+        text = """
+func.func @main() -> i32 {
+  %five = arith.constant 5 : i32
+  %a = dist.uniform 0, 4 : !dist.dist<i32>
+  %t = dist.addi %a, %five : !dist.dist<i32>, i32 -> !dist.dist<i32>
+  %a2 = dist.add_assign %a, %five : !dist.dist<i32>, i32 -> !dist.dist<i32>
+  %u = dist.addi %t, %a2 : !dist.dist<i32>, !dist.dist<i32> -> !dist.dist<i32>
+  %m = dist.measure %u : !dist.dist<i32> -> i32
+  return %m : i32
+}"""
+        sunk = pipeline.optimise(text, "--sink-to-use")
+        self.assertLess(sunk.index("dist.addi %"), sunk.index("dist.add_assign"))
+
 
 if __name__ == "__main__":
     unittest.main()
