@@ -110,6 +110,12 @@ struct AssignQubits : PassWrapper<AssignQubits, OperationPass<ModuleOp>> {
     builder.setInsertionPoint(block.getTerminator());
     memref::DeallocOp::create(builder, loc, pool);
     main->setAttr("existing_ir.pool_qubits", attrs.getI64IntegerAttr(next));
+    // The pool is what the program needs at once, so it is checked against the system's qubits here, after the releases.
+    if (auto available = main->getAttrOfType<IntegerAttr>("existing_ir.qubits_available"); available && next > available.getInt()) {
+      main.emitError() << "the program needs " << next << " qubits at once but the system has " << available.getInt() << " (over by "
+                       << next - available.getInt() << ")";
+      return signalPassFailure();
+    }
   }
 };
 } // namespace

@@ -624,6 +624,20 @@ struct Return : OpRewritePattern<func::ReturnOp> {
   }
 };
 
+// Marks every operation a pattern creates with the position (`existing_ir.id`, from `schedule-release`) of the operation it replaces, as
+// `existing_ir.of`, so that the gates that computed a register can be found again and run backwards to release it.
+struct Tagger : RewriterBase::Listener {
+  int64_t id = -1;
+  void notifyPatternBegin(const Pattern &, Operation *op) override {
+    auto attr = op->getAttrOfType<IntegerAttr>("existing_ir.id");
+    id = attr ? attr.getInt() : -1;
+  }
+  void notifyOperationInserted(Operation *op, OpBuilder::InsertPoint) override {
+    if (id >= 0)
+      op->setAttr("existing_ir.of", IntegerAttr::get(IntegerType::get(op->getContext(), 64), id));
+  }
+};
+
 struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerToQC)
   StringRef getArgument() const final { return "lower-to-qc"; }
@@ -688,6 +702,8 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
         &getContext(), widths, inPlace);
     patterns.add<Return>(&getContext());
     GreedyRewriteConfig config;
+    Tagger tagger;
+    config.setListener(&tagger);
     config.setUseTopDownTraversal(true);
     config.enableFolding(false);
     config.enableConstantCSE(false);
@@ -726,7 +742,11 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     main->setAttr("existing_ir.peak_qubits", IntegerAttr::get(IntegerType::get(&getContext(), 64), peak));
     FailureOr<Attribute> budget = dlti::query(module, ArrayRef<StringRef>{"quantum", "qubits"});
     auto available = succeeded(budget) ? dyn_cast<IntegerAttr>(*budget) : IntegerAttr();
-    if (!available || peak <= available.getInt())
+    if (available)
+      main->setAttr("existing_ir.qubits_available", available);  // for the pool, which has the last word
+    auto releases = main->getAttrOfType<DenseI64ArrayAttr>("existing_ir.releases");
+    bool releasing = releases && !releases.empty();  // registers are about to be released: this peak holds them all
+    if (!available || peak <= available.getInt() || releasing)
       return success();
     llvm::sort(sizes, std::greater<int64_t>());
     InFlightDiagnostic error = module.emitError() << "the program needs " << peak << " qubits at once but the system has "

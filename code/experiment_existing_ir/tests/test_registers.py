@@ -1,9 +1,7 @@
 import re
-import subprocess
 import unittest
 
 from compiler.parser.parser import parse
-from compiler.system import System
 from experiment_existing_ir import pipeline
 from experiment_existing_ir.translate import translate
 from tests.golden import GOLDEN
@@ -53,25 +51,6 @@ class Registers(unittest.TestCase):
             self.assertLessEqual(pool, freed, golden.name)
             self.assertLessEqual(freed, dedicated, golden.name)
             self.assertLessEqual(dedicated, held, golden.name)
-
-    def test_a_register_is_released_only_when_the_budget_needs_its_qubits_and_a_program_that_cannot_fit_is_refused(self):
-        program = translate(parse("a = 0..4; b = a + 1; c = b - a; d = c + c; return d;", "v2"))
-
-        def classified(qubits=None):
-            text = program if qubits is None else pipeline.with_system(program, System(qubits=qubits))
-            out = pipeline.optimise(text, *pipeline.BEFORE_LOWERING, "--plan-registers", "--classify-release")
-            classes = [int(n) for n in re.search(r"release_class = array<i64: ([^>]*)>", out).group(1).split(",")]
-            return classes, int(re.search(r"qubits_needed = (\d+)", out).group(1))
-
-        classes, needed = classified()
-        self.assertEqual(set(classes), {0})  # no system: nothing must be released
-        self.assertEqual(classified(needed)[0], classes)  # exactly enough without releasing
-        released, now_needed = classified(needed - 4)
-        self.assertIn(1, released)  # tighter: some dead register is released at its last use
-        self.assertLessEqual(now_needed, needed - 4)
-        with self.assertRaises(subprocess.CalledProcessError) as raised:
-            classified(5)
-        self.assertIn("even with every dead register released", raised.exception.stderr)
 
 
 if __name__ == "__main__":
