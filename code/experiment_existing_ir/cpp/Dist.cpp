@@ -321,6 +321,41 @@ void SubIOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContex
 void AddAssignOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<CombineConstantSteps<AddAssignOp>>(context); }
 void SubAssignOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<CombineConstantSteps<SubAssignOp>>(context); }
 
+// ---- flattening nested conditionals ------------------------------------------------------------------------------------------
+
+// A conditional inside a conditional that otherwise gives the same value takes one condition: if c { if d { x } else { y } } else
+// { y } is `x` where c && d and `y` elsewhere, and likewise with the roles of the arms swapped for ||. A nest of n conditions
+// becomes one condition of n - 1 `and`s, which the lowering computes without a select and a copy of the value at each level.
+// Only a select of one value is flattened; the inner select must have no other user.
+struct FlattenSelect : OpRewritePattern<SelectOp> {
+  using OpRewritePattern<SelectOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(SelectOp outer, PatternRewriter &rewriter) const override {
+    if (outer.getResults().size() != 1)
+      return failure();
+    Value whenTrue = outer.getTrueValues()[0], whenFalse = outer.getFalseValues()[0];
+    for (bool nestedInTrue : {true, false}) {
+      auto inner = (nestedInTrue ? whenTrue : whenFalse).getDefiningOp<SelectOp>();
+      if (!inner || inner.getResults().size() != 1 || !inner->hasOneUse())
+        continue;
+      Value same = nestedInTrue ? whenFalse : whenTrue;  // what the outer gives when the inner is not reached
+      Value innerTrue = inner.getTrueValues()[0], innerFalse = inner.getFalseValues()[0];
+      Type type = outer.getCondition().getType();
+      if (nestedInTrue && innerFalse == same) {
+        Value both = AndIOp::create(rewriter, outer.getLoc(), type, outer.getCondition(), inner.getCondition());
+        rewriter.replaceOpWithNewOp<SelectOp>(outer, TypeRange{outer.getResult(0).getType()}, both, ValueRange{innerTrue}, ValueRange{same});
+        return success();
+      }
+      if (!nestedInTrue && innerTrue == same) {
+        Value either = OrIOp::create(rewriter, outer.getLoc(), type, outer.getCondition(), inner.getCondition());
+        rewriter.replaceOpWithNewOp<SelectOp>(outer, TypeRange{outer.getResult(0).getType()}, either, ValueRange{same}, ValueRange{innerFalse});
+        return success();
+      }
+    }
+    return failure();
+  }
+};
+void SelectOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<FlattenSelect>(context); }
+
 OpFoldResult AddAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, plus); }
 OpFoldResult SubAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, minus); }
 OpFoldResult ConstantOp::fold(FoldAdaptor) { return getValue(); }

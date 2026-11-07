@@ -14,7 +14,7 @@ from tests.golden import GOLDEN, TOLERANCE, distance, entry
 TIGHT = {"a function called in a loop": 20, "a loop variable compared with a distribution": 28,
          "a condition on a distribution in a loop": 19, "two independent conditional updates joined by a sum": 25,
          "three independent calls joined by sums": 29, "every comparison of a distribution": 27,
-         "two variables tied to one condition": 29, "a distribution conditional inside another, in a loop": 24,
+         "two variables tied to one condition": 29, "a distribution conditional inside another, in a loop": 21,
          "three independent comparisons joined by and": 21, "two independent accumulators in a loop joined by a sum": 24}
 # These give the wrong outcome when a register is freed without being returned to zero first, because the qubits are reused (the last
 # two of TIGHT happen not to reuse a dirty qubit in a way that shows).
