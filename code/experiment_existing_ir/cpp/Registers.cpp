@@ -12,6 +12,9 @@
 //   `existing_ir.register`: for each result, the number of its register (counted from 0 in order of first appearance), or -1 if
 //                           the result is not held in a register;
 //   `existing_ir.qubits`:   for each result, the qubits of its register, or 0;
+//   `existing_ir.status`:   for each result, 1 if its register holds a superposition and 0 if it holds one known value, from the
+//                           groups of `dist-status` (a value that depends on a distribution is in a group; one that does not is
+//                           definite). Written only when `dist-status` has run, and a register is superposed if any value in it is;
 //   `existing_ir.scratch`:  on an operation that needs temporaries while it runs, how many qubits it allocates for them (an operand
 //                           copy and a carry for a sum, the difference register of a comparison, ...). They are not values; the
 //                           lowering allocates exactly these, and nothing releases them yet;
@@ -23,6 +26,7 @@
 #include "mlir/Analysis/DataFlow/IntegerRangeAnalysis.h"
 #include "mlir/Analysis/DataFlowFramework.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Pass/Pass.h"
 #include "llvm/Support/MathExtras.h"
 
@@ -144,6 +148,19 @@ void existing_ir::planRegisters(ModuleOp module) {
     return 0;
   };
 
+  // Whether each register holds a superposition: any value in it that `dist-status` put in a group. Only known if it has run.
+  bool statusKnown = false;
+  DenseSet<Value> superposed;  // roots of the registers
+  module.walk([&](func::FuncOp function) { statusKnown |= function->hasAttr("dist.groups"); });
+  if (statusKnown)
+    module.walk([&](Operation *op) {
+      if (!op->hasAttr("dist.group"))
+        return;
+      for (Value result : op->getResults())
+        if (widths.contains(result))
+          superposed.insert(find(result));
+    });
+
   // Write the plan, numbering the registers in order of first appearance.
   DenseMap<Value, int64_t> number;
   Builder builder(context);
@@ -162,6 +179,12 @@ void existing_ir::planRegisters(ModuleOp module) {
       registers.push_back(number[root]);
       qubits.push_back(parent.contains(result) ? registerWidths[root] : it->second);
       any = true;
+    }
+    if (any && statusKnown) {
+      SmallVector<int64_t> status;
+      for (Value result : op->getResults())
+        status.push_back(widths.contains(result) && superposed.contains(find(result)) ? 1 : 0);
+      op->setAttr("existing_ir.status", builder.getDenseI64ArrayAttr(status));
     }
     if (any) {
       op->setAttr("existing_ir.register", builder.getDenseI64ArrayAttr(registers));
