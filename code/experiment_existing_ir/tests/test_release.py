@@ -1,3 +1,4 @@
+import math
 import re
 import subprocess
 import unittest
@@ -18,7 +19,7 @@ TIGHT = {"a function called in a loop": 20, "a loop variable compared with a dis
 SENSITIVE = tuple(TIGHT)
 
 
-def compile_with(name: str, qubits=None, strategy="lazy", uncompute=True, policy="spread") -> str:
+def compile_with(name: str, qubits=None, strategy="lazy", uncompute=True, policy="aware") -> str:
     program = translate(parse(entry(name).source, "v2"))
     if qubits is not None:
         program = pipeline.with_system(program, System(qubits=qubits))
@@ -91,6 +92,20 @@ class Release(unittest.TestCase):
         self.assertGreater(garbage.optional_qubits, 0)
         self.assertEqual(sum(q for _, q, reason in garbage.registers if reason.startswith("could be released")), garbage.optional_qubits)
         self.assertIn("released_registers = 0", qc)
+
+    def test_independent_regions_run_side_by_side_when_the_system_has_the_qubits_and_use_fewer_than_a_qubit_for_every_register(self):
+        # x and y are accumulated from two independent dice and joined at the end; with the least qubits they follow one another
+        name = "two independent accumulators in a loop joined by a sum"
+        program = translate(parse(entry(name).source, "v2"))
+        unpooled = metrics.of_qc(pipeline.optimise(program, *(p for p in pipeline.DEFAULT if p != "--assign-qubits")))
+        least = compile_with(name)
+        roomy = compile_with(name, math.ceil(1.5 * pool(least)))
+        blindly = compile_with(name, math.ceil(1.5 * pool(least)), policy="spread")
+        self.assertEqual(metrics.of_qc(roomy).depth, unpooled.depth)  # as shallow as with a qubit of its own for every register
+        self.assertLess(metrics.of_qc(roomy).qubits, unpooled.qubits)  # on far fewer qubits
+        self.assertGreater(metrics.of_qc(least).depth, metrics.of_qc(roomy).depth)  # which the least qubits cannot do
+        self.assertLessEqual(metrics.of_qc(roomy).qubits, metrics.of_qc(blindly).qubits)  # spending spare qubits only where reuse would wait
+        self.assertLess(outcome(name, roomy), TOLERANCE)
 
 
 if __name__ == "__main__":

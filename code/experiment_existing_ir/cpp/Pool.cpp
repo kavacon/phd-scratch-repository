@@ -42,9 +42,11 @@ struct AssignQubits : PassWrapper<AssignQubits, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(AssignQubits)
   AssignQubits() = default;
   AssignQubits(const AssignQubits &other) : PassWrapper(other) {}
-  Option<std::string> policy{*this, "policy", llvm::cl::desc("which qubit an allocation takes: spread (a new one while the system has more, "
-                             "else the one free longest), oldest (the one free longest) or lowest (the lowest free)"),
-                             llvm::cl::init("spread")};
+  Option<std::string> policy{*this, "policy", llvm::cl::desc("which qubit an allocation takes: aware (the free one that "
+                             "is ready just in time, else a new one while the system has more, else the one ready soonest), spread "
+                             "(a new one while the system has more, else the one free longest), oldest (the one free longest) or "
+                             "lowest (the lowest free)"),
+                             llvm::cl::init("aware")};
   StringRef getArgument() const final { return "assign-qubits"; }
   StringRef getDescription() const final { return "Give the registers of a lowered program qubits from one pool, reusing freed ones"; }
   void getDependentDialects(DialectRegistry &registry) const override { registry.insert<arith::ArithDialect, memref::MemRefDialect, mlir::qc::QCDialect>(); }
@@ -63,20 +65,68 @@ struct AssignQubits : PassWrapper<AssignQubits, OperationPass<ModuleOp>> {
         used[load.getMemRef()].insert(*index);
     });
 
-    // Walk in order: give qubits at an allocation, take them back at a deallocation.
-    std::set<int64_t> lowestFree;   // the free qubits, for taking the lowest
+    // Walk in order: give qubits at an allocation, take them back at a deallocation. The walk also runs the gates as early as their
+    // qubits allow, one step for a gate and as many as the gates of the adder for a call, so that for each qubit it is known when it is
+    // ready again. An allocation is then given a qubit that is ready by the time the first gate on the new register could start
+    // for want of its other qubits: reusing it then costs no waiting. Which qubit is taken changes how much waits, never how many
+    // qubits there are, unless the system has qubits to spare (see below).
+    std::set<int64_t> lowestFree;    // the free qubits, for taking the lowest
     std::deque<int64_t> oldestFree;  // and in the order they were freed, for taking the one free longest
-    bool lowest = policy == "lowest";
+    std::vector<int64_t> freeQubits;  // and as a list, for taking the one that is ready when wanted
+    bool lowest = policy == "lowest", aware = policy == "aware";
     int64_t next = 0;
-    // "spread": new qubits are taken while the system has them, so that nothing waits for a qubit it could have had to itself
+    // "spread" and "aware": new qubits are taken while the system has them
     int64_t available = 0;
-    bool spread = false;
-    if (auto attr = main->getAttrOfType<IntegerAttr>("existing_ir.qubits_available"); attr && policy == "spread") {
+    bool spare = false;
+    if (auto attr = main->getAttrOfType<IntegerAttr>("existing_ir.qubits_available"); attr && (policy == "spread" || aware)) {
       available = attr.getInt();
-      spread = true;
+      spare = true;
     }
-    auto take = [&]() -> int64_t {
-      if (spread && next < available)
+    DenseMap<int64_t, int64_t> ready;  // pool qubit -> when its last gate ends
+    DenseMap<Value, DenseMap<int64_t, int64_t>> assigned;  // register -> its qubit index -> pool qubit
+    auto qubitOf = [&](Value value) -> std::optional<int64_t> {
+      auto load = value.getDefiningOp<memref::LoadOp>();
+      if (!load || !isQubitRegister(load.getMemRef()))
+        return std::nullopt;
+      auto index = constantIndex(load);
+      auto found = assigned.find(load.getMemRef());
+      if (!index || found == assigned.end() || !found->second.contains(*index))
+        return std::nullopt;
+      return found->second[*index];
+    };
+    // the first gate on each register, whose other qubits say when the register is first wanted
+    DenseMap<Value, Operation *> firstGate;
+    for (Operation &op : block)
+      if (isa<mlir::qc::QCDialect>(op.getDialect()))
+        for (Value operand : op.getOperands())
+          if (auto load = operand.getDefiningOp<memref::LoadOp>(); load && isQubitRegister(load.getMemRef()) && !firstGate.count(load.getMemRef()))
+            firstGate[load.getMemRef()] = &op;
+    auto cost = [&](Operation &op) -> int64_t {
+      if (auto call = dyn_cast<mlir::qc::CallOp>(op))
+        if (auto callee = module.lookupSymbol<func::FuncOp>(call.getCallee()))
+          return std::max<int64_t>(1, std::distance(callee.getBody().front().begin(), callee.getBody().front().end()) - 1);
+      return 1;
+    };
+    auto take = [&](int64_t wanted) -> int64_t {
+      if (aware) {
+        int64_t best = -1;  // the free qubit that became ready latest but no later than wanted
+        for (size_t i = 0; i < freeQubits.size(); ++i)
+          if (ready[freeQubits[i]] <= wanted && (best < 0 || ready[freeQubits[i]] > ready[freeQubits[best]]))
+            best = i;
+        if (best < 0 && !(spare && next < available) && !freeQubits.empty()) {  // none in time and no spare: the one ready soonest
+          best = 0;
+          for (size_t i = 1; i < freeQubits.size(); ++i)
+            if (ready[freeQubits[i]] < ready[freeQubits[best]])
+              best = i;
+        }
+        if (best >= 0) {
+          int64_t qubit = freeQubits[best];
+          freeQubits.erase(freeQubits.begin() + best);
+          return qubit;
+        }
+        return next++;
+      }
+      if (spare && next < available)
         return next++;
       if (lowest && !lowestFree.empty()) {
         int64_t qubit = *lowestFree.begin();
@@ -90,17 +140,31 @@ struct AssignQubits : PassWrapper<AssignQubits, OperationPass<ModuleOp>> {
       }
       return next++;
     };
-    DenseMap<Value, DenseMap<int64_t, int64_t>> assigned;  // register -> its qubit index -> pool qubit
     for (Operation &op : block) {
       if (auto alloc = dyn_cast<memref::AllocOp>(op); alloc && isQubitRegister(alloc)) {
-        for (int64_t index : used[alloc]) {
-          assigned[alloc][index] = take();
-        }
+        int64_t wanted = 0;
+        if (auto gate = firstGate.find(alloc); aware && gate != firstGate.end())
+          for (Value operand : gate->second->getOperands())
+            if (auto other = qubitOf(operand))
+              wanted = std::max(wanted, ready[*other]);
+        for (int64_t index : used[alloc])
+          assigned[alloc][index] = take(wanted);
       } else if (auto dealloc = dyn_cast<memref::DeallocOp>(op); dealloc && isQubitRegister(dealloc.getMemref())) {
         for (auto &[index, qubit] : assigned[dealloc.getMemref()]) {
           lowestFree.insert(qubit);
           oldestFree.push_back(qubit);
+          freeQubits.push_back(qubit);
         }
+      } else if (isa<mlir::qc::QCDialect>(op.getDialect())) {
+        SmallVector<int64_t> qubits;
+        for (Value operand : op.getOperands())
+          if (auto qubit = qubitOf(operand))
+            qubits.push_back(*qubit);
+        int64_t start = 0;
+        for (int64_t qubit : qubits)
+          start = std::max(start, ready[qubit]);
+        for (int64_t qubit : qubits)
+          ready[qubit] = start + cost(op);
       }
     }
 

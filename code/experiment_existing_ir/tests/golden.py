@@ -192,6 +192,28 @@ GOLDEN: Tuple[Golden, ...] = (
     Golden("an outer name aliased inside a dead branch",
            "a = 0..4; x = 2; k = 9; if k < 3 { x = a; } x += 1; return a;",
            {0: 1/4, 1: 1/4, 2: 1/4, 3: 1/4}),
+    # independent computations joined at the end: regions that could run side by side
+    Golden("two independent sums joined by a product",
+           'a = 0..4; b = 0..4; c = 0..4; d = 0..4; return (a + b) * (c + d);',
+           {0: 31/256, 1: 1/64, 2: 3/64, 3: 1/16, 4: 21/256, 5: 1/32, 6: 7/64, 8: 9/128, 9: 1/16, 10: 3/64, 12: 15/128, 15: 1/16, 16: 9/256, 18: 1/32, 20: 3/64, 24: 3/128, 25: 1/64, 30: 1/64, 36: 1/256}),
+    Golden("three independent comparisons joined by and",
+           'a = 0..4; b = 0..4; c = 0..4; return (a < 2) && (b < 2) && (c < 2);',
+           {0: 7/8, 1: 1/8}),
+    Golden("two independent conditional updates joined by a sum",
+           'a = 0..4; b = 0..4; x = 0; y = 0; if a < 2 { x += 3; } if b < 2 { y += 5; } return x + y;',
+           {0: 1/4, 3: 1/4, 5: 1/4, 8: 1/4}),
+    Golden("two independent squares joined by a sum",
+           'a = 0..8; b = 0..8; return (a * a) + (b * b);',
+           {0: 1/64, 1: 1/32, 2: 1/64, 4: 1/32, 5: 1/32, 8: 1/64, 9: 1/32, 10: 1/32, 13: 1/32, 16: 1/32, 17: 1/32, 18: 1/64, 20: 1/32, 25: 1/16, 26: 1/32, 29: 1/32, 32: 1/64, 34: 1/32, 36: 1/32, 37: 1/32, 40: 1/32, 41: 1/32, 45: 1/32, 49: 1/32, 50: 3/64, 52: 1/32, 53: 1/32, 58: 1/32, 61: 1/32, 65: 1/32, 72: 1/64, 74: 1/32, 85: 1/32, 98: 1/64}),
+    Golden("two independent accumulators in a loop joined by a sum",
+           'a = 0..4; b = 0..4; x = 0; y = 0; for i in 0..3 { x += a; y += b; } return x + y;',
+           {0: 1/16, 3: 1/8, 6: 3/16, 9: 1/4, 12: 3/16, 15: 1/8, 18: 1/16}),
+    Golden("three independent calls joined by sums",
+           'function sq(p) { return p * p; }\na = 0..4; b = 0..4; c = 0..4; return sq(a) + sq(b) + sq(c);',
+           {0: 1/64, 1: 3/64, 2: 3/64, 3: 1/64, 4: 3/64, 5: 3/32, 6: 3/64, 8: 3/64, 9: 3/32, 10: 3/32, 11: 3/64, 12: 1/64, 13: 3/32, 14: 3/32, 17: 3/64, 18: 3/64, 19: 3/64, 22: 3/64, 27: 1/64}),
+    Golden("three independent sums joined by a sum",
+           'a = 0..4; b = 0..4; c = 0..4; d = 0..4; e = 0..4; f = 0..4; return ((a + b) + (c + d)) + (e + f);',
+           {0: 1/4096, 1: 3/2048, 2: 21/4096, 3: 7/512, 4: 15/512, 5: 27/512, 6: 21/256, 7: 57/512, 8: 273/2048, 9: 145/1024, 10: 273/2048, 11: 57/512, 12: 21/256, 13: 27/512, 14: 15/512, 15: 7/512, 16: 21/4096, 17: 3/2048, 18: 1/4096}),
 )
 
 
