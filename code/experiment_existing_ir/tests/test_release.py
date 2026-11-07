@@ -10,14 +10,12 @@ from tests.golden import GOLDEN, TOLERANCE, distance, entry
 
 # Programs that only fit a small system because dead registers are released and their qubits reused: the qubits each needs without
 # release are more than the budget here. The intended outcome does not depend on the budget.
-TIGHT = {"a loop variable compared with a distribution": 29, "every comparison of a distribution": 28,
-         "a condition on a distribution in a loop": 21, "a function called in a loop": 29,
-         "a distribution conditional inside another, in a loop": 24, "two variables tied to one condition": 29,
-         "boolean operators": 20, "conditional update of a distribution": 18,
-         "arm of a distribution conditional superposes x": 19}
+TIGHT = {"a function called in a loop": 20, "a loop variable compared with a distribution": 27,
+         "every comparison of a distribution": 24, "a condition on a distribution in a loop": 19,
+         "two variables tied to one condition": 29, "boolean operators": 17,
+         "a distribution conditional inside another, in a loop": 24}
 # These give the wrong outcome when a register is freed without being returned to zero first, because the qubits are reused.
-SENSITIVE = ("a loop variable compared with a distribution", "every comparison of a distribution",
-             "a condition on a distribution in a loop", "a function called in a loop", "two variables tied to one condition")
+SENSITIVE = tuple(TIGHT)
 
 
 def compile_with(name: str, qubits=None, strategy="lazy", uncompute=True) -> str:
