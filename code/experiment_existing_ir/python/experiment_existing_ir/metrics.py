@@ -45,6 +45,13 @@ class Fit(NamedTuple):
     registers: List[int]  # sizes of the QC program's registers, largest first
 
 
+class Garbage(NamedTuple):
+    """The registers held to the end of the program that are not its result, and why. Reported, not an error."""
+    registers: List[Tuple[int, int, str]]  # (register, qubits, reason)
+    blocked_qubits: int  # held because they cannot be returned to zero: entangled with what is kept, or an input has changed
+    optional_qubits: int  # held although they could be released, because the system did not need the qubits
+
+
 class Run(NamedTuple):
     shots: int
     outcomes: int  # distinct values measured
@@ -96,6 +103,18 @@ def fit(qc: str, system: System) -> Fit:
     needed = int(re.search(r"existing_ir\.peak_qubits = (\d+)", qc).group(1))
     sizes = sorted((int(n) for n in re.findall(r"memref\.alloc\(\)(?: \{[^}]*\})? : memref<(\d+)x!qc\.qubit>", qc)), reverse=True)
     return Fit(needed <= system.qubits, needed, system.qubits, max(needed - system.qubits, 0), sizes)
+
+
+REASONS = {1: "entangled with a held register that depends on it", 2: "an input changes before it is last used",
+           3: "could be released; the system did not need the qubits"}
+
+
+def garbage(qc: str) -> Garbage:
+    """The registers a program holds to its end, from the QC text of a program built with a release schedule."""
+    numbers = [int(n) for n in re.search(r"existing_ir\.garbage = array<i64: ([\d, ]*)>", qc).group(1).replace(" ", "").split(",") if n]
+    triples = [(numbers[i], numbers[i + 1], REASONS[numbers[i + 2]]) for i in range(0, len(numbers), 3)]
+    blocked, optional = (int(re.search(rf"existing_ir\.garbage_{kind}_qubits = (\d+)", qc).group(1)) for kind in ("blocked", "optional"))
+    return Garbage(triples, blocked, optional)
 
 
 def of_run(counts: Dict[int, int]) -> Run:
