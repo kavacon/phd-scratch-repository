@@ -133,18 +133,14 @@ void existing_ir::planRegisters(ModuleOp module) {
       return equality(eq.getLhs(), eq.getRhs());
     if (isa<arith::SelectOp>(op))
       return qubitsOf(op->getResult(0));
-    if (isa<SelectOp>(op)) {  // a difference register for each variable the conditional changes
-      int64_t total = 0;
+    if (isa<SelectOp>(op)) {  // a difference register for each variable the conditional changes, one at a time
+      int64_t most = 0;
       for (Value result : op->getResults())
-        total += qubitsOf(result);
-      return total;
+        most = std::max(most, qubitsOf(result));
+      return most;
     }
-    if (auto uniform = dyn_cast<UniformOp>(op); uniform && int32_t(uniform.getStart()) != 0) {
-      // prepared on its own register, an offset register, then the sum of the two
-      int64_t n = int64_t(int32_t(uniform.getStop())) - int32_t(uniform.getStart());
-      int64_t prepared = std::max<int64_t>(llvm::Log2_64_Ceil(n), 1) + 1;
-      return prepared + qubitsOf(uniform.getResult()) + sum(uniform.getResult());
-    }
+    if (auto uniform = dyn_cast<UniformOp>(op); uniform && int32_t(uniform.getStart()) != 0)
+      return sum(uniform.getResult());  // an offset register and a carry; the start is added in place
     return 0;
   };
 
