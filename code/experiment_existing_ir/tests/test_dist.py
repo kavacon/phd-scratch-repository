@@ -47,6 +47,11 @@ class Distributions(unittest.TestCase):
     def test_a_definite_amount_does_not_join_a_group(self):
         self.assertIn("dist.groups = 1 : i64", status("a = 0..4; k = 7; a += k; return a;"))
 
+    def test_a_comparison_the_range_decides_is_folded_with_its_conditional(self):
+        # a is in 0..3, so a < 10 holds whatever the roll: the program is the constant 1, with no distribution left
+        ir = pipeline.optimise(translate(parse("a = 0..4; x = 0; if a < 10 { x = 1; } return x;", "v2")), *pipeline.BEFORE_LOWERING)
+        self.assertNotIn("dist.", ir)
+
 
 if __name__ == "__main__":
     unittest.main()

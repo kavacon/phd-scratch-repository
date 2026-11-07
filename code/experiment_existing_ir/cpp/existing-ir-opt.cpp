@@ -26,6 +26,7 @@ int main(int argc, char **argv) {
   existing_ir::registerDistStatus();
   existing_ir::registerInstances();
   existing_ir::registerInPlaceUpdates();
+  existing_ir::registerFoldByRange();
   existing_ir::registerResolveDist();
   existing_ir::registerPlanRegisters();
   existing_ir::registerQubitLiveness();

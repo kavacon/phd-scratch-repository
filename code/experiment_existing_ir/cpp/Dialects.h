@@ -54,6 +54,7 @@ void registerLowerToQC();
 void registerDistStatus();
 void registerInstances();
 void registerInPlaceUpdates();
+void registerFoldByRange();
 void registerResolveDist();
 void registerPlanRegisters();
 void registerQubitLiveness();
