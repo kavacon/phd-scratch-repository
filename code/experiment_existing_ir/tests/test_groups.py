@@ -70,18 +70,14 @@ def distribution(circuit, interest: List[int]) -> Dict[int, float]:
 
 def final_state(program: str) -> Tuple[Dict[int, List[int]], Dict[int, float], List[int]]:
     """
-    The wires of each value register and the final distribution over all of them. The annotations on the lowered allocations say which
-    allocation is which register, and the exported circuit names its registers after the allocations in order.
+    The wires of each value register and the final distribution over all of them. The pool pass records on `main` which pool qubits hold
+    each value register of the plan, and the exported circuit is one register of the pool's qubits, so a pool qubit is a wire.
     """
     qc = pipeline.build(program, *pipeline.DEFAULT)
-    allocs = re.findall(r"memref\.alloc\(\) \{([^}]*)\} : memref<\d+x!qc\.qubit>", qc)
     circuit = qiskit_tools.read(pipeline.export(qc, "openqasm3"))
-    assert len(circuit.qregs) == len(allocs), "the exported circuit has a register for every allocation"
-    qubits: Dict[int, List[int]] = {}
-    for alloc, register in zip(allocs, circuit.qregs):
-        number = re.search(r"existing_ir\.register = (\d+)", alloc)
-        if number and 'role = "value"' in alloc:
-            qubits.setdefault(int(number.group(1)), []).extend(circuit.find_bit(q).index for q in register)
+    assert len(circuit.qregs) == 1, "the exported circuit is the pool"
+    qubits = {int(number): [int(q) for q in wires.split(",")]
+              for number, wires in re.findall(r"existing_ir\.qubits_of_(\d+) = array<i64: ([\d, ]+)>", qc)}
     wires = sorted({wire for register in qubits.values() for wire in register})
     return qubits, distribution(circuit, wires), wires
 

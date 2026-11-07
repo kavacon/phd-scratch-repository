@@ -30,6 +30,7 @@ int main(int argc, char **argv) {
   existing_ir::registerPlanRegisters();
   existing_ir::registerQubitLiveness();
   existing_ir::registerClassifyRelease();
+  existing_ir::registerAssignQubits();
   mlir::DialectRegistry registry;
   mlir::registerAllDialects(registry);
   mlir::func::registerInlinerExtension(registry);

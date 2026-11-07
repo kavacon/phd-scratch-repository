@@ -233,11 +233,13 @@ struct Sum : OpRewritePattern<Op> {
 Value lessThan(OpBuilder &rw, Location loc, Value lhs, Value rhs, Scratch &scratch) {
   unsigned width = std::max(registerWidth(lhs), registerWidth(rhs)) + 1;
   Span span(rw);
+  size_t copies = scratch.copies.size();
   Value difference = scratch.add(sum(rw, loc, lhs, rhs, width, true, scratch));
   span.close(rw);
   Value result = allocate(rw, loc, 1);
   controlledX(rw, loc, {load(rw, loc, difference).back()}, load(rw, loc, result)[0]);
   uncompute(rw, loc, span);  // the difference has served; run it backwards so that its register is zero again
+  scratch.copies.resize(copies);  // (and the operand copy made inside the span is cleared by that too)
   return result;
 }
 
