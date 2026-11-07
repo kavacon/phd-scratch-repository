@@ -70,7 +70,7 @@ RESOLVE = ("--resolve-dist", "--sccp", "--canonicalize")
 # then folds each single-gate inverse (a self-adjoint gate is itself). The lowering writes a subtraction as the adder inside `qc.inv`,
 # which the exporters (DDSIM's OpenQASM reader, Jeff) do not take; after this the circuit has no modifier on a call.
 UNROLL_MODIFIERS = ("--unroll-modifiers", "--canonicalize")
-BEFORE_LOWERING = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--fold-by-range", "--canonicalize", "--cse", "--in-place-updates")
+BEFORE_LOWERING = (*PREPARE, *RESOLVE, "--cse", "--resolve-instances", "--canonicalize", "--fold-by-range", "--canonicalize", "--cse", "--in-place-updates")
 # The order of the operations decides which registers are alive together and who gets a free qubit first, so it is chosen once the plan says how
 # wide each is: critical-path first, within the qubits the system has (or the program as written would use). The plan is made again for the new order.
 PLANNED = (*BEFORE_LOWERING, "--dist-status", "--plan-registers", "--reorder-ops{policy=pressure}", "--plan-registers")

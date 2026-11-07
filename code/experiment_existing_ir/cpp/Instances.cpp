@@ -40,16 +40,51 @@ struct ResolveInstances : PassWrapper<ResolveInstances, OperationPass<func::Func
   void runOnOperation() override {
     SmallVector<InstanceOp> instances;
     getOperation().walk([&](InstanceOp instance) { instances.push_back(instance); });  // in program order
+    // What each replay cloned, kept so that the other arm of a conditional can use it.
+    DenseMap<Value, std::pair<IRMapping, SetVector<Operation *>>> replays;
     for (InstanceOp instance : instances) {
       SetVector<Operation *> history;
       collectHistory(instance.getInput(), history);
       OpBuilder builder(instance);
       IRMapping mapping;
+      // The two arms of a conditional are never both seen, so a value computed in one arm and in the other, from the same
+      // operations, is computed once. The arms are told apart by the select that takes both: this instance's partner is the
+      // value at the same place on the other side, and it must already be replayed (so that its clones come first).
+      if (std::optional<Value> partner = otherArm(instance)) {
+        auto found = replays.find(*partner);
+        if (found != replays.end()) {
+          SmallVector<Operation *> common;
+          for (Operation *operation : history)
+            if (found->second.second.contains(operation))
+              common.push_back(operation);
+          // Sharing only the distributions both arms start from saves no work and costs the arms their in-place updates, since
+          // a shared value is used twice; it pays when an operation on them is shared too.
+          bool worth = llvm::any_of(common, [](Operation *operation) { return !isa<UniformOp, LiftOp>(operation); });
+          for (Operation *operation : worth ? ArrayRef<Operation *>(common) : ArrayRef<Operation *>())
+            for (Value result : operation->getResults())
+              mapping.map(result, found->second.first.lookup(result));
+        }
+      }
       for (Operation *operation : history)
-        builder.clone(*operation, mapping);
-      instance.getResult().replaceAllUsesWith(mapping.lookupOrDefault(instance.getInput()));
+        if (!mapping.contains(operation->getNumResults() ? operation->getResult(0) : Value()))
+          builder.clone(*operation, mapping);
+      Value replayed = mapping.lookupOrDefault(instance.getInput());
+      instance.getResult().replaceAllUsesWith(replayed);
+      replays[replayed] = {mapping, history};
       instance.erase();
     }
+  }
+
+  // The value the select puts at the same place on the other side from this instance, when this instance is an operand of one.
+  static std::optional<Value> otherArm(InstanceOp instance) {
+    for (OpOperand &use : instance.getResult().getUses())
+      if (auto select = dyn_cast<SelectOp>(use.getOwner())) {
+        unsigned index = use.getOperandNumber() - 1, n = select.getResults().size();  // operand 0 is the condition
+        if (index < n)
+          return select->getOperand(1 + n + index);
+        return select->getOperand(1 + index - n);
+      }
+    return std::nullopt;
   }
 };
 

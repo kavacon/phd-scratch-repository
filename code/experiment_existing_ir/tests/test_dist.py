@@ -57,6 +57,11 @@ class Distributions(unittest.TestCase):
         self.assertEqual(ir.count("dist.sub_assign"), 1)  # a + 1 + 1 - 3 is a - 1
         self.assertNotIn("dist.add_assign", ir)
 
+    def test_work_common_to_both_arms_of_a_conditional_is_done_once(self):
+        ir = pipeline.optimise(translate(parse("a = 0..4; b = 0..3; x = 0; if a < 2 { x = b * b + 1; } else { x = b * b + 2; } return x;", "v2")),
+                               *pipeline.BEFORE_LOWERING)
+        self.assertEqual(ir.count("dist.muli"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
