@@ -42,7 +42,7 @@ def built() -> bool:
 
 
 # The tool's own passes that are anchored on a function. Flags nest them by themselves; in a pipeline they are nested here.
-FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "resolve-dist", "qubit-liveness", "sink-to-use"}
+FUNCTION_PASSES = {"resolve-instances", "tie-instances", "in-place-updates", "dist-status", "resolve-dist", "qubit-liveness", "sink-to-use", "reorder-ops"}
 
 
 def command(*passes: str) -> list:
@@ -53,7 +53,7 @@ def command(*passes: str) -> list:
     """
     options = [p for p in passes if p.startswith("--mlir")]
     names = [p.removeprefix("--") for p in passes if not p.startswith("--mlir")]
-    names = [f"func.func({name})" if name in FUNCTION_PASSES else name for name in names]
+    names = [f"func.func({name})" if name.split("{")[0] in FUNCTION_PASSES else name for name in names]
     return [TOOL, *options, *([f"--pass-pipeline=builtin.module({','.join(names)})"] if names else [])]
 
 
@@ -71,7 +71,11 @@ RESOLVE = ("--resolve-dist", "--sccp", "--canonicalize")
 # which the exporters (DDSIM's OpenQASM reader, Jeff) do not take; after this the circuit has no modifier on a call.
 UNROLL_MODIFIERS = ("--unroll-modifiers", "--canonicalize")
 BEFORE_LOWERING = (*PREPARE, *RESOLVE, "--resolve-instances", "--canonicalize", "--cse", "--in-place-updates")
-DEFAULT = (*BEFORE_LOWERING, "--dist-status", "--plan-registers", "--schedule-release{strategy=lazy}", "--lower-to-qc", "--release-registers", *UNROLL_MODIFIERS,
+# The order of the operations decides which registers are alive together and who gets a free qubit first, so it is chosen once the plan says how
+# wide each is: critical-path first, within the qubits the system has (or the program as written would use). The plan is made again for the new order.
+PLANNED = (*BEFORE_LOWERING, "--dist-status", "--plan-registers", "--reorder-ops{policy=pressure}", "--plan-registers")
+DEFAULT = (*PLANNED,
+           "--schedule-release{strategy=lazy}", "--lower-to-qc", "--release-registers", *UNROLL_MODIFIERS,
            "--assign-qubits")
 
 

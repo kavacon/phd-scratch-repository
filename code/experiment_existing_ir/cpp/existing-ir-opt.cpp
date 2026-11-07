@@ -33,6 +33,7 @@ int main(int argc, char **argv) {
   existing_ir::registerReleaseRegisters();
   existing_ir::registerAssignQubits();
   existing_ir::registerSinkToUse();
+  existing_ir::registerReorderOps();
   mlir::DialectRegistry registry;
   mlir::registerAllDialects(registry);
   mlir::func::registerInlinerExtension(registry);
