@@ -94,7 +94,7 @@ def fit(qc: str, system: System) -> Fit:
     at most the system's qubits. (Given the system up front, the tool refuses instead; this assesses a program that was built
     without one.)"""
     needed = int(re.search(r"existing_ir\.peak_qubits = (\d+)", qc).group(1))
-    sizes = sorted((int(n) for n in re.findall(r"memref\.alloc\(\) : memref<(\d+)x!qc\.qubit>", qc)), reverse=True)
+    sizes = sorted((int(n) for n in re.findall(r"memref\.alloc\(\)(?: \{[^}]*\})? : memref<(\d+)x!qc\.qubit>", qc)), reverse=True)
     return Fit(needed <= system.qubits, needed, system.qubits, max(needed - system.qubits, 0), sizes)
 
 
