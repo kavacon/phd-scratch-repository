@@ -74,6 +74,23 @@ class Distributions(unittest.TestCase):
         self.assertEqual(ir.count("dist.add_assign"), 1)
         self.assertNotIn("dist.addi", ir)
 
+    def test_a_copy_made_by_adding_zero_is_kept_when_it_is_updated_while_the_original_is_still_used(self):
+        template = """func.func @main() -> i32 {
+  %zero = arith.constant 0 : i32
+  %one = arith.constant 1 : i32
+  %a = dist.uniform 0, 4 : !dist.dist<i32>
+  %copy = dist.addi %a, %zero : !dist.dist<i32>, i32 -> !dist.dist<i32>
+  %updated = dist.add_assign %copy, %one : !dist.dist<i32>, i32 -> !dist.dist<i32>
+  %both = dist.addi %a, %updated : !dist.dist<i32>, !dist.dist<i32> -> !dist.dist<i32>
+  %r = dist.measure %both : !dist.dist<i32> -> i32
+  func.return %r : i32
+}"""
+        kept = pipeline.optimise(template, "--dist-rewrites")
+        self.assertEqual(kept.count("dist.addi"), 2)  # the copy and the sum: a is used again, so the update must not reach it
+        alone = pipeline.optimise(template.replace("%both = dist.addi %a, %updated : !dist.dist<i32>, !dist.dist<i32>",
+                                                   "%both = dist.addi %updated, %one : !dist.dist<i32>, i32"), "--dist-rewrites")
+        self.assertNotIn("dist.addi", alone)  # nothing else uses a, so the copy is a: it is updated in place, and the two steps combine
+
 
 if __name__ == "__main__":
     unittest.main()

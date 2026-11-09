@@ -260,15 +260,15 @@ static APInt both(const APInt &a, const APInt &b) { return a & b; }
 static APInt either(const APInt &a, const APInt &b) { return a | b; }
 static APInt differ(const APInt &a, const APInt &b) { return a ^ b; }
 static APInt less(const APInt &a, const APInt &b) { return APInt(1, a.slt(b)); }
-// Adding or subtracting a known zero leaves the value as it was, whatever the other operand is.
+// An update by a known zero is the target again: the result of an update is the target, so nothing is lost.
 template <typename Op> static OpFoldResult foldStep(Op op, typename Op::FoldAdaptor adaptor, APInt (*compute)(const APInt &, const APInt &)) {
   std::optional<APInt> amount = known(adaptor.getOperands()[1]);
   if (amount && amount->isZero() && isa<DistType>(op->getOperand(0).getType()))
     return op->getOperand(0);
   return foldBinary(op, adaptor, compute);
 }
-OpFoldResult AddIOp::fold(FoldAdaptor adaptor) { return foldStep(*this, adaptor, plus); }
-OpFoldResult SubIOp::fold(FoldAdaptor adaptor) { return foldStep(*this, adaptor, minus); }
+OpFoldResult AddIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, plus); }
+OpFoldResult SubIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, minus); }
 OpFoldResult SltOp::fold(FoldAdaptor adaptor) {
   if (getLhs() == getRhs())
     return pointOf(getType(), APInt(1, 0));
@@ -357,9 +357,30 @@ struct FlattenSelect : OpRewritePattern<SelectOp> {
     return failure();
   }
 };
+// `x + 0` and `x - 0` computed out of place are a copy of x that can be updated without touching x, and that is kept when it is
+// needed: when x has other uses and the copy is updated in place. Where the copy is only read, or x has no other use and may as
+// well be the one updated, it is x.
+template <typename Op> struct DropZeroStep : OpRewritePattern<Op> {
+  using OpRewritePattern<Op>::OpRewritePattern;
+  LogicalResult matchAndRewrite(Op op, PatternRewriter &rewriter) const override {
+    Attribute amount;
+    Value operand = op->getOperand(0);
+    if (!isa<DistType>(operand.getType()) || !matchPattern(op->getOperand(1), m_Constant(&amount)))
+      return failure();
+    std::optional<APInt> value = known(amount);
+    if (!value || !value->isZero())
+      return failure();
+    bool updated = llvm::any_of(op->getUses(), [](OpOperand &use) { return isa<AddAssignOp, SubAssignOp>(use.getOwner()) && use.getOperandNumber() == 0; });
+    if (updated && !operand.hasOneUse())
+      return failure();
+    rewriter.replaceOp(op, operand);
+    return success();
+  }
+};
+
 void existing_ir::populateDistRewrites(RewritePatternSet &patterns, bool combineSteps, bool flatten) {
   if (combineSteps)
-    patterns.add<CombineConstantSteps<AddIOp>, CombineConstantSteps<SubIOp>, CombineConstantSteps<AddAssignOp>,
+    patterns.add<DropZeroStep<AddIOp>, DropZeroStep<SubIOp>, CombineConstantSteps<AddIOp>, CombineConstantSteps<SubIOp>, CombineConstantSteps<AddAssignOp>,
                  CombineConstantSteps<SubAssignOp>>(patterns.getContext());
   if (flatten)
     patterns.add<FlattenSelect>(patterns.getContext());
