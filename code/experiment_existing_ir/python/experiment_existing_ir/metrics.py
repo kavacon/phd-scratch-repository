@@ -9,6 +9,7 @@ The T cost counts the T gates a Clifford+T circuit needs for what is exact in it
 construction, without ancillas) and a T or its adjoint is one. A rotation (the preparation of an interval that is not a power of two)
 has no exact T cost and a gate with three or more controls has several, so both are counted separately, not folded in.
 """
+import math
 import re
 import sys
 from collections import Counter
@@ -56,6 +57,46 @@ class Run(NamedTuple):
     shots: int
     outcomes: int  # distinct values measured
     law: Dict[int, float]  # the chance of each value, as measured
+
+
+class TCost(NamedTuple):
+    """A circuit written in Clifford and T (and phase rotations), measured the way a fault-tolerant machine would count it."""
+    qubits: int  # wires the circuit touches
+    gates: int
+    two_qubit: int
+    depth: int
+    t_count: int  # T and its adjoint, and any phase that is an odd multiple of pi/4, however the gate is written
+    t_depth: int  # the most T gates on one path through the circuit
+    rotations: int  # phases that are not a multiple of pi/4: no exact T cost, counted apart
+
+
+PHASES = ("rz", "rx", "ry", "p", "u1")
+
+
+def quarter_turns(instruction) -> Optional[int]:
+    """The angle of a phase or rotation gate as a whole number of quarter pi, or None when it is not one (or not such a gate)."""
+    operation = instruction.operation
+    if operation.name not in PHASES or not operation.params:
+        return None
+    turns = float(operation.params[0]) / (math.pi / 4)
+    return round(turns) if abs(turns - round(turns)) < 1e-9 else None
+
+
+def is_t(instruction) -> bool:
+    if instruction.operation.name in ("t", "tdg"):
+        return True
+    turns = quarter_turns(instruction)
+    return turns is not None and turns % 2 != 0
+
+
+def of_clifford_t(circuit) -> TCost:
+    """A Qiskit circuit already in Clifford and T (see `optimisers.clifford_t`): its T count and T depth, and the rotations it could not
+    write exactly. The decomposition that got it there is the caller's to name."""
+    ops = circuit.count_ops()
+    rotations = sum(1 for i in circuit.data if i.operation.name in PHASES and i.operation.params and quarter_turns(i) is None)
+    measured = qiskit_tools.measure(circuit)
+    return TCost(measured["touched"], circuit.size() - ops.get("measure", 0), circuit.num_nonlocal_gates(), circuit.depth(),
+                 sum(1 for i in circuit.data if is_t(i)), circuit.depth(filter_function=is_t), rotations)
 
 
 def of_circuit(circuit) -> Circuit:
