@@ -25,6 +25,13 @@
 #include "DistOps.h.inc"
 
 namespace existing_ir {
+// An in-place update (`add_assign`, `sub_assign`) consumes its target: the result is the target updated. The target an operation
+// consumes (null for any other operation), and whether it consumes a value, are said here once for every pass that needs them.
+// (MLIR's destination-style interface says this for tensors and memrefs only; its verifier refuses any other type.)
+inline mlir::Value consumedBy(mlir::Operation *op) {
+  return llvm::isa<dist::AddAssignOp, dist::SubAssignOp>(op) ? op->getOperand(0) : mlir::Value();
+}
+inline bool consumes(mlir::Operation *op, mlir::Value value) { return consumedBy(op) == value; }
 // When each register is live, from the plan (see Liveness.cpp). Indexes are positions in `order`.
 struct QubitTimeline {
   struct Register { int64_t first, last, qubits; };

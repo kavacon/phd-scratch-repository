@@ -100,17 +100,18 @@ void existing_ir::planRegisters(ModuleOp module) {
       parent.try_emplace(measure.getResult(), measure.getResult());
       parent[find(measure.getResult())] = find(measure.getInput());
     }
-    if (!isa<AddAssignOp, SubAssignOp>(op))
+    Value target = existing_ir::consumedBy(op);
+    if (!target)
       return;
-    bool laterUse = llvm::any_of(op->getOperand(0).getUsers(), [&](Operation *user) {
+    bool laterUse = llvm::any_of(target.getUsers(), [&](Operation *user) {
       return user != op && (user->getBlock() != op->getBlock() || !user->isBeforeInBlock(op));
     });
     if (laterUse)
       return;
     inPlace.insert(op);
-    parent.try_emplace(op->getOperand(0), op->getOperand(0));
+    parent.try_emplace(target, target);
     parent.try_emplace(op->getResult(0), op->getResult(0));
-    parent[find(op->getResult(0))] = find(op->getOperand(0));
+    parent[find(op->getResult(0))] = find(target);
   });
   DenseMap<Value, unsigned> registerWidths;
   for (auto &member : parent)
