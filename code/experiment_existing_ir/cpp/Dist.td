@@ -98,8 +98,8 @@ def Dist_MulIOp : Dist_BinaryOp<"muli", [Commutative]>;
 def Dist_SltOp : Dist_BinaryOp<"slt">;
 def Dist_EqOp : Dist_BinaryOp<"eq", [Commutative]>;
 // Bitwise operations, used on one-bit integers as the booleans `&&`, `||` and `!` (not is xor with one).
-def Dist_AndIOp : Dist_BinaryOp<"andi", [Commutative]>;
-def Dist_OrIOp : Dist_BinaryOp<"ori", [Commutative]>;
+def Dist_AndIOp : Dist_BinaryOp<"andi", [Commutative, Idempotent]>;
+def Dist_OrIOp : Dist_BinaryOp<"ori", [Commutative, Idempotent]>;
 def Dist_XOrIOp : Dist_BinaryOp<"xori", [Commutative]>;
 
 // The value of a computed expression assigned to a new variable: an independent instance with the law of its input.
