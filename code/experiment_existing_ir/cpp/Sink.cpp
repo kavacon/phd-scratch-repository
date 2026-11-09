@@ -23,10 +23,15 @@ namespace {
 bool movable(Operation *op) {
   if (op->getNumResults() == 0 || op->getNumRegions() != 0 || op->hasTrait<OpTrait::IsTerminator>())
     return false;
-  if (isa<AddAssignOp, SubAssignOp, arith::ConstantOp>(op))
+  if (existing_ir::consumedBy(op) || isa<arith::ConstantOp>(op))
     return false;
-  if (isa<UniformOp, LiftOp>(op))  // fresh values: they allocate, but read and write nothing
-    return true;
+  // fresh values allocate, but read and write nothing
+  if (auto effects = dyn_cast<MemoryEffectOpInterface>(op)) {
+    SmallVector<MemoryEffects::EffectInstance> instances;
+    effects.getEffects(instances);
+    if (!instances.empty() && llvm::all_of(instances, [](auto &effect) { return isa<MemoryEffects::Allocate>(effect.getEffect()); }))
+      return true;
+  }
   return isMemoryEffectFree(op);
 }
 
@@ -56,8 +61,7 @@ struct SinkToUse : PassWrapper<SinkToUse, OperationPass<func::FuncOp>> {
       // not past an update that consumes one of its inputs
       bool blocked = false;
       for (Operation *between = op->getNextNode(); between != first && !blocked; between = between->getNextNode())
-        if (isa<AddAssignOp, SubAssignOp>(between))
-          blocked = llvm::is_contained(op->getOperands(), between->getOperand(0));
+        blocked = llvm::any_of(op->getOperands(), [&](Value operand) { return existing_ir::consumes(between, operand); });
       if (!blocked)
         op->moveBefore(first);
     }

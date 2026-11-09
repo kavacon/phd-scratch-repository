@@ -282,8 +282,8 @@ OpFoldResult EqOp::fold(FoldAdaptor adaptor) {
     return pointOf(getType(), APInt(1, 1));
   return foldBinary(*this, adaptor, equal);
 }
-OpFoldResult AndIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, both); }  // x && x is x by the Idempotent trait
-OpFoldResult OrIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, either); }
+OpFoldResult AndIOp::fold(FoldAdaptor adaptor) { return getLhs() == getRhs() ? OpFoldResult(getLhs()) : foldBinary(*this, adaptor, both); }
+OpFoldResult OrIOp::fold(FoldAdaptor adaptor) { return getLhs() == getRhs() ? OpFoldResult(getLhs()) : foldBinary(*this, adaptor, either); }
 OpFoldResult XOrIOp::fold(FoldAdaptor adaptor) {
   if (getLhs() == getRhs())
     return pointOf(getType(), APInt(elementOf(getType()).getIntOrFloatBitWidth(), 0));
@@ -308,7 +308,7 @@ template <typename Op> struct CombineConstantSteps : OpRewritePattern<Op> {
     APInt total = (subtracts(inner) ? -innerAmount : innerAmount) + (subtracts(op) ? -outerAmount : outerAmount);
     if (total.isZero())
       return failure();
-    bool inPlace = isa<AddAssignOp, SubAssignOp>(inner);  // the inner step consumed its operand, so the combined one does
+    bool inPlace = bool(existing_ir::consumedBy(inner));  // the inner step consumed its operand, so the combined one does
     Value operand = inner->getOperand(0);
     Value amount = arith::ConstantOp::create(rewriter, op->getLoc(), rewriter.getIntegerAttr(op->getOperand(1).getType(), total.isNegative() ? -total : total));
     Type type = op->getResult(0).getType();
@@ -370,7 +370,7 @@ template <typename Op> struct DropZeroStep : OpRewritePattern<Op> {
     std::optional<APInt> value = known(amount);
     if (!value || !value->isZero())
       return failure();
-    bool updated = llvm::any_of(op->getUses(), [](OpOperand &use) { return isa<AddAssignOp, SubAssignOp>(use.getOwner()) && use.getOperandNumber() == 0; });
+    bool updated = llvm::any_of(op->getUsers(), [&](Operation *user) { return existing_ir::consumes(user, op->getResult(0)); });
     if (updated && !operand.hasOneUse())
       return failure();
     rewriter.replaceOp(op, operand);

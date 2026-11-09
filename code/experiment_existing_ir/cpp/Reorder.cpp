@@ -53,8 +53,8 @@ struct ReorderOps : PassWrapper<ReorderOps, OperationPass<func::FuncOp>> {
       for (Value operand : op->getOperands())
         if (Operation *producer = operand.getDefiningOp(); producer && index.count(producer))
           before[i].insert(index[producer]);
-      if (isa<AddAssignOp, SubAssignOp>(op))
-        for (Operation *user : op->getOperand(0).getUsers())
+      if (Value consumed = existing_ir::consumedBy(op))
+        for (Operation *user : consumed.getUsers())
           if (user != op && index.count(user))
             before[i].insert(index[user]);
     }
