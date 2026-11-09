@@ -282,8 +282,8 @@ OpFoldResult EqOp::fold(FoldAdaptor adaptor) {
     return pointOf(getType(), APInt(1, 1));
   return foldBinary(*this, adaptor, equal);
 }
-OpFoldResult AndIOp::fold(FoldAdaptor adaptor) { return getLhs() == getRhs() ? OpFoldResult(getLhs()) : foldBinary(*this, adaptor, both); }
-OpFoldResult OrIOp::fold(FoldAdaptor adaptor) { return getLhs() == getRhs() ? OpFoldResult(getLhs()) : foldBinary(*this, adaptor, either); }
+OpFoldResult AndIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, both); }  // x && x is x by the Idempotent trait
+OpFoldResult OrIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, either); }
 OpFoldResult XOrIOp::fold(FoldAdaptor adaptor) {
   if (getLhs() == getRhs())
     return pointOf(getType(), APInt(elementOf(getType()).getIntOrFloatBitWidth(), 0));
