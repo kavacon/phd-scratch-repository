@@ -260,8 +260,15 @@ static APInt both(const APInt &a, const APInt &b) { return a & b; }
 static APInt either(const APInt &a, const APInt &b) { return a | b; }
 static APInt differ(const APInt &a, const APInt &b) { return a ^ b; }
 static APInt less(const APInt &a, const APInt &b) { return APInt(1, a.slt(b)); }
-OpFoldResult AddIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, plus); }
-OpFoldResult SubIOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, minus); }
+// Adding or subtracting a known zero leaves the value as it was, whatever the other operand is.
+template <typename Op> static OpFoldResult foldStep(Op op, typename Op::FoldAdaptor adaptor, APInt (*compute)(const APInt &, const APInt &)) {
+  std::optional<APInt> amount = known(adaptor.getOperands()[1]);
+  if (amount && amount->isZero() && isa<DistType>(op->getOperand(0).getType()))
+    return op->getOperand(0);
+  return foldBinary(op, adaptor, compute);
+}
+OpFoldResult AddIOp::fold(FoldAdaptor adaptor) { return foldStep(*this, adaptor, plus); }
+OpFoldResult SubIOp::fold(FoldAdaptor adaptor) { return foldStep(*this, adaptor, minus); }
 OpFoldResult SltOp::fold(FoldAdaptor adaptor) {
   if (getLhs() == getRhs())
     return pointOf(getType(), APInt(1, 0));
@@ -358,8 +365,8 @@ void existing_ir::populateDistRewrites(RewritePatternSet &patterns, bool combine
     patterns.add<FlattenSelect>(patterns.getContext());
 }
 
-OpFoldResult AddAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, plus); }
-OpFoldResult SubAssignOp::fold(FoldAdaptor adaptor) { return foldBinary(*this, adaptor, minus); }
+OpFoldResult AddAssignOp::fold(FoldAdaptor adaptor) { return foldStep(*this, adaptor, plus); }
+OpFoldResult SubAssignOp::fold(FoldAdaptor adaptor) { return foldStep(*this, adaptor, minus); }
 OpFoldResult ConstantOp::fold(FoldAdaptor) { return getValue(); }
 void ConstantOp::inferResultRanges(ArrayRef<ConstantIntRanges>, SetIntRangeFn setResultRange) {
   APInt value = getValue().getValue().getValue();

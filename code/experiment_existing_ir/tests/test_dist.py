@@ -68,6 +68,12 @@ class Distributions(unittest.TestCase):
         self.assertEqual(ir.count("dist.select"), 1)
         self.assertEqual(ir.count("dist.andi"), 2)
 
+    def test_adding_zero_and_the_order_of_a_sum_do_not_matter(self):
+        # a + 0 is a, and a sum with a constant on the left is the same as with it on the right, so both steps combine into one
+        ir = pipeline.optimise(translate(parse("a = 0..4; y = a + 0; z = 1 + y; w = z + 2; return w;", "v2")), *pipeline.BEFORE_LOWERING)
+        self.assertEqual(ir.count("dist.add_assign"), 1)
+        self.assertNotIn("dist.addi", ir)
+
 
 if __name__ == "__main__":
     unittest.main()

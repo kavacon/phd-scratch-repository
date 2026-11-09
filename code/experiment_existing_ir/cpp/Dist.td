@@ -81,7 +81,7 @@ def Dist_ConstantOp : Dist_Op<"constant", [Pure, ConstantLike]> {
   let hasFolder = 1;
 }
 
-class Dist_BinaryOp<string mnemonic> : Dist_PureOp<mnemonic> {
+class Dist_BinaryOp<string mnemonic, list<Trait> traits = []> : Dist_PureOp<mnemonic, traits> {
   let hasFolder = 1;
   let arguments = (ins Dist_DistOrInt:$lhs, Dist_DistOrInt:$rhs);
   let results = (outs Dist_Dist:$result);
@@ -89,18 +89,18 @@ class Dist_BinaryOp<string mnemonic> : Dist_PureOp<mnemonic> {
   let hasVerifier = 1;
 }
 // Sum and difference computed out of place: a new distribution, correlated with its operands, which are only used.
-def Dist_AddIOp : Dist_BinaryOp<"addi"> ;
-def Dist_SubIOp : Dist_BinaryOp<"subi"> ;
+def Dist_AddIOp : Dist_BinaryOp<"addi", [Commutative]>;
+def Dist_SubIOp : Dist_BinaryOp<"subi">;
 // Product, modulo the width of the type.
-def Dist_MulIOp : Dist_BinaryOp<"muli">;
+def Dist_MulIOp : Dist_BinaryOp<"muli", [Commutative]>;
 // Signed less-than and equality; the result is a distribution of one-bit integers. Every other comparison is one of these
 // with the operands swapped or the result negated.
 def Dist_SltOp : Dist_BinaryOp<"slt">;
-def Dist_EqOp : Dist_BinaryOp<"eq">;
+def Dist_EqOp : Dist_BinaryOp<"eq", [Commutative]>;
 // Bitwise operations, used on one-bit integers as the booleans `&&`, `||` and `!` (not is xor with one).
-def Dist_AndIOp : Dist_BinaryOp<"andi">;
-def Dist_OrIOp : Dist_BinaryOp<"ori">;
-def Dist_XOrIOp : Dist_BinaryOp<"xori">;
+def Dist_AndIOp : Dist_BinaryOp<"andi", [Commutative]>;
+def Dist_OrIOp : Dist_BinaryOp<"ori", [Commutative]>;
+def Dist_XOrIOp : Dist_BinaryOp<"xori", [Commutative]>;
 
 // The value of a computed expression assigned to a new variable: an independent instance with the law of its input.
 // It marks the assignment and says nothing about how the instance is made. `resolve-instances` replays the history of
@@ -122,8 +122,8 @@ class Dist_UpdateOp<string mnemonic> : Dist_PureOp<mnemonic> {
   let assemblyFormat = "$target `,` $amount attr-dict `:` type($target) `,` type($amount) `->` type($result)";
   let hasVerifier = 1;
 }
-def Dist_AddAssignOp : Dist_UpdateOp<"add_assign"> ;
-def Dist_SubAssignOp : Dist_UpdateOp<"sub_assign"> ;
+def Dist_AddAssignOp : Dist_UpdateOp<"add_assign">;
+def Dist_SubAssignOp : Dist_UpdateOp<"sub_assign">;
 
 // For each pair, the true value where the condition holds and the false value where it does not. One operation takes
 // all the pairs so the condition, a distribution, is used once however many variables the conditional changes.
