@@ -5,6 +5,8 @@ Source-level rewrites against gate-level optimisation. Each program is compiled 
 
     . ./env.sh && .venv/bin/python -m experiment_existing_ir.comparison [cache.json [program name filter]]
 
+The programs are the measurement workloads (`workloads`): each holds a pattern the literature reports as costly or lossy.
+
 Results are kept in the cache file as they are made, so a stopped run continues.
 """
 import json
@@ -37,8 +39,7 @@ class Cell(NamedTuple):
 
 
 def programs() -> Dict[str, str]:
-    from tests.golden import GOLDEN  # the corpus of the golden table, which lives with the tests (run from this folder)
-    return {**{g.name: g.source for g in GOLDEN}, **{w[1]: w[2] for w in WORKLOADS}}
+    return {w[1]: w[2] for w in WORKLOADS}
 
 
 def distance(counts: Dict[int, int], expected: Dict[int, float]) -> float:
