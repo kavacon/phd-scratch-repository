@@ -7,6 +7,10 @@ Source-level rewrites against gate-level optimisation. Each program is compiled 
 
 The programs are the measurement workloads (`workloads`): each holds a pattern the literature reports as costly or lossy.
 
+Besides the two compilations above there is a ladder: straight lowering, then one source-level step added at a time (CSE, in-place
+updates, the constant-step and zero rewrites, flattening, range folds, sharing between arms), to show which structure each step pays
+off on. Each rung is also built with release and the qubit pool, to give the width the real pipeline would have.
+
 Results are kept in the cache file as they are made, so a stopped run continues.
 """
 import json
@@ -25,17 +29,42 @@ from experiment_existing_ir.workloads import WORKLOADS
 SHOTS = 3000
 TOLERANCE = 0.07  # total variation distance allowed between two samplings of the same outcomes
 REWRITES = {"rewrites": optimisers.unpooled(pipeline.DEFAULT), "no rewrites": optimisers.unpooled(pipeline.UNREWRITTEN)}
+TAIL = ("--dist-status", "--plan-registers", "--schedule-release{strategy=lazy}", "--lower-to-qc", "--release-registers", *pipeline.UNROLL_MODIFIERS)
 
+
+def rung(cse=False, in_place=False, steps=False, flatten=False, ranges=False, share=False):
+    """The stages of one rung of the ladder (before the pool)."""
+    stages = [*pipeline.PREPARE, "--resolve-dist", "--sccp", "--canonicalize"]
+    if cse:
+        stages.append("--cse")
+    stages.append("--resolve-instances" if share else "--resolve-instances{share-arms=false}")
+    if steps or flatten:
+        stages.append("--dist-rewrites{combine-steps=%s flatten=%s}" % (str(steps).lower(), str(flatten).lower()))
+    stages.append("--canonicalize")
+    if ranges:
+        stages += ["--fold-by-range", "--canonicalize"]
+    if cse:
+        stages.append("--cse")
+    if in_place:
+        stages.append("--in-place-updates")
+    return (*stages, *TAIL)
+
+
+LADDER = {"straight lowering": rung(), "+ CSE": rung(True), "+ in-place updates": rung(True, True),
+          "+ constant steps & zero": rung(True, True, True), "+ flatten nested ifs": rung(True, True, True, True),
+          "+ range folds": rung(True, True, True, True, True), "+ arm sharing": rung(True, True, True, True, True, True)}
+PIPELINES = {**REWRITES, **LADDER}
 
 
 class Cell(NamedTuple):
     program: str
-    rewrites: str
+    label: str  # which compilation: see PIPELINES
     optimiser: str
     cost: Optional[list]  # metrics.TCost, or None when the optimiser did not finish
     seconds: float
     error: float  # distance from the unoptimised circuit's outcomes
     leaked: int  # qubits left set that were not left set without the optimiser
+    pooled: int  # qubits of the circuit with release and the qubit pool, before any optimiser
 
 
 def programs() -> Dict[str, str]:
@@ -53,43 +82,50 @@ def outcomes(circuit):
     return {to_signed(value, width): n for value, n in result["counts"].items()}, len(result["leaked"])
 
 
-def measure(name: str, source: str, rewrites: str) -> List[Cell]:
+MEMO: Dict[tuple, tuple] = {}  # an optimiser's result on a circuit it has already seen (steps that leave a program as it was)
+
+
+def measure(name: str, source: str, label: str) -> List[Cell]:
     """Every optimiser on the program compiled one way."""
-    qc = pipeline.optimise(translate(parse(source, "v2")), *REWRITES[rewrites])
+    program = translate(parse(source, "v2"))
+    qc = pipeline.optimise(program, *PIPELINES[label])
+    pooled = metrics.of_qc(pipeline.optimise(program, *PIPELINES[label], "--assign-qubits")).qubits
     reference, held = outcomes(optimisers.none(qc))
     cells = []
     for optimiser, run in optimisers.OPTIMISERS.items():
         start = time.time()
-        try:
-            circuit = run(qc)
-        except optimisers.TimedOut:
-            cells.append(Cell(name, rewrites, optimiser, None, time.time() - start, 0.0, 0))
-            continue
-        seconds = time.time() - start
-        counts, leaked = outcomes(circuit)
-        cells.append(Cell(name, rewrites, optimiser, list(metrics.of_clifford_t(circuit)), seconds, distance(counts, {k: v / SHOTS for k, v in reference.items()}), leaked - held))
+        if (optimiser, qc) not in MEMO:
+            try:
+                circuit = run(qc)
+            except optimisers.TimedOut:
+                MEMO[(optimiser, qc)] = (None, 0.0, 0)
+            else:
+                counts, leaked = outcomes(circuit)
+                MEMO[(optimiser, qc)] = (list(metrics.of_clifford_t(circuit)), distance(counts, {k: v / SHOTS for k, v in reference.items()}), leaked - held)
+        cost, error, leaked = MEMO[(optimiser, qc)]
+        cells.append(Cell(name, label, optimiser, cost, time.time() - start, error, leaked, pooled))
     return cells
 
 
 def run(cache: Optional[str] = None, only: str = "") -> List[Cell]:
     done = [Cell(*row) for row in json.load(open(cache))] if cache and os.path.exists(cache) else []
-    seen = {(c.program, c.rewrites) for c in done}
+    seen = {(c.program, c.label) for c in done}
     for name, source in programs().items():
         if only not in name:
             continue
-        for rewrites in REWRITES:
-            if (name, rewrites) in seen:
+        for label in PIPELINES:
+            if (name, label) in seen:
                 continue
-            done.extend(measure(name, source, rewrites))
+            done.extend(measure(name, source, label))
             if cache:
                 json.dump(done, open(cache, "w"))
-            print(name, rewrites, "done", flush=True)
+            print(name, label, "done", flush=True)
     return done
 
 
 def report(cells: List[Cell]) -> None:
     """Totals over the programs every optimiser finished, so that the columns are over the same programs."""
-    by = {(c.program, c.rewrites, c.optimiser): c for c in cells}
+    by = {(c.program, c.label, c.optimiser): c for c in cells}
     names = sorted({c.program for c in cells})
     names = [n for n in names if all(by.get((n, r, o)) and by[(n, r, o)].cost for r in REWRITES for o in optimisers.OPTIMISERS)]
     skipped = sorted({c.optimiser for c in cells if c.cost is None})
@@ -107,9 +143,38 @@ def report(cells: List[Cell]) -> None:
         print()
 
 
+FAMILY = {w[1]: w[0] for w in WORKLOADS}
+METRICS = ((4, "T count"), (5, "T depth"), (2, "two-qubit gates"), (1, "gates"), (3, "depth"), (0, "qubits (a wire for every register)"))
+
+
+def report_ladder(cells: List[Cell]) -> None:
+    """Each rung of the ladder under each optimiser, totalled over the programs every optimiser finished at every rung."""
+    by = {(c.program, c.label, c.optimiser): c for c in cells}
+    names = [n for n in sorted({c.program for c in cells})
+             if all(by.get((n, r, o)) and by[(n, r, o)].cost for r in LADDER for o in optimisers.OPTIMISERS)]
+    print(f"ladder, over {len(names)} programs finished by every optimiser at every rung\n")
+    for index, label in METRICS:
+        print(f"{label}:")
+        print(f"  {'':<26}" + "".join(f"{o:>9}" for o in optimisers.OPTIMISERS))
+        for rung_label in LADDER:
+            print(f"  {rung_label:<26}" + "".join(f"{sum(by[(n, rung_label, o)].cost[index] for n in names):>9}" for o in optimisers.OPTIMISERS))
+        print()
+    print("qubits with release and the qubit pool (no optimiser):")
+    for rung_label in LADDER:
+        print(f"  {rung_label:<26}{sum(by[(n, rung_label, 'none')].pooled for n in names):>9}")
+    for optimiser in ("none", "mqt", "pyzx"):
+        print(f"\nT count by family, {optimiser}:")
+        print(f"  {'':<26}" + "".join(f"{f:>8}" for f in ("nest", "late", "arms", "chain", "loss", "calls")))
+        for rung_label in LADDER:
+            row = [sum(by[(n, rung_label, optimiser)].cost[4] for n in names if FAMILY[n] == f) for f in ("nest", "late", "arms", "chain", "loss", "calls")]
+            print(f"  {rung_label:<26}" + "".join(f"{x:>8}" for x in row))
+
+
 def main() -> None:
     cache = sys.argv[1] if len(sys.argv) > 1 else None
-    report(run(cache, sys.argv[2] if len(sys.argv) > 2 else ""))
+    cells = run(cache, sys.argv[2] if len(sys.argv) > 2 else "")
+    report(cells)
+    report_ladder(cells)
 
 
 if __name__ == "__main__":

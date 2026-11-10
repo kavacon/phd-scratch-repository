@@ -27,7 +27,7 @@ class Optimisers(unittest.TestCase):
 
     def test_the_comparison_measures_a_program_with_and_without_the_source_rewrites(self):
         source = "a = 0..4; b = 0..3; x = 0; if a < 2 { x = b * b + 1; } else { x = b * b + 2; } return x;"
-        cells = {(c.rewrites, c.optimiser): c for c in comparison.measure("arms", source, "rewrites") + comparison.measure("arms", source, "no rewrites")
+        cells = {(c.label, c.optimiser): c for c in comparison.measure("arms", source, "rewrites") + comparison.measure("arms", source, "no rewrites")
                  if c.optimiser == "none"}
         self.assertLess(cells[("rewrites", "none")].cost[1], cells[("no rewrites", "none")].cost[1])  # fewer gates with the rewrites
 
