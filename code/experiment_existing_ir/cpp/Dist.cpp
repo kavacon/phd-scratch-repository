@@ -125,6 +125,12 @@ LogicalResult SelectOp::verify() {
   return success();
 }
 
+LogicalResult MarkOp::verify() {
+  if (!elementOf(getPredicate().getType()).isInteger(1))
+    return emitOpError("needs a predicate that is a distribution of one-bit integers");
+  return success();
+}
+
 LogicalResult MeasureOp::verify() {
   if (elementOf(getInput().getType()) != getResult().getType())
     return emitOpError("needs a result of the distribution's element type");
@@ -185,6 +191,9 @@ void SelectOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRange
   size_t n = getResults().size();  // the operands are the condition, then the n true values, then the n false values
   for (size_t i = 0; i < n; ++i)
     setResultRange(getResults()[i], ranges[1 + i].rangeUnion(ranges[1 + n + i]));
+}
+void ReflectOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
+  setResultRange(getResult(), ranges[0]);  // the weights move between outcomes, none to a value it could not have
 }
 void MeasureOp::inferResultRanges(ArrayRef<ConstantIntRanges> ranges, SetIntRangeFn setResultRange) {
   setResultRange(getResult(), ranges[0]);

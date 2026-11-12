@@ -602,6 +602,8 @@ struct Uniform : OpRewritePattern<existing_ir::dist::UniformOp> {
     Value result = allocate(rw, loc, it->second);
     SmallVector<Value> qubits = load(rw, loc, result);
     prepareUniform(rw, loc, qubits, n);
+    if (start == 0)
+      result.getDefiningOp()->setAttr("existing_ir.prep", rw.getI64IntegerAttr(n));  // the recipe an amplification of it reflects about
     if (start != 0) {
       Scratch scratch;
       Value offset = scratch.add(allocate(rw, loc, it->second)), carry = scratch.add(allocate(rw, loc, 1));
@@ -668,6 +670,102 @@ struct Tagger : RewriterBase::Listener {
   }
 };
 
+// The mark of an amplification: the sign of the states where the predicate holds is flipped, which is a Z on the predicate's qubit.
+// (The predicate is undone right after, by the release `schedule-release` makes certain of, before the distribution is reflected.)
+struct Mark : OpRewritePattern<existing_ir::dist::MarkOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(existing_ir::dist::MarkOp op, PatternRewriter &rw) const override {
+    if (!isRegister(op.getTarget()) || !isRegister(op.getPredicate()))
+      return failure();
+    SmallVector<Value> bits = load(rw, op.getLoc(), op.getPredicate());
+    mlir::qc::ZOp::create(rw, op.getLoc(), bits[0]);
+    rw.eraseOp(op);
+    return success();
+  }
+};
+
+// The reflection of an amplification: the weights are inverted about the starting state, the range the register was made from.
+// The preparation is undone, the sign of the all-zero value is flipped (X on every qubit around a Z controlled on all the others),
+// and the preparation is done again; the register is updated where it is.
+struct Reflect : OpRewritePattern<existing_ir::dist::ReflectOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(existing_ir::dist::ReflectOp op, PatternRewriter &rw) const override {
+    Value reg = op.getTarget();
+    if (!isRegister(reg))
+      return failure();
+    auto alloc = reg.getDefiningOp<memref::AllocOp>();
+    auto prep = alloc ? alloc->getAttrOfType<IntegerAttr>("existing_ir.prep") : IntegerAttr();
+    if (!prep)
+      return failure();  // (checked before lowering: see `checkAmplification`)
+    Location loc = op.getLoc();
+    uint64_t n = prep.getInt();
+    SmallVector<Value> qubits = load(rw, loc, reg);
+    mlir::qc::InvOp::create(rw, loc, qubits, [&](ValueRange inner) {
+      SmallVector<Value> local(inner.begin(), inner.end());
+      prepareUniform(rw, loc, local, n);
+    });
+    for (Value q : qubits)
+      mlir::qc::XOp::create(rw, loc, q);
+    if (qubits.size() == 1)
+      mlir::qc::ZOp::create(rw, loc, qubits[0]);
+    else
+      mlir::qc::CtrlOp::create(rw, loc, ValueRange(qubits).drop_back(), qubits.back(), [&](Value t) { mlir::qc::ZOp::create(rw, loc, t); });
+    for (Value q : qubits)
+      mlir::qc::XOp::create(rw, loc, q);
+    prepareUniform(rw, loc, qubits, n);
+    replaceWithRegisters(rw, op, reg);
+    return success();
+  }
+};
+
+// What an amplification can be lowered from: the distribution was made by a range that starts at zero and has been changed since only
+// by amplification, and nothing reads it except the predicate (a read by anything else would be of a value the amplification also
+// changes, which the operands do not show). The first implementation refuses anything else.
+LogicalResult checkAmplification(ModuleOp module) {
+  bool ok = true;
+  module.walk([&](existing_ir::dist::ReflectOp reflect) {
+    Value target = reflect.getTarget();
+    Operation *origin = target.getDefiningOp();
+    auto uniform = dyn_cast_or_null<existing_ir::dist::UniformOp>(origin);
+    if (!origin || (!uniform && !isa<existing_ir::dist::ReflectOp>(origin))) {
+      reflect.emitError("a distribution can be amplified only when it was made by a range and nothing but amplification has changed it since");
+      ok = false;
+      return;
+    }
+    if (uniform && int32_t(uniform.getStart()) != 0) {
+      reflect.emitError("a distribution can be amplified only when its range starts at zero");
+      ok = false;
+      return;
+    }
+    existing_ir::dist::MarkOp mark;
+    for (Operation *user : target.getUsers())
+      if (auto candidate = dyn_cast<existing_ir::dist::MarkOp>(user))
+        mark = candidate;
+    if (!mark) {
+      reflect.emitError("an amplification needs the predicate that marks the outcomes to favour");
+      ok = false;
+      return;
+    }
+    DenseSet<Operation *> cone;  // what computes the predicate from the distribution
+    SmallVector<Value> work{mark.getPredicate()};
+    while (!work.empty()) {
+      Value value = work.pop_back_val();
+      Operation *definition = value.getDefiningOp();
+      if (value == target || !definition || !cone.insert(definition).second)
+        continue;
+      work.append(definition->operand_begin(), definition->operand_end());
+    }
+    for (Operation *user : target.getUsers())
+      if (user != mark && user != reflect && !cone.contains(user)) {
+        reflect.emitError("this distribution is also read by something that is not its predicate, which the amplification would change "
+                          "too: not supported yet");
+        ok = false;
+        return;
+      }
+  });
+  return success(ok);
+}
+
 struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerToQC)
   StringRef getArgument() const final { return "lower-to-qc"; }
@@ -679,6 +777,8 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
 
   void runOnOperation() override {
     ModuleOp module = getOperation();
+    if (failed(checkAmplification(module)))
+      return signalPassFailure();
     // The registers are the plan of `plan-registers` (Registers.cpp): made here when no pass has made it yet.
     bool planned = false;
     module.walk([&](Operation *op) { planned |= op->hasAttr("existing_ir.qubits"); });
@@ -730,6 +830,7 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     patterns.add<Lift>(&getContext(), widths, reuse);
     patterns.add<Update<existing_ir::dist::AddAssignOp, false>, Update<existing_ir::dist::SubAssignOp, true>>(
         &getContext(), widths, inPlace);
+    patterns.add<Mark, Reflect>(&getContext());
     patterns.add<Return>(&getContext());
     GreedyRewriteConfig config;
     Tagger tagger;

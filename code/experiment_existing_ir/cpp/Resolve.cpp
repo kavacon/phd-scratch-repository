@@ -286,7 +286,7 @@ public:
       fact = ref->getValue().kind == CellRef::Cell ? contentFact(state->contents, ref->getValue().cell, here) : unknown();
     } else if (isa<UniformOp>(op)) {
       fact = superposed(op->getContext());
-    } else if (isa<AddIOp, SubIOp, MulIOp, SltOp, EqOp, AndIOp, OrIOp, XOrIOp, AddAssignOp, SubAssignOp, InstanceOp>(op) &&
+    } else if (isa<AddIOp, SubIOp, MulIOp, SltOp, EqOp, AndIOp, OrIOp, XOrIOp, AddAssignOp, SubAssignOp, ReflectOp, InstanceOp>(op) &&
                llvm::any_of(operands, [](auto *operand) { return isSuperposed(operand->getValue()); })) {
       fact = superposed(op->getContext());  // a result computed from a superposition is one
     } else {

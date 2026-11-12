@@ -147,6 +147,22 @@ def Dist_MeasureOp : Dist_PureOp<"measure"> {
 // ---- references ------------------------------------------------------------------------------------------------------
 class Dist_RawOp<string mnemonic, list<Trait> traits = []> : Op<Dist_Dialect, mnemonic, traits>;
 
+// Amplification, one round, as two operations. `dist.mark` flips the sign of the states of the distribution where the predicate
+// (a distribution of one-bit integers computed from it) holds. It changes no value, only a sign, so it has no result; it is not pure,
+// so nothing drops it. `dist.reflect` then inverts the weights about the starting state, which makes the marked outcomes more likely;
+// it is an in-place update of its target. See the note "Amplification in the surface language".
+def Dist_MarkOp : Dist_RawOp<"mark"> {
+  let arguments = (ins Dist_Dist:$target, Dist_Dist:$predicate);
+  let assemblyFormat = "$target `,` $predicate attr-dict `:` type($target) `,` type($predicate)";
+  let hasVerifier = 1;
+}
+def Dist_ReflectOp : Dist_Op<"reflect"> {  // not pure: an unread result must not drop it, since it changes what correlated values mean
+  let arguments = (ins Dist_Dist:$target);
+  let results = (outs Dist_Dist:$result);
+  let assemblyFormat = "$target attr-dict `:` type($target) `->` type($result)";
+}
+
+
 // A variable that may hold a distribution holds a reference to an object: a `memref<!dist.dist<T>>` cell, read and written
 // with affine.load and affine.store (which `affine-scalrep` forwards and `mem2reg` leaves alone, so a cell stays in memory
 // until its value is known). What `y = x` means is an `arith.select` of a copy and of x on whether x holds one value; that

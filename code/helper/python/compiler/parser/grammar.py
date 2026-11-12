@@ -59,6 +59,13 @@ class Assign(Node):
 
 
 @dataclass(frozen=True)
+class Amplify(Node):
+    """`name ?= predicate;` (grammar v2): amplify the distribution name holds, one round, toward the outcomes where predicate holds."""
+    name: str
+    predicate: Node
+
+
+@dataclass(frozen=True)
 class ExprStmt(Node):
     expr: Node
 
