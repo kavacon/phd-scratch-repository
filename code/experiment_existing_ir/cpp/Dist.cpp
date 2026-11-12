@@ -131,6 +131,20 @@ LogicalResult MarkOp::verify() {
   return success();
 }
 
+// A mark changes only a sign, and nothing in the language can observe a sign (it has no interference), so a mark whose distribution is never
+// reflected has no effect. This is what a dropped amplification leaves behind; the predicate it read is then dead too.
+struct DropUnreflectedMark : OpRewritePattern<MarkOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(MarkOp mark, PatternRewriter &rewriter) const override {
+    for (Operation *user : mark.getTarget().getUsers())
+      if (isa<ReflectOp>(user))
+        return failure();
+    rewriter.eraseOp(mark);
+    return success();
+  }
+};
+void MarkOp::getCanonicalizationPatterns(RewritePatternSet &patterns, MLIRContext *context) { patterns.add<DropUnreflectedMark>(context); }
+
 LogicalResult MeasureOp::verify() {
   if (elementOf(getInput().getType()) != getResult().getType())
     return emitOpError("needs a result of the distribution's element type");
