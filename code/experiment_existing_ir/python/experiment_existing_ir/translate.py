@@ -29,7 +29,7 @@ a function that returns a variable returns it the same way.
 import itertools
 from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Set, Tuple
 
-from compiler.parser.grammar import (Assign, BinOp, Boolean, Call, Distribution, Equals, ExprStmt, ForLoop, FunctionDef, If,
+from compiler.parser.grammar import (Amplify, Assign, BinOp, Boolean, Call, Distribution, Equals, ExprStmt, ForLoop, FunctionDef, If,
                                      Node, Not, Number, Return, Variable)
 
 WIDTH = 32
@@ -99,6 +99,8 @@ def _walk(statements: Sequence[Node]) -> Iterator[Node]:
             yield from _walk(node.body)
         elif isinstance(node, (ExprStmt, Return)):
             yield from _expressions(node.expr if isinstance(node, ExprStmt) else node.value)
+        elif isinstance(node, Amplify):
+            yield from _expressions(node.predicate)
 
 
 def _expressions(node: Node) -> Iterator[Node]:
@@ -213,6 +215,7 @@ class _Translator:
         self.distribution_names = distribution_names
         self.loops: List[str] = []  # the variables of the loops this is inside, which the body may only read
         self.iterations = 1  # how often the statements run, from the loops they are inside
+        self.conditions = 0  # the conditionals this is inside
 
     # -- text ------------------------------------------------------------------------------------------------------
 
@@ -445,9 +448,11 @@ class _Translator:
         if condition.dist:  # an integer if the distribution turns out to be a lifted one: the folding decides
             condition = self.emit(f"dist.cond {condition.ssa} : {condition.type} -> i1", "i1")
         self.out(f"scf.if {condition.ssa} {{")
+        self.conditions += 1
         self.region(node.body)
         self.out("} else {")
         self.region(node.orelse)
+        self.conditions -= 1
         self.out("}")
 
     def loop(self, node: ForLoop) -> None:
@@ -495,6 +500,31 @@ class _Translator:
         if amount.dist:
             raise TranslationError(f"{node.name} is updated with a distribution but is not known to hold one")
         self.store(var, self.emit(f"arith.{name}i {target.ssa}, {amount.ssa} : {self.type}", self.type))
+
+    def amplify(self, node: Amplify) -> None:
+        """
+        `name ?= predicate;`: one round of amplification of the distribution `name` holds toward the outcomes where the predicate
+        holds. The predicate is a boolean expression, or the name of a function, which stands for the function applied to `name`.
+        It is marked on the distribution (`dist.mark`, which reads the distribution and the predicate computed from it) and the
+        distribution is then reflected in place (`dist.reflect`), and stored back into the same cell, as an update is.
+        """
+        var = self.lookup(node.name)
+        self.check_writable(node.name)
+        if not var.ref:
+            raise TranslationError(f"{node.name} is amplified but is not known to hold a distribution")
+        if self.conditions:
+            raise TranslationError("a distribution cannot be amplified inside a conditional yet")
+        predicate = node.predicate
+        if isinstance(predicate, Variable) and predicate.name in self.module.functions and not self.exists(predicate.name):
+            predicate = Call(predicate.name, (Variable(node.name),))
+        reference = self.reference(var)
+        held = self.get(reference)
+        flag = self.flag(self.expression(predicate))
+        if not flag.dist:
+            raise TranslationError(f"the predicate of {node.name} ?= does not depend on {node.name}, so there is nothing to amplify")
+        self.out(f"dist.mark {held.ssa}, {flag.ssa} : {held.type}, {flag.type}")
+        result = self.emit(f"dist.reflect {held.ssa} : {held.type} -> {held.type}", held.type)
+        self.out(f"memref.store {result.ssa}, {reference.ssa}[] : {reference.type}")
 
     def assign(self, node: Assign) -> None:
         exists = self.exists(node.name)
@@ -545,6 +575,8 @@ class _Translator:
             self.update(node)
         elif isinstance(node, Assign):
             self.assign(node)
+        elif isinstance(node, Amplify):
+            self.amplify(node)
         elif isinstance(node, If):
             self.conditional(node)
         elif isinstance(node, ForLoop):

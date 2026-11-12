@@ -6,6 +6,7 @@ from typing import Dict, List
 from lark import Lark, Transformer, v_args
 
 from compiler.parser.grammar import (
+    Amplify,
     Assign,
     BinOp,
     Boolean,
@@ -90,6 +91,9 @@ class _ToGrammar(Transformer):
 
     def sub_update(self, name, value):
         return Assign(str(name), BinOp("-", Variable(str(name)), value), inplace=True)
+
+    def amplify_update(self, name, predicate):
+        return Amplify(str(name), predicate)
 
     def distribution(self, text):
         start, stop = (int(bound) for bound in re.fullmatch(r"(-?\d+)\s*\.\.\s*(-?\d+)", str(text)).groups())

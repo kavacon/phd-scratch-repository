@@ -2,6 +2,7 @@ start: (function_def | statement)* return_stmt
 
 ?statement: assignment
           | update_stmt
+          | amplify_stmt
           | for_loop
           | if_stmt
           | unassign_stmt
@@ -12,6 +13,10 @@ assignment: NAME "=" expr ";"
 // Updates the variable where it sits: only add and subtract, the two operations that can be undone in place.
 update_stmt: NAME "+=" expr ";"   -> add_update
            | NAME "-=" expr ";"   -> sub_update
+
+// Amplifies the variable in place: one round that makes the outcomes where the predicate holds more likely. The predicate is a boolean
+// expression, or the name of a function, which stands for the function applied to the variable.
+amplify_stmt: NAME "?=" expr ";"  -> amplify_update
 
 // v2 declares no types on a function: every value in the language is inferred, and a function is inlined, so a signature
 // would say nothing the body does not. A parameter is a name.

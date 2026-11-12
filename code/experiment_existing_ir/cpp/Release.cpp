@@ -193,6 +193,25 @@ struct ScheduleRelease : PassWrapper<ScheduleRelease, OperationPass<ModuleOp>> {
 
     int64_t needed = 0;
     for (int64_t i = 0; i < size; ++i) {
+      // An amplification marks, undoes what computed its predicate, and only then reflects the distribution, which changes what the
+      // predicate was computed from: so every register the predicate needed is released right after the mark, consumers first.
+      if (i > 0)
+        if (auto mark = dyn_cast<existing_ir::dist::MarkOp>(timeline.order[i - 1])) {
+          SmallVector<Value> cone;
+          std::function<void(Value)> collect = [&](Value value) {
+            if (!registerOf.contains(value) || registerOf[value] == registerOf[mark.getTarget()] || llvm::is_contained(cone, value))
+              return;
+            cone.push_back(value);
+            if (Operation *definition = value.getDefiningOp())
+              for (Value operand : definition->getOperands())
+                collect(operand);
+          };
+          collect(mark.getPredicate());
+          llvm::sort(cone, [&](Value a, Value b) { return definedAt[a] > definedAt[b]; });
+          for (Value value : cone)
+            if (valid(registerOf[value], i - 1))
+              release(registerOf[value], i - 1);
+        }
       if (eager && i > 0) {  // after operation i - 1
         bool changed = true;
         while (changed) {
