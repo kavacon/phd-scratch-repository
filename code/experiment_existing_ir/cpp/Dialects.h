@@ -75,5 +75,5 @@ void registerAssignQubits();
 void registerSinkToUse();
 void registerReorderOps();
 // The plan of `plan-registers`, written on the operations of the module (see Registers.cpp).
-void planRegisters(mlir::ModuleOp module);
+void planRegisters(mlir::ModuleOp module, bool increment = false);
 } // namespace existing_ir

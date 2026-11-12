@@ -44,7 +44,7 @@ static int32_t amplifiedStart(ReflectOp reflect) {
   return uniform ? int32_t(uniform.getStart()) : 0;
 }
 
-void existing_ir::planRegisters(ModuleOp module) {
+void existing_ir::planRegisters(ModuleOp module, bool increment) {
   MLIRContext *context = module.getContext();
   // A constant distribution is a lift of an integer constant again, which is what becomes a register.
   module.walk([&](ConstantOp constant) {
@@ -122,6 +122,17 @@ void existing_ir::planRegisters(ModuleOp module) {
     parent.try_emplace(op->getResult(0), op->getResult(0));
     parent[find(op->getResult(0))] = find(target);
   });
+  // A constant added in place needs no scratch when it is added by carrying through the register itself (the increment network of
+  // LowerToQC.cpp): the lowering follows this choice, which trades more controls per gate for the offset register and the carry.
+  DenseSet<Operation *> increments;
+  if (increment)
+    module.walk([&](Operation *op) {
+      if (!inPlace.contains(op) || !isa<AddAssignOp, SubAssignOp>(op))
+        return;
+      Operation *amount = op->getOperand(1).getDefiningOp();
+      if (amount && immediate.contains(amount))
+        increments.insert(op);
+    });
   DenseMap<Value, unsigned> registerWidths;
   for (auto &member : parent)
     registerWidths[find(member.first)] = std::max(registerWidths[find(member.first)], widths.lookup(member.first));
@@ -141,6 +152,8 @@ void existing_ir::planRegisters(ModuleOp module) {
     auto order = [&](Value lhs, Value rhs) { return 2 * (std::max(qubitsOf(lhs), qubitsOf(rhs)) + 1) + 1; };
     auto equality = [&](Value lhs, Value rhs) { return std::max(qubitsOf(lhs), qubitsOf(rhs)); };
     auto copy = [&](Value lhs, Value rhs) { return lhs == rhs ? qubitsOf(rhs) : int64_t(0); };
+    if (increments.contains(op))
+      return 0;
     if (isa<arith::AddIOp, arith::SubIOp, AddIOp, SubIOp, AddAssignOp, SubAssignOp>(op))
       return sum(op->getResult(0));
     if (isa<arith::MulIOp, MulIOp>(op))
@@ -222,6 +235,10 @@ void existing_ir::planRegisters(ModuleOp module) {
       op->setAttr("existing_ir.scratch", builder.getI64IntegerAttr(scratch));
     if (inPlace.contains(op))
       op->setAttr("existing_ir.in_place", builder.getUnitAttr());
+    if (increments.contains(op))
+      op->setAttr("existing_ir.increment", builder.getUnitAttr());
+    else
+      op->removeAttr("existing_ir.increment");
     if (reuse.contains(op))
       op->setAttr("existing_ir.reuse", builder.getUnitAttr());
   });
@@ -230,10 +247,14 @@ void existing_ir::planRegisters(ModuleOp module) {
 namespace {
 struct PlanRegisters : PassWrapper<PlanRegisters, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PlanRegisters)
+  PlanRegisters() = default;
+  PlanRegisters(const PlanRegisters &other) : PassWrapper(other) {}
+  Option<bool> increment{*this, "increment", llvm::cl::desc("add a constant in place by carrying through the register, with no scratch"),
+                         llvm::cl::init(false)};
   StringRef getArgument() const final { return "plan-registers"; }
   StringRef getDescription() const final { return "Decide the register and the number of qubits of every integer and distribution value"; }
   void getDependentDialects(DialectRegistry &registry) const override { registry.insert<DistDialect, arith::ArithDialect>(); }
-  void runOnOperation() override { existing_ir::planRegisters(getOperation()); }
+  void runOnOperation() override { existing_ir::planRegisters(getOperation(), increment); }
 };
 } // namespace
 

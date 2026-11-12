@@ -69,6 +69,20 @@ void controlledX(OpBuilder &b, Location loc, ValueRange controls, Value target) 
 
 std::string adderName(unsigned width) { return "add" + std::to_string(width); }
 
+// Adds a constant to a register in place with no other qubit: for each set bit k of the constant, 2^k is added by incrementing the bits
+// from k up, which flips bit j when bits k .. j - 1 are all set, from the top down so each control still holds its old value, and then
+// bit k itself. The constant is taken modulo 2^width, so a subtraction is the addition of its two's complement.
+void addConstant(OpBuilder &b, Location loc, ArrayRef<Value> qubits, uint64_t constant) {
+  unsigned width = qubits.size();
+  for (unsigned k = 0; k < width; ++k) {
+    if (!((constant >> k) & 1))
+      continue;
+    for (unsigned j = width - 1; j > k; --j)
+      controlledX(b, loc, ArrayRef<Value>(qubits).slice(k, j - k), qubits[j]);
+    mlir::qc::XOp::create(b, loc, qubits[k]);
+  }
+}
+
 // The ripple-carry adder of Cuccaro et al. on parameters a = 0..w-1, b = w..2w-1 and carry = 2w: b becomes (a + b)
 // modulo 2^w, and a and the carry are unchanged. Two's complement needs nothing more.
 void defineAdder(ModuleOp module, unsigned width) {
@@ -429,6 +443,14 @@ struct Update : OpRewritePattern<Op> {
     Location loc = op.getLoc();
     Value target = op.getTarget();
     unsigned width = registerWidth(target);
+    if (op->hasAttr("existing_ir.increment")) {  // the plan chose the increment network: no scratch, no adder
+      auto constant = op.getAmount().template getDefiningOp<arith::ConstantOp>();
+      int64_t value = cast<IntegerAttr>(constant.getValue()).getInt();
+      uint64_t mask = width >= 64 ? ~uint64_t(0) : (uint64_t(1) << width) - 1;
+      addConstant(rw, loc, load(rw, loc, target), uint64_t(Inverse ? -value : value) & mask);
+      replaceWithRegisters(rw, op, target);
+      return success();
+    }
     Scratch scratch;
     if (!inPlace.contains(op) || it->second > width) {
       Value result = sum(rw, loc, target, op.getAmount(), it->second, Inverse, scratch);
@@ -814,7 +836,8 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
     std::set<unsigned> adders;
     module.walk([&](Operation *op) {
       if (isa<arith::AddIOp, arith::SubIOp, arith::MulIOp, existing_ir::dist::AddIOp, existing_ir::dist::SubIOp,
-              existing_ir::dist::MulIOp, existing_ir::dist::AddAssignOp, existing_ir::dist::SubAssignOp>(op))
+              existing_ir::dist::MulIOp, existing_ir::dist::AddAssignOp, existing_ir::dist::SubAssignOp>(op) &&
+          !op->hasAttr("existing_ir.increment"))
         adders.insert(widths.lookup(op->getResult(0)));
       // An order comparison subtracts in one bit more than its wider operand; an equality needs no adder.
       if (auto cmp = dyn_cast<arith::CmpIOp>(op); cmp && cmp.getPredicate() != arith::CmpIPredicate::eq &&

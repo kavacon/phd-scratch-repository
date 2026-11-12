@@ -79,6 +79,14 @@ DEFAULT = (*PLANNED,
            "--assign-qubits")
 
 
+def with_increment(stages: Sequence[str]) -> Tuple[str, ...]:
+    """
+    The stages with a constant added in place by the increment network (no scratch, but multi-controlled gates) wherever the plan can:
+    the choice is made in `plan-registers`, and the lowering follows it.
+    """
+    return tuple("--plan-registers{increment=true}" if stage == "--plan-registers" else stage for stage in stages)
+
+
 def without_source_rewrites(stages: Sequence[str]) -> Tuple[str, ...]:
     """
     The stages with the source-level rewrites left out, so that a circuit can be compared with and without them under the
