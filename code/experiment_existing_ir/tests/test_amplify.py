@@ -54,10 +54,20 @@ class Amplify(unittest.TestCase):
                        "a = 0..4; c = 0..2; if c == 1 { a ?= a == 2; } return a;"):  # inside a conditional
             with self.subTest(source), self.assertRaises(TranslationError):
                 translate(parse(source, "v2"))
-        for source in ("a = 0..4; p = 0..2; a += p; a ?= a == 2; return p;",  # a was changed by something else first, and p is tied to it
+        for source in ("a = 0..4; p = 0..2; a += p; a ?= a == 0; return a;",  # a was changed by something else first (and p is tied to it)
                        "a = 0..4; a += 1; a ?= a == 2; return a;"):            # a was changed by something else first
             with self.subTest(source), self.assertRaises(subprocess.CalledProcessError):
                 pipeline.optimise(translate(parse(source, "v2")), *pipeline.DEFAULT)
+
+    def test_an_amplification_changes_only_its_target_so_one_nothing_reads_is_dropped(self):
+        # a = a0 + p is tied to p, but amplifying a replaces only a's coordinate and keeps the law of p (as += does), so with a never read
+        # the amplification has no effect: it is dropped before lowering, and p is as it was
+        source = "a = 0..4; p = 0..2; a += p; a ?= a == 0; return p;"
+        ir = pipeline.optimise(translate(parse(source, "v2")), *pipeline.BEFORE_LOWERING)
+        self.assertNotIn("dist.reflect", ir)
+        self.assertNotIn("dist.mark", ir)
+        counts = pipeline.run(translate(parse(source, "v2")), shots=SHOTS)
+        self.assertLess(abs(counts.get(0, 0) / SHOTS - 0.5), 0.03)
 
     def test_a_function_name_stands_for_the_function_applied_to_the_variable(self):
         define = "function oracle(x) { return x + 3 == 5; }\n"

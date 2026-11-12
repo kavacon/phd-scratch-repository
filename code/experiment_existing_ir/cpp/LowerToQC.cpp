@@ -735,8 +735,9 @@ struct Reflect : OpRewritePattern<existing_ir::dist::ReflectOp> {
 };
 
 // What an amplification can be lowered from: the distribution was made by a range and has been changed since only
-// by amplification, and nothing reads it except the predicate (a read by anything else would be of a value the amplification also
-// changes, which the operands do not show). The first implementation refuses anything else.
+// by amplification, and nothing reads it except the predicate. Amplification changes only the target (the laws of the other values are
+// kept, and they are the context it is amplified in), but a target that others were computed from needs a recipe that reads them as
+// controls, which is not built yet; the first implementation refuses anything else.
 LogicalResult checkAmplification(ModuleOp module) {
   bool ok = true;
   module.walk([&](existing_ir::dist::ReflectOp reflect) {
@@ -744,7 +745,8 @@ LogicalResult checkAmplification(ModuleOp module) {
     Operation *origin = target.getDefiningOp();
     auto uniform = dyn_cast_or_null<existing_ir::dist::UniformOp>(origin);
     if (!origin || (!uniform && !isa<existing_ir::dist::ReflectOp>(origin))) {
-      reflect.emitError("a distribution can be amplified only when it was made by a range and nothing but amplification has changed it since");
+      reflect.emitError("amplifying a distribution is supported only when it was made by a range and nothing but amplification has changed it "
+                        "since (not supported yet)");
       ok = false;
       return;
     }
@@ -768,8 +770,8 @@ LogicalResult checkAmplification(ModuleOp module) {
     }
     for (Operation *user : target.getUsers())
       if (user != mark && user != reflect && !cone.contains(user)) {
-        reflect.emitError("this distribution is also read by something that is not its predicate, which the amplification would change "
-                          "too: not supported yet");
+        reflect.emitError("amplifying a distribution that other values were computed from is not supported yet (it is read by something "
+                          "other than its predicate)");
         ok = false;
         return;
       }

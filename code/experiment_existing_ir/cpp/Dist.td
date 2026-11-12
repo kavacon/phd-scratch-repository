@@ -150,13 +150,16 @@ class Dist_RawOp<string mnemonic, list<Trait> traits = []> : Op<Dist_Dialect, mn
 // Amplification, one round, as two operations. `dist.mark` flips the sign of the states of the distribution where the predicate
 // (a distribution of one-bit integers computed from it) holds. It changes no value, only a sign, so it has no result; it is not pure,
 // so nothing drops it. `dist.reflect` then inverts the weights about the starting state, which makes the marked outcomes more likely;
-// it is an in-place update of its target. See the note "Amplification in the surface language".
+// it is an in-place update of its target, and pure: an amplification whose result is never read is dropped, as any update is (it changes
+// no other value's law). A mark whose target is never reflected changes only a sign, which nothing can observe, so it goes too.
+// See the note "Amplification in the surface language".
 def Dist_MarkOp : Dist_RawOp<"mark"> {
+  let hasCanonicalizer = 1;
   let arguments = (ins Dist_Dist:$target, Dist_Dist:$predicate);
   let assemblyFormat = "$target `,` $predicate attr-dict `:` type($target) `,` type($predicate)";
   let hasVerifier = 1;
 }
-def Dist_ReflectOp : Dist_Op<"reflect"> {  // not pure: an unread result must not drop it, since it changes what correlated values mean
+def Dist_ReflectOp : Dist_PureOp<"reflect"> {
   let arguments = (ins Dist_Dist:$target);
   let results = (outs Dist_Dist:$result);
   let assemblyFormat = "$target attr-dict `:` type($target) `->` type($result)";
