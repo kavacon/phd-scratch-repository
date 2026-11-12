@@ -587,8 +587,33 @@ void prepareUniform(OpBuilder &rw, Location loc, ArrayRef<Value> qubits, uint64_
   }
 }
 
+// Adds `start` to a register in place, or takes it away: an offset register loaded with the constant and a carry, both cleared afterwards.
+void offsetBy(OpBuilder &rw, Location loc, ArrayRef<Value> qubits, int64_t start, bool inverse) {
+  unsigned width = qubits.size();
+  Scratch scratch;
+  Value offset = scratch.add(allocate(rw, loc, width)), carry = scratch.add(allocate(rw, loc, 1));
+  SmallVector<Value> bits = load(rw, loc, offset);
+  APInt pattern = APInt(64, start, true).sextOrTrunc(width);
+  Span constant(rw);  // the constant, set and later cleared by the same X gates
+  for (unsigned k = 0; k < bits.size(); ++k)
+    if (pattern[k])
+      mlir::qc::XOp::create(rw, loc, bits[k]);
+  constant.close(rw);
+  SmallVector<Value> args(bits);
+  args.append(qubits.begin(), qubits.end());
+  args.push_back(::load(rw, loc, carry)[0]);
+  auto callee = FlatSymbolRefAttr::get(rw.getContext(), adderName(width));
+  if (!inverse)
+    mlir::qc::CallOp::create(rw, loc, callee, args);
+  else
+    mlir::qc::InvOp::create(rw, loc, args, [&](ValueRange inner) { mlir::qc::CallOp::create(rw, loc, callee, inner); });
+  uncompute(rw, loc, constant);
+  scratch.free(rw, loc);
+}
+
 // An equal superposition of start .. stop - 1: 0 .. stop - start - 1 prepared on the low qubits of the result's register, then
-// `start` added in place when it is not zero (an offset register loaded with the constant, and a carry, both cleared afterwards).
+// `start` added in place when it is not zero. The preparation is recorded on the register (`existing_ir.prep`, `existing_ir.prep_start`)
+// for an amplification of it, which undoes and redoes it.
 struct Uniform : OpRewritePattern<existing_ir::dist::UniformOp> {
   Uniform(MLIRContext *c, const Widths &w) : OpRewritePattern(c), widths(w) {}
   const Widths &widths;
@@ -602,25 +627,10 @@ struct Uniform : OpRewritePattern<existing_ir::dist::UniformOp> {
     Value result = allocate(rw, loc, it->second);
     SmallVector<Value> qubits = load(rw, loc, result);
     prepareUniform(rw, loc, qubits, n);
-    if (start == 0)
-      result.getDefiningOp()->setAttr("existing_ir.prep", rw.getI64IntegerAttr(n));  // the recipe an amplification of it reflects about
-    if (start != 0) {
-      Scratch scratch;
-      Value offset = scratch.add(allocate(rw, loc, it->second)), carry = scratch.add(allocate(rw, loc, 1));
-      SmallVector<Value> bits = load(rw, loc, offset);
-      APInt pattern = APInt(64, start, true).sextOrTrunc(it->second);
-      Span constant(rw);  // the constant, set and later cleared by the same X gates
-      for (unsigned k = 0; k < bits.size(); ++k)
-        if (pattern[k])
-          mlir::qc::XOp::create(rw, loc, bits[k]);
-      constant.close(rw);
-      SmallVector<Value> args(bits);
-      args.append(qubits.begin(), qubits.end());
-      args.push_back(::load(rw, loc, carry)[0]);
-      mlir::qc::CallOp::create(rw, loc, FlatSymbolRefAttr::get(rw.getContext(), adderName(it->second)), args);
-      uncompute(rw, loc, constant);
-      scratch.free(rw, loc);
-    }
+    if (start != 0)
+      offsetBy(rw, loc, qubits, start, false);
+    result.getDefiningOp()->setAttr("existing_ir.prep", rw.getI64IntegerAttr(n));
+    result.getDefiningOp()->setAttr("existing_ir.prep_start", rw.getI64IntegerAttr(start));
     replaceWithRegisters(rw, op, result);
     return success();
   }
@@ -670,6 +680,7 @@ struct Tagger : RewriterBase::Listener {
   }
 };
 
+
 // The mark of an amplification: the sign of the states where the predicate holds is flipped, which is a Z on the predicate's qubit.
 // (The predicate is undone right after, by the release `schedule-release` makes certain of, before the distribution is reflected.)
 struct Mark : OpRewritePattern<existing_ir::dist::MarkOp> {
@@ -699,7 +710,10 @@ struct Reflect : OpRewritePattern<existing_ir::dist::ReflectOp> {
       return failure();  // (checked before lowering: see `checkAmplification`)
     Location loc = op.getLoc();
     uint64_t n = prep.getInt();
+    int64_t start = alloc->getAttrOfType<IntegerAttr>("existing_ir.prep_start").getInt();
     SmallVector<Value> qubits = load(rw, loc, reg);
+    if (start != 0)
+      offsetBy(rw, loc, qubits, start, true);
     mlir::qc::InvOp::create(rw, loc, qubits, [&](ValueRange inner) {
       SmallVector<Value> local(inner.begin(), inner.end());
       prepareUniform(rw, loc, local, n);
@@ -713,12 +727,14 @@ struct Reflect : OpRewritePattern<existing_ir::dist::ReflectOp> {
     for (Value q : qubits)
       mlir::qc::XOp::create(rw, loc, q);
     prepareUniform(rw, loc, qubits, n);
+    if (start != 0)
+      offsetBy(rw, loc, qubits, start, false);
     replaceWithRegisters(rw, op, reg);
     return success();
   }
 };
 
-// What an amplification can be lowered from: the distribution was made by a range that starts at zero and has been changed since only
+// What an amplification can be lowered from: the distribution was made by a range and has been changed since only
 // by amplification, and nothing reads it except the predicate (a read by anything else would be of a value the amplification also
 // changes, which the operands do not show). The first implementation refuses anything else.
 LogicalResult checkAmplification(ModuleOp module) {
@@ -729,11 +745,6 @@ LogicalResult checkAmplification(ModuleOp module) {
     auto uniform = dyn_cast_or_null<existing_ir::dist::UniformOp>(origin);
     if (!origin || (!uniform && !isa<existing_ir::dist::ReflectOp>(origin))) {
       reflect.emitError("a distribution can be amplified only when it was made by a range and nothing but amplification has changed it since");
-      ok = false;
-      return;
-    }
-    if (uniform && int32_t(uniform.getStart()) != 0) {
-      reflect.emitError("a distribution can be amplified only when its range starts at zero");
       ok = false;
       return;
     }
@@ -809,6 +820,13 @@ struct LowerToQC : PassWrapper<LowerToQC, OperationPass<ModuleOp>> {
         adders.insert(std::max(widths.lookup(cmp.getLhs()), widths.lookup(cmp.getRhs())) + 1);
       if (auto uniform = dyn_cast<existing_ir::dist::UniformOp>(op); uniform && int32_t(uniform.getStart()) != 0)
         adders.insert(widths.lookup(uniform.getResult()));
+      if (auto reflect = dyn_cast<existing_ir::dist::ReflectOp>(op)) {  // an amplified range that does not start at zero takes its start away and back
+        Value root = reflect.getTarget();
+        while (auto previous = root.getDefiningOp<existing_ir::dist::ReflectOp>())
+          root = previous.getTarget();
+        if (auto uniform = root.getDefiningOp<existing_ir::dist::UniformOp>(); uniform && int32_t(uniform.getStart()) != 0)
+          adders.insert(widths.lookup(reflect.getResult()));
+      }
       if (auto slt = dyn_cast<existing_ir::dist::SltOp>(op))
         adders.insert(std::max(widths.lookup(slt.getLhs()), widths.lookup(slt.getRhs())) + 1);
     });

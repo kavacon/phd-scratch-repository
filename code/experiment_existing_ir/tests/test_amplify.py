@@ -40,11 +40,12 @@ def qiskit_grover(n: int, marked: int, rounds: int):
 class Amplify(unittest.TestCase):
     def test_amplification_gives_the_chances_of_qiskit_s_grover_operator(self):
         # sizes that are and are not a power of two, and rounds past the best one, where the chance of the marked value falls again
-        for n, marked, rounds in ((4, 2, 2), (8, 5, 3), (16, 9, 2), (6, 3, 2), (5, 4, 2)):
-            with self.subTest(values=n, marked=marked, rounds=rounds):
-                source = f"a = 0..{n}; " + f"a ?= a == {marked}; " * rounds + "return a;"
+        # (and ranges that start elsewhere, which only move the values: the reference is the same)
+        for n, marked, rounds, start in ((4, 2, 2, 0), (8, 5, 3, 0), (16, 9, 2, 0), (6, 3, 2, 0), (5, 4, 2, 0), (8, 5, 2, 2), (8, 5, 1, -3)):
+            with self.subTest(values=n, marked=marked, rounds=rounds, start=start):
+                source = f"a = {start}..{start + n}; " + f"a ?= a == {marked + start}; " * rounds + "return a;"
                 counts = pipeline.run(translate(parse(source, "v2")), shots=SHOTS)
-                ours = np.array([counts.get(value, 0) / SHOTS for value in range(n)])
+                ours = np.array([counts.get(value + start, 0) / SHOTS for value in range(n)])
                 self.assertLess(0.5 * np.abs(ours - qiskit_grover(n, marked, rounds)).sum(), 0.04)
 
     def test_what_cannot_be_amplified_yet_is_refused(self):
@@ -54,7 +55,7 @@ class Amplify(unittest.TestCase):
             with self.subTest(source), self.assertRaises(TranslationError):
                 translate(parse(source, "v2"))
         for source in ("a = 0..4; p = 0..2; a += p; a ?= a == 2; return p;",  # a was changed by something else first, and p is tied to it
-                       "a = 1..5; a ?= a == 2; return a;"):                    # a range that does not start at zero
+                       "a = 0..4; a += 1; a ?= a == 2; return a;"):            # a was changed by something else first
             with self.subTest(source), self.assertRaises(subprocess.CalledProcessError):
                 pipeline.optimise(translate(parse(source, "v2")), *pipeline.DEFAULT)
 
