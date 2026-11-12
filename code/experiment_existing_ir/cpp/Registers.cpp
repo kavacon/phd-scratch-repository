@@ -35,6 +35,15 @@
 using namespace mlir;
 using namespace existing_ir::dist;
 
+// The start of the range an amplified distribution was made from.
+static int32_t amplifiedStart(ReflectOp reflect) {
+  Value target = reflect.getTarget();
+  while (auto previous = target.getDefiningOp<ReflectOp>())
+    target = previous.getTarget();
+  auto uniform = target.getDefiningOp<UniformOp>();
+  return uniform ? int32_t(uniform.getStart()) : 0;
+}
+
 void existing_ir::planRegisters(ModuleOp module) {
   MLIRContext *context = module.getContext();
   // A constant distribution is a lift of an integer constant again, which is what becomes a register.
@@ -156,6 +165,8 @@ void existing_ir::planRegisters(ModuleOp module) {
     }
     if (auto uniform = dyn_cast<UniformOp>(op); uniform && int32_t(uniform.getStart()) != 0)
       return sum(uniform.getResult());  // an offset register and a carry; the start is added in place
+    if (auto reflect = dyn_cast<ReflectOp>(op); reflect && amplifiedStart(reflect) != 0)
+      return sum(reflect.getResult());  // the same, to take the start away and put it back
     return 0;
   };
 
