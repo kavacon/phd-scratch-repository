@@ -68,6 +68,7 @@ void registerDistRewrites();
 void populateDistRewrites(mlir::RewritePatternSet &patterns, bool combineSteps, bool flatten);
 void registerResolveDist();
 void registerPlanRegisters();
+void registerConstantAdd();
 void registerQubitLiveness();
 void registerScheduleRelease();
 void registerReleaseRegisters();

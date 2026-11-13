@@ -30,7 +30,7 @@ mlir_tablegen(DistOps.h.inc -gen-op-decls -dialect=dist)
 mlir_tablegen(DistOps.cpp.inc -gen-op-defs -dialect=dist)
 add_public_tablegen_target(DistIncGen)
 
-add_llvm_executable(existing-ir-opt existing-ir-opt.cpp Dist.cpp InPlace.cpp Ranges.cpp Rewrites.cpp Instances.cpp Resolve.cpp Registers.cpp Liveness.cpp Release.cpp ReleaseEmit.cpp Pool.cpp Sink.cpp Reorder.cpp Status.cpp LowerToQC.cpp)
+add_llvm_executable(existing-ir-opt existing-ir-opt.cpp Dist.cpp InPlace.cpp Ranges.cpp Rewrites.cpp Instances.cpp Resolve.cpp Registers.cpp ConstantAdd.cpp Liveness.cpp Release.cpp ReleaseEmit.cpp Pool.cpp Sink.cpp Reorder.cpp Status.cpp LowerToQC.cpp)
 add_dependencies(existing-ir-opt DistIncGen)
 get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)

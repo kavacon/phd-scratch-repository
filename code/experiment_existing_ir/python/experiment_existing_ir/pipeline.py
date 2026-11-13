@@ -87,6 +87,17 @@ def with_increment(stages: Sequence[str]) -> Tuple[str, ...]:
     return tuple("--plan-registers{increment=true}" if stage == "--plan-registers" else stage for stage in stages)
 
 
+def with_auto_constant_add(stages: Sequence[str]) -> Tuple[str, ...]:
+    """
+    The stages with the choice between the adder and the increment network made for each constant added in place (`constant-add`): the
+    network where the adder's scratch would take the live qubits over the machine's, and otherwise where its predicted cost is no worse on
+    two-qubit gates and on depth. It runs on the finished plan, so the release schedule and the lowering follow it.
+    """
+    stages = list(stages)
+    last = max(i for i, stage in enumerate(stages) if stage.startswith("--plan-registers"))
+    return tuple(stages[:last + 1] + ["--constant-add"] + stages[last + 1:])
+
+
 def without_source_rewrites(stages: Sequence[str]) -> Tuple[str, ...]:
     """
     The stages with the source-level rewrites left out, so that a circuit can be compared with and without them under the
