@@ -6,6 +6,7 @@
 // difference is a fresh register: the first operand is copied in with CNOTs, the second into a temporary register, and
 // a named ripple-carry adder (or its inverse) adds the temporary into the result. The return measures the result into
 // a bit register and releases every register.
+#include "ConstantAdd.h"
 #include "Dialects.h"
 #include "mlir/Analysis/DataFlow/DeadCodeAnalysis.h"
 #include "mlir/Analysis/DataFlow/IntegerRangeAnalysis.h"
@@ -69,17 +70,25 @@ void controlledX(OpBuilder &b, Location loc, ValueRange controls, Value target) 
 
 std::string adderName(unsigned width) { return "add" + std::to_string(width); }
 
-// Adds a constant to a register in place with no other qubit: for each set bit k of the constant, 2^k is added by incrementing the bits
-// from k up, which flips bit j when bits k .. j - 1 are all set, from the top down so each control still holds its old value, and then
-// bit k itself. The constant is taken modulo 2^width, so a subtraction is the addition of its two's complement.
+// Adds a constant to a register in place with no other qubit, as the cheaper of its set bits and its signed digits (ConstantAdd.h). The
+// constant is taken modulo 2^width, so a subtraction is the addition of its two's complement. A step adds 2^k by an increment of the bits
+// from k: bit j, from the top down, flips when bits k .. j - 1 are all set (so each control still holds its old value), then bit k; a step
+// that subtracts is the same gates in the reverse order, since each undoes itself.
 void addConstant(OpBuilder &b, Location loc, ArrayRef<Value> qubits, uint64_t constant) {
   unsigned width = qubits.size();
-  for (unsigned k = 0; k < width; ++k) {
-    if (!((constant >> k) & 1))
-      continue;
-    for (unsigned j = width - 1; j > k; --j)
-      controlledX(b, loc, ArrayRef<Value>(qubits).slice(k, j - k), qubits[j]);
-    mlir::qc::XOp::create(b, loc, qubits[k]);
+  for (const existing_ir::Step &step : existing_ir::bestNetwork(width, constant).steps) {
+    SmallVector<unsigned> targets;  // the bits to flip, in the order of an increment: from the top down, then the step's own bit
+    for (unsigned j = width - 1; j > step.bit; --j)
+      targets.push_back(j);
+    targets.push_back(step.bit);
+    if (step.subtract)
+      std::reverse(targets.begin(), targets.end());
+    for (unsigned j : targets) {
+      if (j == step.bit)
+        mlir::qc::XOp::create(b, loc, qubits[j]);
+      else
+        controlledX(b, loc, ArrayRef<Value>(qubits).slice(step.bit, j - step.bit), qubits[j]);
+    }
   }
 }
 
